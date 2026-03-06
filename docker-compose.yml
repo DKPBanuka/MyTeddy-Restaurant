@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: pos_postgres
+    environment:
+      POSTGRES_USER: myteddy_user
+      POSTGRES_PASSWORD: myteddy_password
+      POSTGRES_DB: pos_db
+    ports:
+      - '5455:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: api-gateway
+    container_name: api-gateway
+    restart: always
+    ports:
+      - '3000:3000'
+    depends_on:
+      - postgres
+    env_file:
+      - ./apps/backend/.env
+
+  auth-service:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: auth-service
+    container_name: auth-service
+    restart: always
+    expose:
+      - '3001'
+    depends_on:
+      - postgres
+    env_file:
+      - ./apps/backend/.env
+
+  inventory-service:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: inventory-service
+    container_name: inventory-service
+    restart: always
+    expose:
+      - '3002'
+    depends_on:
+      - postgres
+    env_file:
+      - ./apps/backend/.env
+
+  order-service:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: order-service
+    container_name: order-service
+    restart: always
+    expose:
+      - '3003'
+    depends_on:
+      - postgres
+    env_file:
+      - ./apps/backend/.env
+
+volumes:
+  postgres_data:
