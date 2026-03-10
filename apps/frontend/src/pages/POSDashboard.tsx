@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { api } from '../api';
 import type { Product, OrderItemDto } from '../types';
 import { ProductType } from '../types';
@@ -16,6 +17,7 @@ type OrderType = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
 
 export function POSDashboard() {
     const { user } = useAuth();
+    const location = useLocation();
 
     const [products, setProducts] = useState<Product[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -72,6 +74,46 @@ export function POSDashboard() {
         const interval = setInterval(fetchReadyOrders, 10000);
         return () => clearInterval(interval);
     }, []);
+
+    useEffect(() => {
+        const state = location.state as { tableNo?: string; orderId?: string } | null;
+        if (state?.tableNo && !state.orderId) {
+            handleClearCart();
+            setOrderType('DINE_IN');
+            setOrderMetadata(prev => ({ ...prev, tableNo: state.tableNo as string }));
+        }
+        
+        if (state?.orderId) {
+            const fetchAndOpenOrder = async () => {
+                try {
+                    const data = await api.getPendingOrders();
+                    const orderToOpen = data.find((o: any) => o.id === state.orderId);
+                    if (orderToOpen) {
+                        setActiveOrderId(orderToOpen.id);
+                        setOrderType(orderToOpen.orderType as OrderType);
+                        setGeneratedToken(orderToOpen.tokenId || null);
+                        setOrderMetadata({
+                            tableNo: orderToOpen.tableNumber || '',
+                            customerName: orderToOpen.customerName || '',
+                            customerPhone: orderToOpen.customerPhone || '',
+                            deliveryAddress: orderToOpen.deliveryAddress || ''
+                        });
+                        setCartItems(orderToOpen.orderItems?.map((item: any) => ({
+                            productId: item.productId,
+                            quantity: item.quantity,
+                            type: item.product?.type || ProductType.FOOD,
+                            product: item.product,
+                            notes: item.notes || ''
+                        })) || []);
+                    }
+                } catch (error) {
+                    console.error('Failed to load order from Floor Plan:', error);
+                    toast.error('Failed to load order from Floor Plan.');
+                }
+            }
+            fetchAndOpenOrder();
+        }
+    }, [location.state]);
 
     const filteredProducts = useMemo(() => {
         let result = products;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, CreditCard, Banknote, HelpCircle } from 'lucide-react';
+import { X, CreditCard, Banknote } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
 
 interface CheckoutModalProps {

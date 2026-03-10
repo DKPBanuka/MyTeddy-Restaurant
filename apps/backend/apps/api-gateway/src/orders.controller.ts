@@ -40,6 +40,23 @@ export class OrdersGatewayController {
         }
     }
 
+    @Get('tables/status')
+    async getTableStatus() {
+        try {
+            const result = await firstValueFrom(
+                this.orderClient.send({ cmd: 'get_table_status' }, {}).pipe(
+                    catchError(error => throwError(() => new RpcException(error)))
+                )
+            );
+            return result;
+        } catch (error: any) {
+            throw new HttpException({
+                status: HttpStatus.INTERNAL_SERVER_ERROR,
+                error: error.message || 'Microservice error fetching table status',
+            }, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
     @Get('pending')
     async getPendingOrders() {
         try {

@@ -16,6 +16,11 @@ export class OrderController {
         return this.orderService.getKitchenOrders();
     }
 
+    @MessagePattern({ cmd: 'get_table_status' })
+    async getTableStatus() {
+        return this.orderService.getTableStatus();
+    }
+
     @MessagePattern({ cmd: 'get_pending_orders' })
     async getPendingOrders() {
         return this.orderService.getPendingOrders();

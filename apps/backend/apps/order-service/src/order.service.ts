@@ -167,6 +167,41 @@ export class OrderService {
         }
     }
 
+    async getTableStatus() {
+        try {
+            const totalTables = 12;
+            const tables = Array.from({ length: totalTables }, (_, i) => ({
+                tableNo: (i + 1).toString(),
+                status: 'AVAILABLE',
+                orderId: null as string | null,
+            }));
+
+            const pendingOrders = await this.prisma.order.findMany({
+                where: {
+                    status: 'PENDING',
+                    orderType: 'DINE_IN',
+                    tableNumber: { not: null }
+                },
+                select: {
+                    id: true,
+                    tableNumber: true
+                }
+            });
+
+            pendingOrders.forEach(order => {
+                const tableIndex = tables.findIndex(t => t.tableNo === order.tableNumber);
+                if (tableIndex !== -1) {
+                    tables[tableIndex].status = 'OCCUPIED';
+                    tables[tableIndex].orderId = order.id;
+                }
+            });
+
+            return tables;
+        } catch (error: any) {
+            throw new RpcException({ message: error.message, status: 500 });
+        }
+    }
+
     async getPendingOrders() {
         try {
             const orders = await this.prisma.order.findMany({

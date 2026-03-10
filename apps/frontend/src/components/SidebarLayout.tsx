@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Store, LayoutDashboard, Calendar, ShoppingBag, TrendingUp, Users, ChefHat, Settings, LogOut } from 'lucide-react';
+import { Store, LayoutDashboard, Calendar, ShoppingBag, TrendingUp, Users, ChefHat, Settings, LogOut, Layers } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export function SidebarLayout() {
@@ -25,6 +25,9 @@ export function SidebarLayout() {
                 <nav className="flex-1 flex flex-col gap-6 w-full items-center">
                     <NavLink to="/" end className={navLinkClass} title="POS / New Sale">
                         <LayoutDashboard size={24} />
+                    </NavLink>
+                    <NavLink to="/floor-plan" className={navLinkClass} title="Floor Plan">
+                        <Layers size={24} />
                     </NavLink>
                     <NavLink to="/events" className={navLinkClass} title="Party & Events">
                         <Calendar size={24} />

@@ -31,7 +31,6 @@ interface CartProps {
 export function Cart({
     items,
     onUpdateQty,
-    onRemove,
     onClearCart,
     onCheckout,
     onSendToKDS,

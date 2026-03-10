@@ -5,9 +5,9 @@ services:
     image: postgres:15
     container_name: pos_postgres
     environment:
-      POSTGRES_USER: myteddy_user
-      POSTGRES_PASSWORD: myteddy_password
-      POSTGRES_DB: pos_db
+      POSTGRES_USER: ${POSTGRES_USER:-myteddy_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-myteddy_password}
+      POSTGRES_DB: ${POSTGRES_DB:-pos_db}
     ports:
       - '5455:5432'
     volumes:

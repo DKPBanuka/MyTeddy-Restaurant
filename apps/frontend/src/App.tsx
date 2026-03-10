@@ -11,6 +11,7 @@ import { KDSDashboard } from './pages/KDSDashboard';
 import { InventoryDashboard } from './pages/InventoryDashboard';
 import { ReportsDashboard } from './pages/ReportsDashboard';
 import { StaffDashboard } from './pages/StaffDashboard';
+import { FloorPlan } from './pages/FloorPlan';
 
 function App() {
   const { isAuthenticated } = useAuth();
@@ -30,6 +31,7 @@ function App() {
       <Routes>
         <Route element={<SidebarLayout />}>
           <Route path="/" element={<POSDashboard />} />
+          <Route path="/floor-plan" element={<FloorPlan />} />
           <Route path="/events" element={<EventsDashboard />} />
           <Route path="/inventory" element={<InventoryDashboard />} />
           <Route path="/reports" element={<ReportsDashboard />} />

@@ -58,6 +58,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   orders    Order[]
+  partyBookings PartyBooking[]
 }
 
 model Product {
@@ -68,6 +69,7 @@ model Product {
   type        ProductType
   barcode     String?       @unique
   imageUrl    String?
+  isActive    Boolean       @default(true)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -151,19 +153,21 @@ model OrderItem {
 
 model PartyBooking {
   id              String             @id @default(uuid())
-  customerId      String             // Using simple string as per current convention, could link to User if needed
+  customerId      String             
   customerName    String
   customerPhone   String
   eventDate       DateTime
-  startTime       String             // Storing as HH:mm string for simpler time-slot logic
-  endTime         String             // Storing as HH:mm string
+  startTime       DateTime           
+  endTime         DateTime           
   guestCount      Int
-  hallCharge      Float              @default(0)
-  menuTotal       Float              @default(0)
-  addonsTotal     Float              @default(0)
-  totalAmount     Float              @default(0)
-  advancePaid     Float              @default(0)
+  hallCharge      Decimal            @default(0) @db.Decimal(10, 2)
+  menuTotal       Decimal            @default(0) @db.Decimal(10, 2)
+  addonsTotal     Decimal            @default(0) @db.Decimal(10, 2)
+  totalAmount     Decimal            @default(0) @db.Decimal(10, 2)
+  advancePaid     Decimal            @default(0) @db.Decimal(10, 2)
   status          PartyBookingStatus @default(PENDING)
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
+
+  customer        User               @relation(fields: [customerId], references: [id])
 }
