@@ -24,19 +24,35 @@ export class PartyBookingService {
             }
         });
 
-        // Time overlap logic (Simple string comparison works for HH:mm)
-        const hasClash = existingBookings.some(booking => {
-            // requestedStart < existingEnd AND requestedEnd > existingStart
-            return (data.startTime < booking.endTime) && (data.endTime > booking.startTime);
+        // Time overlap logic
+        const reqStart = new Date(data.startTime);
+        const reqEnd = new Date(data.endTime);
+
+        const hasClash = existingBookings.some((booking: any) => {
+            const existingStart = new Date(booking.startTime);
+            const existingEnd = new Date(booking.endTime);
+
+            const overlaps = (reqStart.getTime() < existingEnd.getTime()) && (reqEnd.getTime() > existingStart.getTime());
+
+            if (overlaps) {
+                // If either the new booking or the existing booking is EXCLUSIVE, they clash
+                if (data.bookingType === 'EXCLUSIVE' || booking.bookingType === 'EXCLUSIVE') {
+                    return true;
+                }
+                // Partial bookings can overlap with other Partial bookings
+            }
+            return false;
         });
 
         if (hasClash) {
-            throw new RpcException(new ConflictException('The selected time slot conflicts with an existing booking.'));
+            throw new RpcException(new ConflictException('The selected time slot conflicts with an exclusive booking.'));
         }
 
         // 2. Calculations
+        // 2. Calculations
+        const bookingType = data.bookingType || 'PARTIAL';
         const guestCount = Number(data.guestCount) || 0;
-        const hallCharge = Number(data.hallCharge) || 0;
+        const hallCharge = bookingType === 'EXCLUSIVE' ? 5000 : 0; // Enforce UI rule
         const menuTotal = Number(data.menuTotal) || 0;
         const addonsTotal = Number(data.addonsTotal) || 0;
 
@@ -50,14 +66,15 @@ export class PartyBookingService {
                 customerName: data.customerName,
                 customerPhone: data.customerPhone,
                 eventDate: new Date(data.eventDate),
-                startTime: data.startTime,
-                endTime: data.endTime,
+                startTime: reqStart,
+                endTime: reqEnd,
                 guestCount,
                 hallCharge,
                 menuTotal,
                 addonsTotal,
                 totalAmount,
                 advancePaid,
+                bookingType,
                 status: advancePaid > 0 ? 'CONFIRMED' : 'PENDING'
             }
         });
@@ -70,16 +87,16 @@ export class PartyBookingService {
             const exactDate = new Date(filters.date);
             exactDate.setHours(0, 0, 0, 0);
             whereClause.eventDate = {
-                gte: exactDate,
-                lt: new Date(exactDate.getTime() + 24 * 60 * 60 * 1000)
-            };
+                gte: exactDate.toISOString(),
+                lt: new Date(exactDate.getTime() + 24 * 60 * 60 * 1000).toISOString()
+            } as any;
         } else if (filters.month && filters.year) {
             const startOfMonth = new Date(filters.year, filters.month - 1, 1);
             const endOfMonth = new Date(filters.year, filters.month, 1);
             whereClause.eventDate = {
-                gte: startOfMonth,
-                lt: endOfMonth
-            };
+                gte: startOfMonth.toISOString(),
+                lt: endOfMonth.toISOString()
+            } as any;
         }
 
         return this.prisma.partyBooking.findMany({

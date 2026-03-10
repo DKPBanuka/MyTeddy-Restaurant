@@ -48,6 +48,11 @@ enum PartyBookingStatus {
   CANCELLED
 }
 
+enum BookingType {
+  PARTIAL
+  EXCLUSIVE
+}
+
 model User {
   id        String   @id @default(uuid())
   name      String
@@ -153,7 +158,7 @@ model OrderItem {
 
 model PartyBooking {
   id              String             @id @default(uuid())
-  customerId      String             
+  customerId      String?            
   customerName    String
   customerPhone   String
   eventDate       DateTime
@@ -166,8 +171,9 @@ model PartyBooking {
   totalAmount     Decimal            @default(0) @db.Decimal(10, 2)
   advancePaid     Decimal            @default(0) @db.Decimal(10, 2)
   status          PartyBookingStatus @default(PENDING)
+  bookingType     BookingType        @default(PARTIAL)
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
-  customer        User               @relation(fields: [customerId], references: [id])
+  customer        User?              @relation(fields: [customerId], references: [id])
 }

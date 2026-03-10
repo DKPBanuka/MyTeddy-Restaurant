@@ -53,6 +53,25 @@ export interface StaffDto {
     email?: string;
 }
 
+export interface PartyBookingDto {
+    id?: string;
+    customerId?: string;
+    customerName: string;
+    customerPhone: string;
+    eventDate: string;
+    startTime: string;
+    endTime: string;
+    guestCount: number;
+    hallCharge?: number;
+    menuTotal: number;
+    addonsTotal?: number;
+    totalAmount?: number;
+    advancePaid?: number;
+    bookingType: 'PARTIAL' | 'EXCLUSIVE';
+    status?: string;
+    createdAt?: string;
+}
+
 export const api = {
     setAuthToken: (token: string | null) => {
         authToken = token;
@@ -174,5 +193,19 @@ export const api = {
     deleteStaff: async (id: string) => {
         const res = await apiClient.delete(`/staff/${id}`);
         return res.data;
-    }
+    },
+
+    // --- Party Bookings ---
+    getPartyBookings: async (params?: { month?: number; year?: number; date?: string }): Promise<PartyBookingDto[]> => {
+        const res = await apiClient.get(`/party-bookings`, { params });
+        return res.data;
+    },
+    createPartyBooking: async (data: Omit<PartyBookingDto, 'id' | 'status' | 'createdAt' | 'totalAmount' | 'hallCharge'>): Promise<PartyBookingDto> => {
+        const res = await apiClient.post(`/party-bookings`, data);
+        return res.data;
+    },
+    updatePartyBookingAdvance: async (id: string, amount: number): Promise<PartyBookingDto> => {
+        const res = await apiClient.patch(`/party-bookings/${id}/advance`, { amount });
+        return res.data;
+    },
 };

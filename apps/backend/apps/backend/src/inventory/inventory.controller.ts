@@ -1,0 +1,70 @@
+import { Controller, Get, Post, Patch, Delete, Body, Param } from '@nestjs/common';
+import { InventoryService } from './inventory.service';
+
+@Controller('inventory')
+export class InventoryController {
+    constructor(private readonly inventoryService: InventoryService) { }
+
+    @Get('products')
+    async getProducts() {
+        return this.inventoryService.getProducts();
+    }
+
+    // --- Ingredients ---
+    @Get('ingredients')
+    async getIngredients() {
+        return this.inventoryService.getIngredients();
+    }
+
+    @Post('ingredients')
+    async createIngredient(@Body() data: any) {
+        return this.inventoryService.createIngredient(data);
+    }
+
+    @Patch('ingredients/:id')
+    async updateIngredient(@Param('id') id: string, @Body() data: any) {
+        return this.inventoryService.updateIngredient(id, data);
+    }
+
+    @Delete('ingredients/:id')
+    async deleteIngredient(@Param('id') id: string) {
+        return this.inventoryService.deleteIngredient(id);
+    }
+
+    // --- Retail Stock ---
+    @Get('retail')
+    async getRetailStock() {
+        return this.inventoryService.getRetailStock();
+    }
+
+    @Post('retail')
+    async createRetailStock(@Body() data: any) {
+        return this.inventoryService.createRetailStock(data);
+    }
+
+    @Patch('retail/:id')
+    async updateRetailStock(@Param('id') id: string, @Body() data: any) {
+        return this.inventoryService.updateRetailStock(id, data);
+    }
+
+    @Delete('retail/:id')
+    async deleteRetailStock(@Param('id') id: string) {
+        return this.inventoryService.deleteRetailStock(id);
+    }
+
+    // --- Recipe BOM ---
+    @Get('bom')
+    async getRecipeBOMs() {
+        return this.inventoryService.getRecipeBOMs();
+    }
+
+    @Post('bom')
+    async createRecipeBOM(@Body() data: any) {
+        return this.inventoryService.createRecipeBOM(data);
+    }
+
+    @Delete('bom/:id')
+    async deleteRecipeBOM(@Param('id') id: string) {
+        return this.inventoryService.deleteRecipeBOM(id);
+    }
+}
