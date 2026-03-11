@@ -1,328 +1,361 @@
-import { useState, useEffect, useCallback } from 'react';
-import { X, Calendar as CalendarIcon, Clock, Users, CheckCircle2, User, Phone, Sparkles, AlertCircle, Package, Loader2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { X, Calendar as CalendarIcon, Users, ShoppingBag, CheckCircle2, Loader2, Phone, User, Search } from 'lucide-react';
 import { api } from '../api';
-import type { PartyBookingDto } from '../api';
 import type { Product } from '../types';
 import { toast } from 'sonner';
 
 interface NewPartyModalProps {
     isOpen: boolean;
     onClose: () => void;
-    initialDate: Date;
-    initialStartTime: string; // e.g., "14:00"
-    initialDuration: number;  // e.g., 2
-    onSuccess: () => void;    // Callback to refresh the parent dashboard
+    initialDate?: Date;
+    initialStartTime?: string;
+    initialDuration?: number;
+    onSuccess: () => void;
+    onOpenTimeline?: (date: string) => void;
 }
 
-export function NewPartyModal({ isOpen, onClose, initialDate, initialStartTime, initialDuration, onSuccess }: NewPartyModalProps) {
+export function NewPartyModal({
+    isOpen,
+    onClose,
+    initialDate = new Date(),
+    initialStartTime = "18:00",
+    initialDuration = 3,
+    onSuccess,
+    onOpenTimeline
+}: NewPartyModalProps) {
+    // --- Form State ---
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
     const [pax, setPax] = useState<number>(20);
+    const [eventDate, setEventDate] = useState<string>(initialDate.toISOString().split('T')[0]);
+    const [startTime, setStartTime] = useState(initialStartTime);
+    const [durationHrs, setDurationHrs] = useState<number>(initialDuration);
     const [bookingType, setBookingType] = useState<'PARTIAL' | 'EXCLUSIVE'>('PARTIAL');
-    const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-    const [products, setProducts] = useState<Product[]>([]);
-    const [isLoadingProducts, setIsLoadingProducts] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [quantities, setQuantities] = useState<Record<string, number>>({});
 
-    // Fetch all products and use them as selectable packages
-    const fetchProducts = useCallback(async () => {
-        setIsLoadingProducts(true);
-        try {
-            const data = await api.getProducts();
-            // Show all FOOD type products as potential packages
-            const packageProducts = data.filter(p => p.type === 'FOOD');
-            setProducts(packageProducts);
-            if (packageProducts.length > 0 && !selectedProductId) {
-                setSelectedProductId(packageProducts[0].id);
-            }
-        } catch (err) {
-            console.error('Failed to fetch products:', err);
-            toast.error('Could not load menu packages.');
-        } finally {
-            setIsLoadingProducts(false);
-        }
-    }, [selectedProductId]);
+    // --- Data State ---
+    const [products, setProducts] = useState<Product[]>([]);
+    const [menuSearchQuery, setMenuSearchQuery] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
-            setName('');
-            setPhone('');
-            setPax(20);
-            setBookingType('PARTIAL');
             fetchProducts();
+            setEventDate(initialDate.toISOString().split('T')[0]);
+            setStartTime(initialStartTime);
+            setDurationHrs(initialDuration);
         }
-    }, [isOpen]);
+    }, [isOpen, initialDate, initialStartTime, initialDuration]);
 
-    if (!isOpen) return null;
+    const fetchProducts = async () => {
+        setIsLoading(true);
+        try {
+            const data = await api.getProducts();
+            setProducts(data.filter(p => p.type === 'FOOD'));
+        } catch (err) {
+            toast.error("Failed to load menu items");
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-    // --- Derived State ---
-    const selectedProduct = products.find(p => p.id === selectedProductId);
-    const productPricePerPax = selectedProduct ? parseFloat(selectedProduct.price) || 0 : 0;
-    const menuTotal = productPricePerPax * pax;
+    const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+
+    const menuTotal = useMemo(() => {
+        let total = 0;
+        Object.entries(quantities).forEach(([id, qty]) => {
+            const product = products.find(p => p.id === id);
+            if (product) total += (parseFloat(product.price) || 0) * qty;
+        });
+        return total;
+    }, [quantities, products]);
+
     const hallCharge = bookingType === 'EXCLUSIVE' ? 5000 : 0;
     const estimatedTotal = menuTotal + hallCharge;
     const requiredAdvance = estimatedTotal * 0.30;
 
-    // Compute end time from start time + duration
-    const [startHr, startMin] = initialStartTime.split(':').map(Number);
-    let endHr = (startHr || 0) + initialDuration;
-    const endMin = startMin || 0;
-    const endTimeStr = `${endHr.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`;
-
-    // Build ISO datetime strings for start and end (backend expects DateTime)
-    const buildDateTime = (date: Date, timeStr: string): string => {
-        const [h, m] = timeStr.split(':').map(Number);
-        const d = new Date(date);
-        d.setHours(h, m, 0, 0);
-        return d.toISOString();
+    const handleQuantityChange = (id: string, value: string) => {
+        const q = parseInt(value) || 0;
+        setQuantities(prev => ({ ...prev, [id]: Math.max(0, q) }));
     };
 
-    const handleConfirm = async () => {
-        if (!name.trim() || !phone.trim() || pax < 1) {
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!name || !phone || !eventDate || !startTime) {
             toast.error('Please fill in all required fields.');
             return;
         }
 
         setIsSubmitting(true);
         try {
-            const payload: Omit<PartyBookingDto, 'id' | 'status' | 'createdAt' | 'totalAmount' | 'hallCharge'> = {
-                customerName: name.trim(),
-                customerPhone: phone.trim(),
-                eventDate: initialDate.toISOString(),
-                startTime: buildDateTime(initialDate, initialStartTime),
-                endTime: buildDateTime(initialDate, endTimeStr),
+            const dateObj = new Date(eventDate);
+            const [h, m] = startTime.split(':').map(Number);
+
+            const startDateTime = new Date(dateObj);
+            startDateTime.setHours(h, m, 0, 0);
+
+            const endDateTime = new Date(startDateTime);
+            endDateTime.setHours(startDateTime.getHours() + durationHrs);
+
+            await api.createPartyBooking({
+                customerName: name,
+                customerPhone: phone,
+                eventDate: dateObj.toISOString(),
+                startTime: startDateTime.toISOString(),
+                endTime: endDateTime.toISOString(),
                 guestCount: pax,
                 menuTotal,
                 addonsTotal: 0,
                 advancePaid: requiredAdvance,
                 bookingType,
-            };
+            });
 
-            await api.createPartyBooking(payload);
             toast.success(`Booking for ${name} confirmed! ✅`);
-            onSuccess();  // Trigger parent refresh
+            onSuccess();
             onClose();
+            // Reset
+            setName(''); setPhone(''); setQuantities({});
         } catch (err: any) {
-            const msg = err?.response?.data?.message || err?.message || 'Booking failed. Please try again.';
-            toast.error(msg);
+            toast.error(err?.response?.data?.message || 'Booking failed.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
+    if (!isOpen) return null;
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            {/* Backdrop */}
-            <div
-                className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
-                onClick={onClose}
-            ></div>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center md:p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose}></div>
 
-            {/* Modal Content */}
-            <div className="bg-slate-50 rounded-[2rem] shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col relative z-10">
+            <div className="bg-white w-full h-full max-h-[100dvh] md:h-auto md:max-h-[90vh] md:max-w-5xl md:rounded-[2.5rem] shadow-2xl relative flex flex-col md:flex-row overflow-hidden animate-in fade-in zoom-in duration-300">
 
-                {/* Header */}
-                <div className="bg-white px-8 py-5 border-b border-slate-100 flex items-center justify-between shrink-0">
-                    <div>
-                        <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3">
-                            <Sparkles className="text-blue-600" size={24} />
-                            Create New Party Booking
-                        </h2>
-                        <p className="text-slate-500 font-medium text-sm mt-1">Select a menu package and fill out the event details.</p>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="w-10 h-10 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl flex items-center justify-center transition-colors"
-                    >
-                        <X size={20} />
-                    </button>
-                </div>
-
-                {/* Scrollable Body */}
-                <div className="flex-1 overflow-y-auto p-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-                    {/* Left Column: Details & Packages */}
-                    <div className="lg:col-span-2 space-y-8">
-
-                        {/* Selected Time Banner */}
-                        <div className="bg-blue-600 rounded-2xl p-4 flex flex-wrap items-center gap-6 text-white shadow-lg shadow-blue-500/20">
-                            <div className="flex items-center gap-2 font-bold bg-white/10 px-4 py-2 rounded-xl">
-                                <CalendarIcon size={18} className="text-blue-200" />
-                                {initialDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                            </div>
-                            <div className="flex items-center gap-2 font-bold bg-white/10 px-4 py-2 rounded-xl">
-                                <Clock size={18} className="text-blue-200" />
-                                {initialStartTime} - {endTimeStr} ({initialDuration} Hours)
-                            </div>
+                {/* Left: Form */}
+                <div className="flex-1 p-6 md:p-10 border-r border-slate-100 overflow-y-auto">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h2 className="text-3xl font-black text-slate-800">New Party</h2>
+                            <p className="text-slate-500 font-bold">Fill in the details to book a date</p>
                         </div>
+                        <button onClick={onClose} className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors md:hidden">
+                            <X size={20} />
+                        </button>
+                    </div>
 
-                        {/* Customer Info */}
-                        <section className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
-                            <h3 className="text-lg font-bold text-slate-800 mb-4 px-1">Customer Details</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-sm font-bold text-slate-600 ml-1">Full Name *</label>
-                                    <div className="relative">
-                                        <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                        <input
-                                            type="text"
-                                            value={name}
-                                            onChange={(e) => setName(e.target.value)}
-                                            placeholder="e.g. John Doe"
-                                            className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none font-medium text-slate-800 transition-all font-sans"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-sm font-bold text-slate-600 ml-1">Phone Number *</label>
-                                    <div className="relative">
-                                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                        <input
-                                            type="tel"
-                                            value={phone}
-                                            onChange={(e) => setPhone(e.target.value)}
-                                            placeholder="e.g. 077 123 4567"
-                                            className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none font-medium text-slate-800 transition-all font-sans"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
-
-                        {/* Pax + Booking Type */}
-                        <section className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
-                            <div className="flex flex-wrap items-center gap-6">
-                                <div className="flex items-center gap-3">
-                                    <Users size={18} className="text-slate-400" />
-                                    <span className="text-sm font-bold text-slate-600">Guests (Pax):</span>
+                    <form onSubmit={handleSubmit} className="space-y-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-500 flex items-center gap-2">Name <span className="text-red-500">*</span></label>
+                                <div className="relative group">
+                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18} />
                                     <input
-                                        type="number"
-                                        value={pax}
-                                        onChange={(e) => setPax(parseInt(e.target.value) || 0)}
-                                        min="1"
-                                        className="w-20 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-center font-bold text-slate-800 outline-none focus:border-blue-500"
+                                        type="text"
+                                        placeholder="Customer name"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        required
+                                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-700"
                                     />
                                 </div>
-                                {/* Booking Type */}
-                                <div className="flex items-center gap-3 ml-auto">
-                                    <span className="text-sm font-bold text-slate-600">Booking Type:</span>
-                                    <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-                                        <button
-                                            onClick={() => setBookingType('PARTIAL')}
-                                            className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-all ${bookingType === 'PARTIAL' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}
-                                        >
-                                            Partial
-                                        </button>
-                                        <button
-                                            onClick={() => setBookingType('EXCLUSIVE')}
-                                            className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-all ${bookingType === 'EXCLUSIVE' ? 'bg-amber-500 text-amber-950 shadow-sm' : 'text-slate-500'}`}
-                                        >
-                                            Exclusive (+Rs. 5000)
-                                        </button>
-                                    </div>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-500 flex items-center gap-2">Phone <span className="text-red-500">*</span></label>
+                                <div className="relative group">
+                                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18} />
+                                    <input
+                                        type="tel"
+                                        placeholder="Phone number"
+                                        value={phone}
+                                        onChange={(e) => setPhone(e.target.value)}
+                                        required
+                                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-700"
+                                    />
                                 </div>
                             </div>
-                        </section>
+                        </div>
 
-                        {/* Package Selection from Products */}
-                        <section>
-                            <div className="flex items-center gap-3 mb-4 px-1">
-                                <Package size={20} className="text-slate-500" />
-                                <h3 className="text-lg font-bold text-slate-800">Select Menu Package</h3>
-                            </div>
-
-                            {isLoadingProducts ? (
-                                <div className="flex items-center justify-center py-12 bg-white rounded-3xl border border-slate-100">
-                                    <Loader2 className="animate-spin text-blue-500" size={28} />
-                                    <span className="ml-3 text-slate-500 font-medium">Loading packages from menu...</span>
-                                </div>
-                            ) : products.length === 0 ? (
-                                <div className="flex items-center justify-center py-12 bg-white rounded-3xl border border-slate-100 text-slate-400 font-medium">
-                                    No menu products found. Add products in the Products module first.
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-72 overflow-y-auto pr-1">
-                                    {products.map(product => (
-                                        <div
-                                            key={product.id}
-                                            onClick={() => setSelectedProductId(product.id)}
-                                            className={`relative cursor-pointer rounded-3xl p-5 border-2 transition-all duration-200 bg-white ${selectedProductId === product.id ? 'border-blue-500 shadow-md' : 'border-slate-100 hover:border-blue-200 shadow-sm'}`}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div className="space-y-2 md:col-span-2">
+                                <label className="text-sm font-bold text-slate-500">Event Date</label>
+                                <div className="relative group flex items-center gap-2">
+                                    {onOpenTimeline && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onOpenTimeline(eventDate)}
+                                            className="shrink-0 w-14 h-[56px] bg-slate-100 hover:bg-blue-100 text-slate-500 hover:text-blue-600 rounded-2xl flex items-center justify-center transition-colors group-focus-within:border-blue-500"
+                                            title="Select from Timeline"
                                         >
-                                            {selectedProductId === product.id && (
-                                                <div className="absolute top-4 right-4 text-blue-600">
-                                                    <CheckCircle2 size={22} />
-                                                </div>
-                                            )}
-                                            {product.imageUrl && (
-                                                <img src={product.imageUrl} alt={product.name} className="w-12 h-12 rounded-2xl object-cover mb-3" />
-                                            )}
-                                            <div className="font-bold text-base text-slate-800 pr-8">{product.name}</div>
-                                            <div className="text-blue-600 font-extrabold text-lg mt-1">
-                                                Rs. {parseFloat(product.price).toLocaleString()}
-                                                <span className="text-xs text-slate-400 font-semibold"> /pax</span>
-                                            </div>
-                                            {product.description && (
-                                                <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed line-clamp-2">{product.description}</p>
-                                            )}
-                                        </div>
+                                            <CalendarIcon size={20} />
+                                        </button>
+                                    )}
+                                    <input
+                                        type="date"
+                                        min={todayStr}
+                                        value={eventDate}
+                                        onChange={(e) => setEventDate(e.target.value)}
+                                        required
+                                        className="w-full px-4 py-4 bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-700"
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-500">Start Time</label>
+                                <input
+                                    type="time"
+                                    value={startTime}
+                                    onChange={(e) => setStartTime(e.target.value)}
+                                    required
+                                    className="w-full px-4 py-4 bg-slate-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-slate-700"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-500">Duration (Hrs)</label>
+                                <div className="flex bg-slate-50 p-1 rounded-2xl border-2 border-transparent h-[60px]">
+                                    {[2, 3, 4, 5].map(h => (
+                                        <button
+                                            key={h}
+                                            type="button"
+                                            onClick={() => setDurationHrs(h)}
+                                            className={`flex-1 rounded-xl text-sm font-black transition-all ${durationHrs === h ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
+                                        >
+                                            {h}h
+                                        </button>
                                     ))}
                                 </div>
-                            )}
-                        </section>
-
-                    </div>
-
-                    {/* Right Column: Pricing Summary */}
-                    <div className="lg:col-span-1">
-                        <div className="bg-slate-800 text-white rounded-[2rem] p-6 shadow-2xl sticky top-0">
-                            <h3 className="text-xl font-black mb-6">Booking Summary</h3>
-
-                            <div className="space-y-3 mb-6 text-sm font-medium">
-                                <div className="flex justify-between items-center bg-white/5 rounded-xl p-3">
-                                    <span className="text-slate-300 truncate pr-2">
-                                        {selectedProduct ? selectedProduct.name : 'No Package'} ({pax} pax)
-                                    </span>
-                                    <span className="font-bold shrink-0">Rs. {menuTotal.toLocaleString()}</span>
-                                </div>
-                                {bookingType === 'EXCLUSIVE' && (
-                                    <div className="flex justify-between items-center bg-amber-400/10 border border-amber-400/20 rounded-xl p-3">
-                                        <span className="text-amber-300">Hall Charge (Exclusive)</span>
-                                        <span className="font-bold text-amber-300">Rs. 5,000</span>
-                                    </div>
-                                )}
                             </div>
+                        </div>
 
-                            <div className="border-t border-slate-700 pt-6 space-y-4">
-                                <div className="flex justify-between items-end">
-                                    <span className="text-slate-400 font-bold">Estimated Total</span>
-                                    <span className="text-3xl font-black text-amber-400">Rs. {estimatedTotal.toLocaleString()}</span>
-                                </div>
-                                <div className="bg-amber-400/10 border border-amber-400/20 rounded-xl p-4 flex items-start gap-3">
-                                    <AlertCircle className="text-amber-400 shrink-0 mt-0.5" size={18} />
-                                    <div>
-                                        <div className="text-amber-400 font-bold text-sm">Required Advance (30%)</div>
-                                        <div className="text-white font-black text-xl mt-1">Rs. {requiredAdvance.toLocaleString()}</div>
-                                        <div className="text-amber-400/70 text-xs font-medium mt-1">Payable immediately to confirm slot.</div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-500">Guest Count</label>
+                                <div className="flex items-center gap-3 bg-slate-50 p-1.5 rounded-2xl h-[60px]">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPax(prev => Math.max(1, prev - 5))}
+                                        className="w-10 h-10 bg-white shadow-sm rounded-xl flex items-center justify-center text-slate-600 hover:text-blue-600 font-bold"
+                                    >
+                                        -5
+                                    </button>
+                                    <div className="flex-1 flex items-center justify-center gap-2">
+                                        <Users size={18} className="text-slate-400" />
+                                        <span className="text-lg font-black text-slate-700">{pax}</span>
                                     </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPax(prev => prev + 5)}
+                                        className="w-10 h-10 bg-white shadow-sm rounded-xl flex items-center justify-center text-slate-600 hover:text-blue-600 font-bold"
+                                    >
+                                        +5
+                                    </button>
                                 </div>
                             </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-500">Booking Type</label>
+                                <div className="flex bg-slate-50 p-1 rounded-2xl h-[60px]">
+                                    <button
+                                        type="button"
+                                        onClick={() => setBookingType('PARTIAL')}
+                                        className={`flex-1 rounded-xl text-xs font-black transition-all ${bookingType === 'PARTIAL' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
+                                    >
+                                        PARTIAL
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setBookingType('EXCLUSIVE')}
+                                        className={`flex-1 rounded-xl text-xs font-black transition-all ${bookingType === 'EXCLUSIVE' ? 'bg-amber-500 text-amber-950 shadow-sm' : 'text-slate-400'}`}
+                                    >
+                                        EXCLUSIVE
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
 
+                        <div className="pt-4">
                             <button
-                                onClick={handleConfirm}
-                                disabled={isSubmitting || !name.trim() || !phone.trim() || pax < 1 || !selectedProductId}
-                                className="w-full mt-8 bg-amber-500 hover:bg-amber-400 text-amber-950 font-black py-4 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.3)] transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="w-full bg-slate-900 hover:bg-black text-white py-5 rounded-2xl font-black text-lg transition-all shadow-xl shadow-slate-900/20 active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-50"
                             >
-                                {isSubmitting ? (
-                                    <>
-                                        <Loader2 className="animate-spin" size={18} />
-                                        Confirming...
-                                    </>
-                                ) : 'Confirm & Request Advance'}
+                                {isSubmitting ? <Loader2 className="animate-spin" /> : <CheckCircle2 size={24} className="text-blue-400" />}
+                                Confirm Booking
                             </button>
                         </div>
+                    </form>
+                </div>
+
+                {/* Right: Menu & Summary */}
+                <div className="w-full md:w-[380px] bg-slate-50 p-6 md:p-10 flex flex-col overflow-y-auto md:max-h-full min-h-[400px]">
+                    <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600">
+                                <ShoppingBag size={20} />
+                            </div>
+                            <h3 className="text-xl font-black text-slate-800">Menu Select</h3>
+                        </div>
+                        <button onClick={onClose} className="hidden md:flex w-10 h-10 rounded-full bg-white flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors shadow-sm">
+                            <X size={20} />
+                        </button>
                     </div>
 
+                    <div className="relative mb-4 shrink-0">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                        <input
+                            type="text"
+                            placeholder="Find items..."
+                            value={menuSearchQuery}
+                            onChange={(e) => setMenuSearchQuery(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 focus:border-blue-500 rounded-xl outline-none font-bold text-sm text-slate-700 transition-all font-sans shadow-sm"
+                        />
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                        {isLoading ? (
+                            <div className="flex items-center justify-center py-10">
+                                <Loader2 className="animate-spin text-blue-500" />
+                            </div>
+                        ) : products
+                            .filter(p => p.name.toLowerCase().includes(menuSearchQuery.toLowerCase()))
+                            .map(item => (
+                                <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between group hover:ring-2 hover:ring-blue-100 transition-all">
+                                    <div className="min-w-0 pr-4">
+                                        <h4 className="font-bold text-slate-700 truncate text-sm">{item.name}</h4>
+                                        <p className="text-[10px] font-black text-slate-400">Rs. {parseFloat(item.price).toLocaleString()}</p>
+                                    </div>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        placeholder="0"
+                                        value={quantities[item.id] || ''}
+                                        onChange={(e) => handleQuantityChange(item.id, e.target.value)}
+                                        className="w-14 bg-slate-50 border border-slate-200 rounded-xl py-2 text-center font-black text-slate-700 outline-none focus:border-blue-500 transition-all text-xs"
+                                    />
+                                </div>
+                            ))}
+                    </div>
+
+                    <div className="mt-8 pt-8 border-t border-slate-200 space-y-4">
+                        <div className="flex justify-between items-center text-sm font-bold">
+                            <span className="text-slate-400 uppercase tracking-wider">Estimated Total</span>
+                            <span className="text-slate-800 text-lg">Rs. {estimatedTotal.toLocaleString()}</span>
+                        </div>
+                        <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100">
+                            <div className="flex justify-between items-center mb-1">
+                                <span className="text-amber-800 text-[10px] font-black uppercase tracking-widest">Mandatory Advance (30%)</span>
+                                <span className="text-amber-900 font-black">Rs. {requiredAdvance.toLocaleString()}</span>
+                            </div>
+                            {bookingType === 'EXCLUSIVE' && (
+                                <p className="text-[10px] text-amber-600 font-bold">Includes Rs. 5,000 Hall Charge</p>
+                            )}
+                        </div>
+                    </div>
                 </div>
+
+                <style>{`
+                    .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+                    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                    .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+                `}</style>
             </div>
         </div>
     );

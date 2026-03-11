@@ -3,6 +3,7 @@ import { Toaster } from 'sonner';
 import { useAuth } from './context/AuthContext';
 import { LoginScreen } from './components/LoginScreen';
 import { SidebarLayout } from './components/SidebarLayout';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 // Pages
 import { POSDashboard } from './pages/POSDashboard';
@@ -11,7 +12,6 @@ import { KDSDashboard } from './pages/KDSDashboard';
 import { InventoryDashboard } from './pages/InventoryDashboard';
 import { ReportsDashboard } from './pages/ReportsDashboard';
 import { StaffDashboard } from './pages/StaffDashboard';
-import { FloorPlan } from './pages/FloorPlan';
 
 function App() {
   const { isAuthenticated } = useAuth();
@@ -30,13 +30,31 @@ function App() {
       <Toaster position="top-right" richColors />
       <Routes>
         <Route element={<SidebarLayout />}>
-          <Route path="/" element={<POSDashboard />} />
-          <Route path="/floor-plan" element={<FloorPlan />} />
-          <Route path="/events" element={<EventsDashboard />} />
-          <Route path="/inventory" element={<InventoryDashboard />} />
-          <Route path="/reports" element={<ReportsDashboard />} />
-          <Route path="/staff" element={<StaffDashboard />} />
-          <Route path="/kds" element={<KDSDashboard />} />
+          <Route element={<ProtectedRoute requiredPermission="POS" />}>
+            <Route path="/" element={<POSDashboard />} />
+            {/* assuming CART is part of POS for now, or just /cart */}
+          </Route>
+
+          <Route element={<ProtectedRoute requiredPermission="EVENTS" />}>
+            <Route path="/events" element={<EventsDashboard />} />
+          </Route>
+
+          <Route element={<ProtectedRoute requiredPermission="INVENTORY" />}>
+            <Route path="/inventory" element={<InventoryDashboard />} />
+          </Route>
+
+          <Route element={<ProtectedRoute requiredPermission="REPORTS" />}>
+            <Route path="/reports" element={<ReportsDashboard />} />
+          </Route>
+
+          <Route element={<ProtectedRoute requiredPermission="STAFF" />}>
+            <Route path="/staff" element={<StaffDashboard />} />
+          </Route>
+
+          <Route element={<ProtectedRoute requiredPermission="KDS" />}>
+            <Route path="/kds" element={<KDSDashboard />} />
+          </Route>
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

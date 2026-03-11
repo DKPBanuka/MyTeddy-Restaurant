@@ -26,13 +26,30 @@ export class AuthService {
             throw new UnauthorizedException('Invalid PIN');
         }
 
-        const payload = { sub: user.id, name: user.name, role: user.role };
+        // Fetch permissions for the role
+        let rolePerm = await this.prisma.rolePermission.findUnique({
+            where: { role: user.role }
+        });
+
+        // Fallback default permissions if not configured yet
+        if (!rolePerm) {
+            rolePerm = {
+                id: 'temp',
+                role: user.role,
+                permissions: user.role === 'ADMIN' ? ['POS', 'INVENTORY', 'REPORTS', 'EVENTS', 'STAFF', 'KDS'] : ['POS'],
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            };
+        }
+
+        const payload = { sub: user.id, name: user.name, role: user.role, permissions: rolePerm.permissions };
         return {
             access_token: this.jwtService.sign(payload),
             user: {
                 id: user.id,
                 name: user.name,
                 role: user.role,
+                permissions: rolePerm.permissions
             }
         };
     }

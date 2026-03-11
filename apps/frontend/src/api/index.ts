@@ -84,6 +84,18 @@ export const api = {
         const res = await apiClient.get(`/products`);
         return res.data;
     },
+    createProduct: async (data: Partial<Product>): Promise<Product> => {
+        const res = await apiClient.post(`/products`, data);
+        return res.data;
+    },
+    updateProduct: async (id: string, data: Partial<Product>): Promise<Product> => {
+        const res = await apiClient.patch(`/products/${id}`, data);
+        return res.data;
+    },
+    deleteProduct: async (id: string) => {
+        const res = await apiClient.delete(`/products/${id}`);
+        return res.data;
+    },
     uploadProductImage: async (file: File) => {
         const formData = new FormData();
         formData.append('file', file);
@@ -206,6 +218,24 @@ export const api = {
     },
     updatePartyBookingAdvance: async (id: string, amount: number): Promise<PartyBookingDto> => {
         const res = await apiClient.patch(`/party-bookings/${id}/advance`, { amount });
+        return res.data;
+    },
+    updatePartyBookingTime: async (id: string, data: { eventDate: string; startTime: string; endTime: string }): Promise<PartyBookingDto> => {
+        const res = await apiClient.patch(`/party-bookings/${id}/time`, data);
+        return res.data;
+    },
+    addPartyBookingExtras: async (id: string, addonsAmount: number): Promise<PartyBookingDto> => {
+        const res = await apiClient.patch(`/party-bookings/${id}/extras`, { addonsAmount });
+        return res.data;
+    },
+
+    // --- Role Permissions ---
+    getRolePermissions: async () => {
+        const res = await apiClient.get(`/role-permissions`);
+        return res.data;
+    },
+    updateRolePermissions: async (role: string, permissions: string[]) => {
+        const res = await apiClient.patch(`/role-permissions/${role}`, { permissions });
         return res.data;
     },
 };

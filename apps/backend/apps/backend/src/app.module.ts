@@ -7,9 +7,11 @@ import { OrdersModule } from './orders/orders.module';
 import { AuthModule } from './auth/auth.module';
 import { PartyBookingsModule } from './party-bookings/party-bookings.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { StaffModule } from './staff/staff.module';
+import { RolePermissionsModule } from './role-permissions/role-permissions.module';
 
 @Module({
-  imports: [PrismaModule, ProductsModule, OrdersModule, AuthModule, PartyBookingsModule, InventoryModule],
+  imports: [PrismaModule, ProductsModule, OrdersModule, AuthModule, PartyBookingsModule, InventoryModule, StaffModule, RolePermissionsModule],
   controllers: [AppController],
   providers: [AppService],
 })

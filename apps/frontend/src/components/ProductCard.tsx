@@ -53,7 +53,7 @@ export function ProductCard({ product, qtyInCart, onAdd, onUpdateQty }: ProductC
 
                 <div className="mt-auto flex items-end justify-between pt-2">
                     <div className="flex items-start">
-                        <span className="text-xs font-bold text-slate-400 mt-1 mr-0.5">$</span>
+                        <span className="text-xs font-bold text-slate-400 mt-1 mr-1">Rs.</span>
                         <span className="font-extrabold text-2xl text-slate-800 tracking-tight leading-none">
                             {Number(product.price).toFixed(1)}
                         </span>

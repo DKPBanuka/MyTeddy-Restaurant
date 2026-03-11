@@ -439,7 +439,7 @@ function RetailView({ data, onRefresh, searchQuery, setSearchQuery }: any) {
                         {filtered.map((item: RetailStock) => (
                             <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                                 <td className="p-4 pl-6 font-bold text-slate-900">{item.product?.name}</td>
-                                <td className="p-4">${Number(item.product?.price || 0).toFixed(2)}</td>
+                                <td className="p-4">Rs. {Number(item.product?.price || 0).toFixed(2)}</td>
                                 <td className="p-4">
                                     <div className="flex items-center gap-3">
                                         <button
@@ -540,7 +540,7 @@ function RetailModal({ initialData, onClose, onSave }: any) {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1.5">Selling Price ($)</label>
+                            <label className="block text-sm font-bold text-slate-700 mb-1.5">Selling Price (Rs.)</label>
                             <input
                                 required type="number" step="0.01" min="0"
                                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-500 font-medium"

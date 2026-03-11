@@ -140,7 +140,7 @@ export function Cart({
                                         <div className="flex justify-between items-start">
                                             <h4 className="font-bold text-slate-800 text-sm leading-tight line-clamp-1 py-1">{item.product.name}</h4>
                                             <span className="text-sm font-black text-slate-800 tracking-tight shrink-0 ml-2">
-                                                ${(Number(item.product.price) * item.quantity).toFixed(1)}
+                                                Rs. {(Number(item.product.price) * item.quantity).toFixed(1)}
                                             </span>
                                         </div>
 
@@ -181,11 +181,11 @@ export function Cart({
                     <div className="space-y-3 mb-4">
                         <div className="flex justify-between items-center text-sm">
                             <span className="text-slate-500 font-medium">Sub Total</span>
-                            <span className="font-bold text-slate-800">${subTotal.toFixed(1)}</span>
+                            <span className="font-bold text-slate-800">Rs. {subTotal.toFixed(1)}</span>
                         </div>
                         <div className="flex justify-between items-center text-sm">
                             <span className="text-slate-500 font-medium">Tax</span>
-                            <span className="font-bold text-slate-800">${tax.toFixed(1)}</span>
+                            <span className="font-bold text-slate-800">Rs. {tax.toFixed(1)}</span>
                         </div>
                     </div>
 
@@ -193,7 +193,7 @@ export function Cart({
 
                     <div className="flex justify-between items-center mb-6">
                         <span className="text-slate-500 font-medium">Total Payment</span>
-                        <span className="text-lg font-black text-slate-800">${totalAmount.toFixed(1)}</span>
+                        <span className="text-lg font-black text-slate-800">Rs. {totalAmount.toFixed(1)}</span>
                     </div>
 
                     {/* Payment Toggles */}

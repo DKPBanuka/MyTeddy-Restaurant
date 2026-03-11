@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import { toast } from 'sonner';
-import { Plus, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Shield, Users as UsersIcon, Save, UtensilsCrossed } from 'lucide-react';
 import { Role } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { MenuManagement } from '../components/MenuManagement';
 
 interface StaffUser {
     id: string;
@@ -11,8 +13,16 @@ interface StaffUser {
 }
 
 export const StaffDashboard: React.FC = () => {
+    const { user: currentUser } = useAuth();
     const [staff, setStaff] = useState<StaffUser[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<'staff' | 'permissions' | 'menu'>('staff');
+
+    // Permissions State
+    const [rolePermissions, setRolePermissions] = useState<any[]>([]);
+    const [isSavingPermissions, setIsSavingPermissions] = useState(false);
+
+    const AVAILABLE_FEATURES = ['POS', 'KDS', 'REPORTS', 'EVENTS', 'INVENTORY', 'STAFF'];
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -32,7 +42,19 @@ export const StaffDashboard: React.FC = () => {
 
     useEffect(() => {
         fetchStaff();
-    }, []);
+        if (currentUser?.role === 'ADMIN') {
+            fetchPermissions();
+        }
+    }, [currentUser?.role]);
+
+    const fetchPermissions = async () => {
+        try {
+            const data = await api.getRolePermissions();
+            setRolePermissions(data);
+        } catch (error: any) {
+            toast.error(error.response?.data?.error || 'Failed to fetch permissions');
+        }
+    };
 
     const fetchStaff = async () => {
         try {
@@ -43,6 +65,33 @@ export const StaffDashboard: React.FC = () => {
             toast.error(error.response?.data?.error || 'Failed to fetch staff');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handlePermissionToggle = (role: string, feature: string) => {
+        setRolePermissions(prev => prev.map(rp => {
+            if (rp.role === role) {
+                const newPerms = rp.permissions.includes(feature)
+                    ? rp.permissions.filter((p: string) => p !== feature)
+                    : [...rp.permissions, feature];
+                return { ...rp, permissions: newPerms };
+            }
+            return rp;
+        }));
+    };
+
+    const handleSavePermissions = async () => {
+        try {
+            setIsSavingPermissions(true);
+            for (const rp of rolePermissions) {
+                await api.updateRolePermissions(rp.role, rp.permissions);
+            }
+            toast.success('Role permissions updated successfully!');
+            fetchPermissions();
+        } catch (error: any) {
+            toast.error(error.response?.data?.error || 'Failed to update permissions');
+        } finally {
+            setIsSavingPermissions(false);
         }
     };
 
@@ -118,80 +167,189 @@ export const StaffDashboard: React.FC = () => {
 
 
     return (
-        <div className="p-8 max-w-6xl mx-auto">
-            <div className="flex justify-between items-center mb-8">
+        <div className="p-8 max-w-6xl mx-auto pb-32">
+            <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-800">Staff Management</h1>
-                    <p className="text-slate-500 mt-1">Manage system users, roles, and PIN access.</p>
+                    <h1 className="text-3xl font-bold text-slate-800">System Settings</h1>
+                    <p className="text-slate-500 mt-1">Manage system users, roles, and feature access.</p>
                 </div>
-                <button
-                    onClick={() => handleOpenModal('create')}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
-                >
-                    <Plus size={20} />
-                    Add Staff Member
-                </button>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-slate-50/50 border-b border-slate-100">
-                                <th className="p-4 font-semibold text-slate-600">Name</th>
-                                <th className="p-4 font-semibold text-slate-600">Role</th>
-                                <th className="p-4 font-semibold text-slate-600 text-right w-32">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {isLoading ? (
-                                <tr>
-                                    <td colSpan={3} className="p-8 text-center text-slate-500">Loading staff data...</td>
-                                </tr>
-                            ) : staff.length === 0 ? (
-                                <tr>
-                                    <td colSpan={3} className="p-8 text-center text-slate-500">No staff members found.</td>
-                                </tr>
-                            ) : (
-                                staff.map((user) => (
-                                    <tr key={user.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                        <td className="p-4">
-                                            <div className="font-medium text-slate-800">{user.name}</div>
-                                        </td>
-                                        <td className="p-4">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
+            {/* Tabs */}
+            <div className="flex p-1 bg-slate-200/50 rounded-xl mb-6 w-max">
+                <button
+                    onClick={() => setActiveTab('staff')}
+                    className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'staff' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    <UsersIcon size={18} />
+                    Staff Accounts
+                </button>
+                {currentUser?.role === 'ADMIN' && (
+                    <button
+                        onClick={() => setActiveTab('permissions')}
+                        className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'permissions' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        <Shield size={18} />
+                        Role Permissions
+                    </button>
+                )}
+                {currentUser?.role === 'ADMIN' && (
+                    <button
+                        onClick={() => setActiveTab('menu')}
+                        className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'menu' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        <UtensilsCrossed size={18} />
+                        Menu setup
+                    </button>
+                )}
+            </div>
+
+            {activeTab === 'staff' && (
+                <>
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-bold text-slate-700">Staff Members</h2>
+                        <button
+                            onClick={() => handleOpenModal('create')}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-sm text-sm font-semibold"
+                        >
+                            <Plus size={18} />
+                            Add User
+                        </button>
+                    </div>
+
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-50/50 border-b border-slate-100">
+                                        <th className="p-4 font-semibold text-slate-600">Name</th>
+                                        <th className="p-4 font-semibold text-slate-600">Role</th>
+                                        <th className="p-4 font-semibold text-slate-600 text-right w-32">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {isLoading ? (
+                                        <tr>
+                                            <td colSpan={3} className="p-8 text-center text-slate-500">Loading staff data...</td>
+                                        </tr>
+                                    ) : staff.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={3} className="p-8 text-center text-slate-500">No staff members found.</td>
+                                        </tr>
+                                    ) : (
+                                        staff.map((user) => (
+                                            <tr key={user.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                                <td className="p-4">
+                                                    <div className="font-medium text-slate-800">{user.name}</div>
+                                                </td>
+                                                <td className="p-4">
+                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
                                                 ${user.role === 'ADMIN' ? 'bg-purple-100 text-purple-800' :
-                                                    user.role === 'CASHIER' ? 'bg-blue-100 text-blue-800' :
-                                                        user.role === 'KITCHEN' ? 'bg-orange-100 text-orange-800' :
-                                                            'bg-green-100 text-green-800'}`}>
-                                                {user.role.toLowerCase()}
-                                            </span>
-                                        </td>
-                                        <td className="p-4">
-                                            <div className="flex justify-end gap-2">
-                                                <button
-                                                    onClick={() => handleOpenModal('edit', user)}
-                                                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                    title="Edit User"
-                                                >
-                                                    <Edit2 size={18} />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDeleteClick(user.id)}
-                                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                    title="Delete User"
-                                                >
-                                                    <Trash2 size={18} />
-                                                </button>
-                                            </div>
+                                                            user.role === 'CASHIER' ? 'bg-blue-100 text-blue-800' :
+                                                                user.role === 'KITCHEN' ? 'bg-orange-100 text-orange-800' :
+                                                                    'bg-green-100 text-green-800'}`}>
+                                                        {user.role.toLowerCase()}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="flex justify-end gap-2">
+                                                        <button
+                                                            onClick={() => handleOpenModal('edit', user)}
+                                                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                            title="Edit User"
+                                                        >
+                                                            <Edit2 size={18} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteClick(user.id)}
+                                                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                            title="Delete User"
+                                                        >
+                                                            <Trash2 size={18} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* PERMISSIONS TAB */}
+            {activeTab === 'permissions' && (
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden animate-in fade-in">
+                    <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                        <div>
+                            <h2 className="text-lg font-bold text-slate-800">Feature Access Control</h2>
+                            <p className="text-sm text-slate-500">Toggle which roles can access specific system features.</p>
+                        </div>
+                        <button
+                            onClick={handleSavePermissions}
+                            disabled={isSavingPermissions}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-sm ${isSavingPermissions ? 'bg-slate-300 text-white cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
+                        >
+                            <Save size={18} />
+                            {isSavingPermissions ? 'Saving...' : 'Save Permissions'}
+                        </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="border-b border-slate-100">
+                                    <th className="p-4 font-semibold text-slate-600 bg-white sticky left-0 z-10 w-48">Role / Feature</th>
+                                    {AVAILABLE_FEATURES.map(feature => (
+                                        <th key={feature} className="p-4 font-semibold text-slate-600 text-center">
+                                            {feature}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rolePermissions.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={AVAILABLE_FEATURES.length + 1} className="p-8 text-center text-slate-500">
+                                            Loading permissions... (Make sure backend is initialized)
                                         </td>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                                ) : (
+                                    rolePermissions.map((rp) => (
+                                        <tr key={rp.role} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                            <td className="p-4 bg-white sticky left-0 z-10 font-bold text-slate-700 capitalize">
+                                                {rp.role.toLowerCase()}
+                                            </td>
+                                            {AVAILABLE_FEATURES.map(feature => {
+                                                const hasAccess = rp.permissions.includes(feature);
+                                                return (
+                                                    <td key={`${rp.role}-${feature}`} className="p-4 text-center">
+                                                        <label className="relative inline-flex items-center cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                className="sr-only peer"
+                                                                checked={hasAccess}
+                                                                onChange={() => handlePermissionToggle(rp.role, feature)}
+                                                                disabled={rp.role === 'ADMIN'} // Optional: Stop them from locking themselves out entirely
+                                                            />
+                                                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                                        </label>
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
+            )}
+
+            {activeTab === 'menu' && (
+                <MenuManagement />
+            )}
 
             {/* Add / Edit Modal */}
             {isModalOpen && (

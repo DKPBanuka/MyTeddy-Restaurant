@@ -104,4 +104,67 @@ export class PartyBookingsService {
             data: { advancePaid: newAdvance, status: newStatus as any },
         });
     }
+
+    async updateBookingTime(id: string, eventDate: string, startTime: string, endTime: string) {
+        const booking = await this.prisma.partyBooking.findUnique({ where: { id } });
+        if (!booking) throw new NotFoundException('Booking not found');
+
+        const newEventDate = new Date(eventDate);
+        newEventDate.setHours(0, 0, 0, 0);
+        const reqStart = new Date(startTime);
+        const reqEnd = new Date(endTime);
+
+        // Check for conflicts, ignoring the current booking
+        const existingBookings = await this.prisma.partyBooking.findMany({
+            where: {
+                eventDate: {
+                    gte: newEventDate,
+                    lt: new Date(newEventDate.getTime() + 24 * 60 * 60 * 1000),
+                },
+                status: { in: ['PENDING', 'CONFIRMED'] },
+                id: { not: id },
+            },
+        });
+
+        const hasClash = existingBookings.some((existing: any) => {
+            const existingStart = new Date(existing.startTime);
+            const existingEnd = new Date(existing.endTime);
+            const overlaps = reqStart.getTime() < existingEnd.getTime() && reqEnd.getTime() > existingStart.getTime();
+            if (overlaps) {
+                if (booking.bookingType === 'EXCLUSIVE' || existing.bookingType === 'EXCLUSIVE') {
+                    return true;
+                }
+            }
+            return false;
+        });
+
+        if (hasClash) {
+            throw new ConflictException('The selected time slot conflicts with an exclusive booking.');
+        }
+
+        return this.prisma.partyBooking.update({
+            where: { id },
+            data: {
+                eventDate: new Date(eventDate),
+                startTime: reqStart,
+                endTime: reqEnd,
+            },
+        });
+    }
+
+    async addExtras(id: string, additionalAmount: number) {
+        const booking = await this.prisma.partyBooking.findUnique({ where: { id } });
+        if (!booking) throw new NotFoundException('Booking not found');
+
+        const newAddonsTotal = Number(booking.addonsTotal) + Number(additionalAmount);
+        const newTotalAmount = Number(booking.hallCharge) + Number(booking.menuTotal) + newAddonsTotal;
+
+        return this.prisma.partyBooking.update({
+            where: { id },
+            data: {
+                addonsTotal: newAddonsTotal,
+                totalAmount: newTotalAmount,
+            },
+        });
+    }
 }

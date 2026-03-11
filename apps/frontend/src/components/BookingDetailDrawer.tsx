@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { X, Phone, User, Calendar as CalendarIcon, Clock, DollarSign, MessageCircle, Printer, CreditCard, ChevronRight, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Phone, User, Calendar as CalendarIcon, Clock, DollarSign, MessageCircle, Printer, CreditCard, ChevronRight, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
 import { api, type PartyBookingDto } from '../api';
+import type { Product } from '../types';
 import { toast } from 'sonner';
 
 interface BookingDetailDrawerProps {
@@ -14,9 +15,22 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess }: Boo
     const [paymentAmount, setPaymentAmount] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Extra Items State
+    const [products, setProducts] = useState<Product[]>([]);
+    const [selectedExtraProduct, setSelectedExtraProduct] = useState<string>('');
+    const [extraQuantity, setExtraQuantity] = useState<string>('1');
+    const [isAddingExtra, setIsAddingExtra] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) {
+            api.getProducts().then(setProducts).catch(console.error);
+        }
+    }, [isOpen]);
+
     if (!isOpen || !booking) return null;
 
     const totalAmount = Number(booking.totalAmount) || 0;
+    const addonsTotal = Number(booking.addonsTotal) || 0;
     const advancePaid = Number(booking.advancePaid) || 0;
     const balanceDue = totalAmount - advancePaid;
 
@@ -53,6 +67,31 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess }: Boo
             toast.error(err?.response?.data?.message || 'Failed to record payment.');
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleAddExtraItem = async () => {
+        if (!selectedExtraProduct || !extraQuantity || Number(extraQuantity) <= 0) {
+            toast.error('Please select a product and valid quantity');
+            return;
+        }
+
+        const product = products.find(p => p.id === selectedExtraProduct);
+        if (!product) return;
+
+        const amountToAdd = Number(product.price) * Number(extraQuantity);
+
+        setIsAddingExtra(true);
+        try {
+            await api.addPartyBookingExtras(booking.id!, amountToAdd);
+            toast.success(`Added ${extraQuantity}x ${product.name}!`);
+            setSelectedExtraProduct('');
+            setExtraQuantity('1');
+            onSuccess(); // Refresh the list / current booking
+        } catch (err: any) {
+            toast.error(err?.response?.data?.message || 'Failed to add extra items.');
+        } finally {
+            setIsAddingExtra(false);
         }
     };
 
@@ -139,6 +178,10 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess }: Boo
 
                         <div className="space-y-3">
                             <div className="flex justify-between text-sm py-2 border-b border-slate-50">
+                                <span className="text-slate-500 font-medium">Add-ons (Extras)</span>
+                                <span className="text-slate-800 font-bold">Rs. {addonsTotal.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm py-2 border-b border-slate-50">
                                 <span className="text-slate-500 font-medium">Booking Total</span>
                                 <span className="text-slate-800 font-bold">Rs. {totalAmount.toLocaleString()}</span>
                             </div>
@@ -152,6 +195,43 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess }: Boo
                             </div>
                         </div>
                     </section>
+
+                    {/* Extra Items Form */}
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                        <label className="text-sm font-bold text-slate-800 block mb-3 flex items-center gap-2">
+                            <Plus size={16} className="text-slate-500" />
+                            Add Extra Items (During Party)
+                        </label>
+                        <div className="space-y-3">
+                            <select
+                                value={selectedExtraProduct}
+                                onChange={(e) => setSelectedExtraProduct(e.target.value)}
+                                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50 text-sm font-bold truncate"
+                            >
+                                <option value="">Select Item (Juice, Bites, etc)</option>
+                                {products.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name} - Rs. {Number(p.price).toLocaleString()}</option>
+                                ))}
+                            </select>
+                            <div className="flex gap-2">
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={extraQuantity}
+                                    onChange={(e) => setExtraQuantity(e.target.value)}
+                                    placeholder="Qty"
+                                    className="w-24 px-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50 text-sm font-bold text-center"
+                                />
+                                <button
+                                    onClick={handleAddExtraItem}
+                                    disabled={isAddingExtra || !selectedExtraProduct}
+                                    className="flex-1 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-sm transition-all disabled:opacity-50"
+                                >
+                                    {isAddingExtra ? 'Adding...' : 'Add to Bill'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
                     {/* Actions Panel */}
                     <div className="space-y-3 pt-4">

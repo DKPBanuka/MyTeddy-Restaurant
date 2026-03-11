@@ -17,4 +17,38 @@ export class ProductsService {
             },
         });
     }
+
+    async create(data: { name: string; price: number; type: any; description?: string; imageUrl?: string; isActive?: boolean }) {
+        return this.prisma.product.create({
+            data: {
+                name: data.name,
+                price: data.price,
+                type: data.type,
+                description: data.description,
+                imageUrl: data.imageUrl,
+                isActive: data.isActive ?? true,
+            }
+        });
+    }
+
+    async update(id: string, data: any) {
+        return this.prisma.product.update({
+            where: { id },
+            data
+        });
+    }
+
+    async remove(id: string) {
+        try {
+            return await this.prisma.product.delete({
+                where: { id }
+            });
+        } catch (error) {
+            // Fallback to soft delete if there are foreign key constraints (e.g. order items)
+            return await this.prisma.product.update({
+                where: { id },
+                data: { isActive: false }
+            });
+        }
+    }
 }

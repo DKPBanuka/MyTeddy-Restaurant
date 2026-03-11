@@ -31,6 +31,7 @@ export interface Product {
     type: ProductType;
     barcode: string | null;
     imageUrl?: string | null;
+    isActive?: boolean;
     // Included relations
     retailStock?: {
         stockQty: number;

@@ -145,7 +145,7 @@ export const ReportsDashboard: React.FC = () => {
                                 <BarChart data={data.salesTrend}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                     <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} tickFormatter={(value) => `₨${value / 1000}k`} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} tickFormatter={(value) => `Rs. ${value / 1000}k`} />
                                     <RechartsTooltip
                                         formatter={(value: number | undefined) => formatCurrency(value || 0)}
                                         cursor={{ fill: '#f8fafc' }}

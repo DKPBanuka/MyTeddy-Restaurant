@@ -82,7 +82,7 @@ export function POSDashboard() {
             setOrderType('DINE_IN');
             setOrderMetadata(prev => ({ ...prev, tableNo: state.tableNo as string }));
         }
-        
+
         if (state?.orderId) {
             const fetchAndOpenOrder = async () => {
                 try {
@@ -487,7 +487,7 @@ export function POSDashboard() {
                                 </div>
                             </div>
                             <div className="flex items-center gap-4">
-                                <div className="font-black text-xl">${cartTotalPrice.toFixed(1)}</div>
+                                <div className="font-black text-xl">Rs. {cartTotalPrice.toFixed(1)}</div>
                                 <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
                                     &rarr;
                                 </div>

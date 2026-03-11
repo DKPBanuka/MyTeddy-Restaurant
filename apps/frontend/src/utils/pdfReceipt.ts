@@ -37,8 +37,8 @@ export const generatePDFReceipt = (orderData: CreateOrderDto, orderId: string = 
         tableBody.push([
             { text: name, style: 'tableCell' },
             { text: item.quantity.toString(), style: 'tableCell', alignment: 'center' },
-            { text: `$${Number(price).toFixed(2)}`, style: 'tableCell', alignment: 'right' },
-            { text: `$${Number(lineTotal).toFixed(2)}`, style: 'tableCell', alignment: 'right' }
+            { text: `Rs. ${Number(price).toFixed(2)}`, style: 'tableCell', alignment: 'right' },
+            { text: `Rs. ${Number(lineTotal).toFixed(2)}`, style: 'tableCell', alignment: 'right' }
         ]);
     });
 
@@ -91,7 +91,7 @@ export const generatePDFReceipt = (orderData: CreateOrderDto, orderId: string = 
             {
                 columns: [
                     { text: 'GRAND TOTAL:', style: 'totalLabel', alignment: 'right', width: '*' },
-                    { text: `$${orderData.totalAmount.toFixed(2)}`, style: 'totalValue', alignment: 'right', width: 60 }
+                    { text: `Rs. ${orderData.totalAmount.toFixed(2)}`, style: 'totalValue', alignment: 'right', width: 70 }
                 ],
                 margin: [0, 0, 0, 20]
             },
