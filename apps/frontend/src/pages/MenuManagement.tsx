@@ -3,7 +3,7 @@ import { api } from '../api';
 import type { Category, Product } from '../types';
 import { ProductType } from '../types';
 import { toast } from 'sonner';
-import { Plus, Trash2, Edit2, Save, X, Layers, ShoppingBag, Search } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, Layers, ShoppingBag, Search, Upload, Loader2 } from 'lucide-react';
 
 export function MenuManagement() {
     const [categories, setCategories] = useState<Category[]>([]);
@@ -303,7 +303,25 @@ function ProductModal({ categories, initialData, onClose, onSuccess }: { categor
         type: initialData?.type || ProductType.FOOD,
         categoryId: initialData?.categoryId || '',
         description: initialData?.description || '',
+        imageUrl: initialData?.imageUrl || '',
     });
+    const [isUploading, setIsUploading] = useState(false);
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setIsUploading(true);
+            const { imageUrl } = await api.uploadProductImage(file);
+            setFormData(prev => ({ ...prev, imageUrl }));
+            toast.success('Image uploaded successfully');
+        } catch (error) {
+            toast.error('Failed to upload image');
+        } finally {
+            setIsUploading(false);
+        }
+    };
 
     const handleSubmit = async () => {
         try {
@@ -334,6 +352,38 @@ function ProductModal({ categories, initialData, onClose, onSuccess }: { categor
                     </button>
                 </div>
                 <div className="p-8 space-y-5">
+                    {/* Image Upload Section */}
+                    <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 group hover:border-blue-400 hover:bg-blue-50/30 transition-all relative overflow-hidden h-48">
+                        {formData.imageUrl ? (
+                            <>
+                                <img src={formData.imageUrl} alt="Preview" className="absolute inset-0 w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                    <label className="p-3 bg-white rounded-xl text-slate-800 cursor-pointer hover:scale-110 transition-transform shadow-lg">
+                                        <Upload size={20} />
+                                        <input type="file" className="hidden" aria-label='Upload product image' accept="image/*" onChange={handleImageUpload} disabled={isUploading} />
+                                    </label>
+                                    <button 
+                                        onClick={() => setFormData(prev => ({ ...prev, imageUrl: '' }))}
+                                        className="p-3 bg-white rounded-xl text-red-500 hover:scale-110 transition-transform shadow-lg"
+                                    >
+                                        <Trash2 size={20} />
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <label className="flex flex-col items-center gap-3 cursor-pointer">
+                                <div className="w-16 h-16 rounded-2xl bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-blue-500 group-hover:scale-110 transition-all">
+                                    {isUploading ? <Loader2 size={32} className="animate-spin text-blue-500" /> : <Upload size={32} />}
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-sm font-bold text-slate-700">Click to upload image</p>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">JPG, PNG or WEBP (Max 5MB)</p>
+                                </div>
+                                <input type="file" className="hidden" accept="image/*" aria-label="Upload product image" onChange={handleImageUpload} disabled={isUploading} />
+                            </label>
+                        )}
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                         <div className="col-span-2">
                             <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Product Name</label>

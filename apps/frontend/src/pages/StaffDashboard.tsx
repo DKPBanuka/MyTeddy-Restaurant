@@ -16,7 +16,7 @@ export const StaffDashboard: React.FC = () => {
     const { user: currentUser } = useAuth();
     const [staff, setStaff] = useState<StaffUser[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'staff' | 'permissions' | 'menu'>('staff');
+    const [activeTab, setActiveTab] = useState<'staff' | 'permissions'>('staff');
 
     // Permissions State
     const [rolePermissions, setRolePermissions] = useState<any[]>([]);
@@ -193,15 +193,6 @@ export const StaffDashboard: React.FC = () => {
                         Role Permissions
                     </button>
                 )}
-                {currentUser?.role === 'ADMIN' && (
-                    <button
-                        onClick={() => setActiveTab('menu')}
-                        className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'menu' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        <UtensilsCrossed size={18} />
-                        Menu setup
-                    </button>
-                )}
             </div>
 
             {activeTab === 'staff' && (
@@ -347,9 +338,6 @@ export const StaffDashboard: React.FC = () => {
                 </div>
             )}
 
-            {activeTab === 'menu' && (
-                <MenuManagement />
-            )}
 
             {/* Add / Edit Modal */}
             {isModalOpen && (
