@@ -26,6 +26,12 @@ export function ProductCard({ product, qtyInCart, onAdd, onUpdateQty }: ProductC
                         alt={product.name}
                         className="w-full h-full object-cover rounded-xl transition-transform hover:scale-105 duration-300"
                     />
+                    {/* Category Badge */}
+                    {product.category && (
+                        <div className="absolute top-2 right-2 bg-blue-600/90 backdrop-blur-sm text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded text-white shadow-sm">
+                            {product.category.name}
+                        </div>
+                    )}
                     {/* Stock Indicator Top Left */}
                     {isRetail && (
                         <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm text-[10px] font-bold px-2 py-1 rounded-md text-slate-800 shadow-md">
@@ -34,8 +40,13 @@ export function ProductCard({ product, qtyInCart, onAdd, onUpdateQty }: ProductC
                     )}
                 </div>
             ) : (
-                <div className="h-32 rounded-xl bg-slate-100 mb-4 flex flex-col items-center justify-center text-slate-300 relative overflow-hidden">
-                    {isRetail ? <Package size={40} className="text-slate-300" strokeWidth={1.5} /> : <Utensils size={40} className="text-slate-300" strokeWidth={1.5} />}
+                <div className={`h-32 rounded-xl mb-4 flex flex-col items-center justify-center relative overflow-hidden transition-colors ${product.category?.name === 'Drinks' ? 'bg-blue-50 text-blue-300' : product.category?.name === 'Foods' ? 'bg-orange-50 text-orange-300' : 'bg-slate-100 text-slate-300'}`}>
+                    {isRetail ? <Package size={40} className="opacity-80" strokeWidth={1.5} /> : <Utensils size={40} className="opacity-80" strokeWidth={1.5} />}
+
+                    {/* Category Label Center */}
+                    <div className="absolute bottom-2 text-[9px] font-black uppercase tracking-widest opacity-40">
+                        {product.category?.name || 'Uncategorized'}
+                    </div>
 
                     {/* Stock Indicator Top Left */}
                     {isRetail && (
@@ -48,8 +59,10 @@ export function ProductCard({ product, qtyInCart, onAdd, onUpdateQty }: ProductC
 
             {/* Content Area */}
             <div className="flex-1 flex flex-col px-1">
-                <h3 className="font-bold text-slate-800 leading-tight mb-1 line-clamp-1">{product.name}</h3>
-                <p className="text-[11px] font-medium text-slate-400 leading-snug line-clamp-2 mb-3">{product.description || 'Delicious beef lasagna with double chili'}</p>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                    <h3 className="font-bold text-slate-800 leading-tight line-clamp-1">{product.name}</h3>
+                </div>
+                <p className="text-[11px] font-medium text-slate-400 leading-snug line-clamp-2 mb-3">{product.description || 'Menu item description'}</p>
 
                 <div className="mt-auto flex items-end justify-between pt-2">
                     <div className="flex items-start">

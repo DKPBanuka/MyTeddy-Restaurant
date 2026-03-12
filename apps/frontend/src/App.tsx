@@ -12,6 +12,7 @@ import { KDSDashboard } from './pages/KDSDashboard';
 import { InventoryDashboard } from './pages/InventoryDashboard';
 import { ReportsDashboard } from './pages/ReportsDashboard';
 import { StaffDashboard } from './pages/StaffDashboard';
+import { MenuManagement } from './pages/MenuManagement.tsx';
 
 function App() {
   const { isAuthenticated } = useAuth();
@@ -50,6 +51,8 @@ function App() {
           <Route element={<ProtectedRoute requiredPermission="STAFF" />}>
             <Route path="/staff" element={<StaffDashboard />} />
           </Route>
+
+          <Route path="/menu-management" element={<MenuManagement />} />
 
           <Route element={<ProtectedRoute requiredPermission="KDS" />}>
             <Route path="/kds" element={<KDSDashboard />} />

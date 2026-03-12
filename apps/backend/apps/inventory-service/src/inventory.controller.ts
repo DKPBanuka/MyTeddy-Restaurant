@@ -7,13 +7,28 @@ export class InventoryController {
     constructor(private readonly inventoryService: InventoryService) { }
 
     @MessagePattern({ cmd: 'get_products' })
-    async getProducts() {
-        return this.inventoryService.getProducts();
+    async getProducts(@Payload() payload: { categoryId?: string }) {
+        return this.inventoryService.getProducts(payload?.categoryId);
     }
 
     @MessagePattern({ cmd: 'deduct_stock' })
     async deductStock(@Payload() items: any[]) {
         return this.inventoryService.deductStock(items);
+    }
+
+    @MessagePattern({ cmd: 'create_product' })
+    async createProduct(@Payload() data: any) {
+        return this.inventoryService.createProduct(data);
+    }
+
+    @MessagePattern({ cmd: 'update_product' })
+    async updateProduct(@Payload() payload: { id: string, data: any }) {
+        return this.inventoryService.updateProduct(payload.id, payload.data);
+    }
+
+    @MessagePattern({ cmd: 'delete_product' })
+    async deleteProduct(@Payload() id: string) {
+        return this.inventoryService.deleteProduct(id);
     }
 
     // --- Ingredients ---
@@ -72,5 +87,26 @@ export class InventoryController {
     @MessagePattern({ cmd: 'delete_recipe_bom' })
     async deleteRecipeBOM(@Payload() id: string) {
         return this.inventoryService.deleteRecipeBOM(id);
+    }
+
+    // --- Categories ---
+    @MessagePattern({ cmd: 'get_categories' })
+    async getCategories() {
+        return this.inventoryService.getCategories();
+    }
+
+    @MessagePattern({ cmd: 'create_category' })
+    async createCategory(@Payload() data: { name: string }) {
+        return this.inventoryService.createCategory(data);
+    }
+
+    @MessagePattern({ cmd: 'update_category' })
+    async updateCategory(@Payload() payload: { id: string, name: string }) {
+        return this.inventoryService.updateCategory(payload.id, { name: payload.name });
+    }
+
+    @MessagePattern({ cmd: 'delete_category' })
+    async deleteCategory(@Payload() id: string) {
+        return this.inventoryService.deleteCategory(id);
     }
 }

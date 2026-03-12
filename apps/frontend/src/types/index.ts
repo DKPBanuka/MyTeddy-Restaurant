@@ -23,6 +23,13 @@ export const Role = {
 
 export type Role = typeof Role[keyof typeof Role];
 
+export interface Category {
+    id: string;
+    name: string;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
 export interface Product {
     id: string;
     name: string;
@@ -32,7 +39,9 @@ export interface Product {
     barcode: string | null;
     imageUrl?: string | null;
     isActive?: boolean;
+    categoryId?: string | null;
     // Included relations
+    category?: Category | null;
     retailStock?: {
         stockQty: number;
         supplierDetails: string;

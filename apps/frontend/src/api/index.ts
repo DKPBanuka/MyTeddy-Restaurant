@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { CreateOrderDto, Product } from '../types';
+import type { CreateOrderDto, Product, Category } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -80,8 +80,8 @@ export const api = {
         const res = await apiClient.post(`/auth/login`, { pin });
         return res.data;
     },
-    getProducts: async (): Promise<Product[]> => {
-        const res = await apiClient.get(`/products`);
+    getProducts: async (categoryId?: string): Promise<Product[]> => {
+        const res = await apiClient.get(`/products`, { params: { categoryId } });
         return res.data;
     },
     createProduct: async (data: Partial<Product>): Promise<Product> => {
@@ -236,6 +236,23 @@ export const api = {
     },
     updateRolePermissions: async (role: string, permissions: string[]) => {
         const res = await apiClient.patch(`/role-permissions/${role}`, { permissions });
+        return res.data;
+    },
+    // --- Categories ---
+    getCategories: async (): Promise<Category[]> => {
+        const res = await apiClient.get(`/categories`);
+        return res.data;
+    },
+    createCategory: async (name: string): Promise<Category> => {
+        const res = await apiClient.post(`/categories`, { name });
+        return res.data;
+    },
+    updateCategory: async (id: string, name: string): Promise<Category> => {
+        const res = await apiClient.patch(`/categories/${id}`, { name });
+        return res.data;
+    },
+    deleteCategory: async (id: string) => {
+        const res = await apiClient.delete(`/categories/${id}`);
         return res.data;
     },
 };

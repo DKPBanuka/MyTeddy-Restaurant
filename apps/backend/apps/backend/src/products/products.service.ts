@@ -5,9 +5,13 @@ import { PrismaService } from '../prisma/prisma.service';
 export class ProductsService {
     constructor(private readonly prisma: PrismaService) { }
 
-    async findAll() {
+    async findAll(categoryId?: string) {
         return this.prisma.product.findMany({
+            where: {
+                categoryId: categoryId || undefined,
+            },
             include: {
+                category: true,
                 retailStock: true,
                 recipeBOMs: {
                     include: {
@@ -18,7 +22,7 @@ export class ProductsService {
         });
     }
 
-    async create(data: { name: string; price: number; type: any; description?: string; imageUrl?: string; isActive?: boolean }) {
+    async create(data: { name: string; price: number; type: any; description?: string; imageUrl?: string; isActive?: boolean; categoryId?: string }) {
         return this.prisma.product.create({
             data: {
                 name: data.name,
@@ -27,6 +31,7 @@ export class ProductsService {
                 description: data.description,
                 imageUrl: data.imageUrl,
                 isActive: data.isActive ?? true,
+                categoryId: data.categoryId,
             }
         });
     }

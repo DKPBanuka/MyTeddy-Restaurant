@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Inject, UseInterceptors, UploadedFile, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Inject, Query, UseInterceptors, UploadedFile, HttpException, HttpStatus } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -13,8 +13,23 @@ export class ProductsGatewayController {
     constructor(@Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientProxy) { }
 
     @Get()
-    async getProducts() {
-        return firstValueFrom(this.inventoryClient.send({ cmd: 'get_products' }, {}));
+    async getProducts(@Query('categoryId') categoryId?: string) {
+        return firstValueFrom(this.inventoryClient.send({ cmd: 'get_products' }, { categoryId }));
+    }
+
+    @Post()
+    async createProduct(@Body() data: any) {
+        return firstValueFrom(this.inventoryClient.send({ cmd: 'create_product' }, data));
+    }
+
+    @Patch(':id')
+    async updateProduct(@Param('id') id: string, @Body() data: any) {
+        return firstValueFrom(this.inventoryClient.send({ cmd: 'update_product' }, { id, data }));
+    }
+
+    @Delete(':id')
+    async deleteProduct(@Param('id') id: string) {
+        return firstValueFrom(this.inventoryClient.send({ cmd: 'delete_product' }, id));
     }
 
     @Post('upload-image')

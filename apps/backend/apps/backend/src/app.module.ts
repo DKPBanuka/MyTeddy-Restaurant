@@ -10,8 +10,10 @@ import { InventoryModule } from './inventory/inventory.module';
 import { StaffModule } from './staff/staff.module';
 import { RolePermissionsModule } from './role-permissions/role-permissions.module';
 
+import { CategoriesModule } from './categories/categories.module';
+
 @Module({
-  imports: [PrismaModule, ProductsModule, OrdersModule, AuthModule, PartyBookingsModule, InventoryModule, StaffModule, RolePermissionsModule],
+  imports: [PrismaModule, ProductsModule, OrdersModule, AuthModule, PartyBookingsModule, InventoryModule, StaffModule, RolePermissionsModule, CategoriesModule],
   controllers: [AppController],
   providers: [AppService],
 })

@@ -78,4 +78,25 @@ export class InventoryGatewayController {
     async deleteRecipeBOM(@Param('id') id: string) {
         return this.callService('delete_recipe_bom', id);
     }
+
+    // --- Categories (Backup Routes) ---
+    @Get('/categories')
+    async findAllCategories() {
+        return this.callService('get_categories');
+    }
+
+    @Post('/categories')
+    async createCategory(@Body() data: { name: string }) {
+        return this.callService('create_category', data);
+    }
+
+    @Patch('/categories/:id')
+    async updateCategory(@Param('id') id: string, @Body() data: { name: string }) {
+        return this.callService('update_category', { id, ...data });
+    }
+
+    @Delete('/categories/:id')
+    async removeCategory(@Param('id') id: string) {
+        return this.callService('delete_category', id);
+    }
 }

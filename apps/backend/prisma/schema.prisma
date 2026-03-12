@@ -74,6 +74,14 @@ model RolePermission {
   updatedAt   DateTime @updatedAt
 }
 
+model Category {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
 model Product {
   id          String        @id @default(uuid())
   name        String
@@ -83,9 +91,11 @@ model Product {
   barcode     String?       @unique
   imageUrl    String?
   isActive    Boolean       @default(true)
+  categoryId  String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
+  category     Category?    @relation(fields: [categoryId], references: [id])
   recipeBOMs   RecipeBOM[]
   retailStock  RetailStock?
   orderItems   OrderItem[]

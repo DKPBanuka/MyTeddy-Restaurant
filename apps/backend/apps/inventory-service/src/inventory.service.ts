@@ -6,9 +6,13 @@ import { RpcException } from '@nestjs/microservices';
 export class InventoryService {
     constructor(private readonly prisma: PrismaService) { }
 
-    async getProducts() {
-        return this.prisma.product.findMany({
+    async getProducts(categoryId?: string) {
+        return (this.prisma as any).product.findMany({
+            where: {
+                categoryId: categoryId || undefined,
+            },
             include: {
+                category: true,
                 retailStock: true,
                 recipeBOMs: {
                     include: {
@@ -16,6 +20,43 @@ export class InventoryService {
                     }
                 },
             },
+        });
+    }
+
+    async createProduct(data: any) {
+        return (this.prisma as any).product.create({
+            data: {
+                name: data.name,
+                price: data.price,
+                type: data.type,
+                description: data.description,
+                imageUrl: data.imageUrl,
+                isActive: data.isActive ?? true,
+                categoryId: data.categoryId,
+            },
+            include: { category: true }
+        });
+    }
+
+    async updateProduct(id: string, data: any) {
+        return (this.prisma as any).product.update({
+            where: { id },
+            data: {
+                name: data.name,
+                price: data.price,
+                type: data.type,
+                description: data.description,
+                imageUrl: data.imageUrl,
+                isActive: data.isActive,
+                categoryId: data.categoryId,
+            },
+            include: { category: true }
+        });
+    }
+
+    async deleteProduct(id: string) {
+        return this.prisma.product.delete({
+            where: { id }
         });
     }
 
@@ -215,6 +256,31 @@ export class InventoryService {
 
     async deleteIngredient(id: string) {
         return this.prisma.ingredient.delete({
+            where: { id }
+        });
+    }
+
+    // --- Categories CRUD ---
+
+    async getCategories() {
+        return (this.prisma as any).category.findMany();
+    }
+
+    async createCategory(data: { name: string }) {
+        return (this.prisma as any).category.create({
+            data: { name: data.name }
+        });
+    }
+
+    async updateCategory(id: string, data: { name: string }) {
+        return (this.prisma as any).category.update({
+            where: { id },
+            data: { name: data.name }
+        });
+    }
+
+    async deleteCategory(id: string) {
+        return (this.prisma as any).category.delete({
             where: { id }
         });
     }

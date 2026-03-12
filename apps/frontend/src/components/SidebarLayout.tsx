@@ -83,6 +83,12 @@ export function SidebarLayout() {
                             {isExpanded && <span className="whitespace-nowrap">Staff</span>}
                         </NavLink>
                     )}
+                    {user?.role === 'ADMIN' && (
+                        <NavLink to="/menu-management" className={navLinkClass} title="Menu Management">
+                            <Settings size={24} className="shrink-0" />
+                            {isExpanded && <span className="whitespace-nowrap">Menu Management</span>}
+                        </NavLink>
+                    )}
                 </nav>
 
                 {/* Bottom Settings / Logout */}
@@ -125,6 +131,12 @@ export function SidebarLayout() {
                     <NavLink to="/inventory" className={({ isActive }) => `flex flex-col items-center gap-1 p-2 w-16 transition-all ${isActive ? 'text-white' : 'text-slate-500'}`}>
                         <Layers size={24} />
                         <span className="text-[10px] font-bold">Inv.</span>
+                    </NavLink>
+                )}
+                {user?.role === 'ADMIN' && (
+                    <NavLink to="/menu-management" className={({ isActive }) => `flex flex-col items-center gap-1 p-2 w-16 transition-all ${isActive ? 'text-white' : 'text-slate-500'}`}>
+                        <Settings size={24} />
+                        <span className="text-[10px] font-bold">Admin</span>
                     </NavLink>
                 )}
                 <button onClick={logout} className="flex flex-col items-center gap-1 p-2 w-16 text-slate-500 hover:text-red-400 transition-all">

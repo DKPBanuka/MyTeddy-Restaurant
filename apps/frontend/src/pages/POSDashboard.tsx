@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api } from '../api';
-import type { Product, OrderItemDto } from '../types';
+import type { Product, OrderItemDto, Category } from '../types';
 import { ProductType } from '../types';
 import { ProductCard } from '../components/ProductCard';
 import { Cart } from '../components/Cart';
@@ -20,8 +20,9 @@ export function POSDashboard() {
     const location = useLocation();
 
     const [products, setProducts] = useState<Product[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [activeFilter, setActiveFilter] = useState<ProductType | 'ALL'>('ALL');
+    const [activeFilter, setActiveFilter] = useState<string>('ALL'); // Store categoryId or 'ALL'
     const [searchQuery, setSearchQuery] = useState('');
     const [orderType, setOrderType] = useState<OrderType>('DINE_IN');
 
@@ -42,7 +43,17 @@ export function POSDashboard() {
 
     useEffect(() => {
         fetchProducts();
+        fetchCategories();
     }, []);
+
+    const fetchCategories = async () => {
+        try {
+            const data = await api.getCategories();
+            setCategories(data);
+        } catch (error) {
+            console.error('Failed to load categories');
+        }
+    };
 
     const fetchProducts = async () => {
         try {
@@ -122,7 +133,7 @@ export function POSDashboard() {
             result = result.filter(p => p.name.toLowerCase().includes(query) || (p.barcode && p.barcode.includes(query)));
         }
         if (activeFilter !== 'ALL') {
-            result = result.filter((p) => p.type === activeFilter);
+            result = result.filter((p) => p.categoryId === activeFilter);
         }
         return result;
     }, [products, activeFilter, searchQuery]);
@@ -411,29 +422,26 @@ export function POSDashboard() {
                     {/* Header for Menu */}
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between xl:justify-start gap-4 mb-2 md:mb-4">
                         <h2 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight block xl:mr-auto">
-                            {activeFilter === 'ALL' ? 'All Menu' : activeFilter === ProductType.FOOD ? 'Food Menu' : 'Retail Options'}
+                            {activeFilter === 'ALL' ? 'All Menu' : categories.find(c => c.id === activeFilter)?.name || 'Filtered Menu'}
                         </h2>
 
-                        {/* Row 2: Product Filter Links */}
-                        <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex w-full sm:w-auto">
+                        {/* Row 2: Product Filter Links (Categories) */}
+                        <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex w-full sm:w-auto overflow-x-auto scrollbar-hide">
                             <button
                                 onClick={() => setActiveFilter('ALL')}
-                                className={`flex-1 sm:flex-none px-4 md:px-6 py-2 md:py-1.5 text-xs md:text-sm font-bold rounded-lg transition-colors ${activeFilter === 'ALL' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                                className={`flex-1 sm:flex-none px-4 md:px-6 py-2 md:py-1.5 text-xs md:text-sm font-bold rounded-lg transition-colors whitespace-nowrap ${activeFilter === 'ALL' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
                             >
                                 All
                             </button>
-                            <button
-                                onClick={() => setActiveFilter(ProductType.FOOD)}
-                                className={`flex-1 sm:flex-none px-4 md:px-6 py-2 md:py-1.5 text-xs md:text-sm font-bold rounded-lg transition-colors ${activeFilter === ProductType.FOOD ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
-                            >
-                                Food
-                            </button>
-                            <button
-                                onClick={() => setActiveFilter(ProductType.RETAIL)}
-                                className={`flex-1 sm:flex-none px-4 md:px-6 py-2 md:py-1.5 text-xs md:text-sm font-bold rounded-lg transition-colors ${activeFilter === ProductType.RETAIL ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
-                            >
-                                Retail
-                            </button>
+                            {categories.map((cat) => (
+                                <button
+                                    key={cat.id}
+                                    onClick={() => setActiveFilter(cat.id)}
+                                    className={`flex-1 sm:flex-none px-4 md:px-6 py-2 md:py-1.5 text-xs md:text-sm font-bold rounded-lg transition-colors whitespace-nowrap ${activeFilter === cat.id ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                                >
+                                    {cat.name}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 </div>

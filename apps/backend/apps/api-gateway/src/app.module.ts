@@ -7,6 +7,7 @@ import { InventoryGatewayController } from './inventory.controller';
 import { ReportsGatewayController } from './reports.controller';
 import { StaffGatewayController } from './staff.controller';
 import { PartyBookingsGatewayController } from './party-bookings.controller';
+import { CategoriesGatewayController } from './categories.controller';
 
 @Module({
     imports: [
@@ -23,7 +24,8 @@ import { PartyBookingsGatewayController } from './party-bookings.controller';
         InventoryGatewayController,
         ReportsGatewayController,
         StaffGatewayController,
-        PartyBookingsGatewayController
+        PartyBookingsGatewayController,
+        CategoriesGatewayController
     ],
     providers: [],
 })
