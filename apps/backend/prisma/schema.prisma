@@ -130,6 +130,8 @@ model Package {
   price       Decimal  @db.Decimal(10, 2)
   imageUrl    String?
   isActive    Boolean  @default(true)
+  validFrom   DateTime?
+  validUntil  DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

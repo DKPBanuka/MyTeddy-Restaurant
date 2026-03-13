@@ -341,15 +341,35 @@ export class InventoryService {
 
     // --- Packages CRUD ---
     async getPackages() {
-        return (this.prisma as any).package.findMany({
+        const packages = await (this.prisma as any).package.findMany({
             include: {
                 items: {
                     include: {
-                        product: true,
+                        product: {
+                            include: {
+                                retailStock: true
+                            }
+                        },
                         size: true
                     }
                 }
             }
+        });
+
+        return packages.map(pkg => {
+            const isAllItemsAvailable = pkg.items.every(item => {
+                const product = item.product;
+                if (!product.isActive) return false;
+                if (product.type === 'RETAIL') {
+                    return (product.retailStock?.stockQty || 0) >= item.quantity;
+                }
+                return true;
+            });
+
+            return {
+                ...pkg,
+                isAvailable: pkg.isActive && isAllItemsAvailable
+            };
         });
     }
 
@@ -365,6 +385,8 @@ export class InventoryService {
                     price: data.price,
                     imageUrl: data.imageUrl,
                     isActive: data.isActive ?? true,
+                    validFrom: data.validFrom ? new Date(data.validFrom) : null,
+                    validUntil: data.validUntil ? new Date(data.validUntil) : null,
                     items: {
                         create: validItems.map((item: any) => ({
                             productId: item.productId,
@@ -399,7 +421,9 @@ export class InventoryService {
                         description: data.description,
                         price: data.price,
                         imageUrl: data.imageUrl,
-                        isActive: data.isActive
+                        isActive: data.isActive,
+                        validFrom: data.validFrom ? new Date(data.validFrom) : (data.validFrom === null ? null : undefined),
+                        validUntil: data.validUntil ? new Date(data.validUntil) : (data.validUntil === null ? null : undefined),
                     }
                 });
 

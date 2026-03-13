@@ -3,7 +3,7 @@ import { ProductType } from '../types';
 import { Package, Utensils, Plus, Minus } from 'lucide-react';
 
 interface ProductCardProps {
-    product: Product;
+    product: Product & { isPackage?: boolean; validFrom?: string; validUntil?: string; isAvailable?: boolean };
     qtyInCart: number;
     onAdd: () => void;
     onUpdateQty: (delta: number) => void;
@@ -13,10 +13,25 @@ export function ProductCard({ product, qtyInCart, onAdd, onUpdateQty }: ProductC
     const isRetail = product.type === ProductType.RETAIL;
 
     // Quick availability check
-    const isOutOfStock = isRetail && (product.retailStock?.stockQty || 0) <= 0;
+    let isOutOfStock = isRetail && (product.retailStock?.stockQty || 0) <= 0;
+    
+    // For packages, use the pre-calculated availability from backend
+    if (product.isPackage && product.isAvailable === false) {
+        isOutOfStock = true;
+    }
+    
+    // Validity check
+    const now = new Date();
+    const validFrom = product.validFrom ? new Date(product.validFrom) : null;
+    const validUntil = product.validUntil ? new Date(product.validUntil) : null;
+    const isNotStarted = validFrom && now < validFrom;
+    const isExpired = validUntil && now > validUntil;
+    const isUnavailable = isNotStarted || isExpired;
+
+    const isDisabled = isOutOfStock || isUnavailable;
 
     return (
-        <div className={`flex flex-col bg-white rounded-2xl p-3 border border-slate-100/60 shadow-[0_2px_12px_rgba(0,0,0,0.03)] transition-all hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] relative ${isOutOfStock ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}>
+        <div className={`flex flex-col bg-white rounded-2xl p-3 border border-slate-100/60 shadow-[0_2px_12px_rgba(0,0,0,0.03)] transition-all hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] relative ${isDisabled ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}>
 
             {/* Top Image Placeholder */}
             {product.imageUrl ? (
@@ -72,13 +87,13 @@ export function ProductCard({ product, qtyInCart, onAdd, onUpdateQty }: ProductC
                                 {Number(product.price).toFixed(0)}
                             </span>
                         </div>
-                        {(product.variants?.length || 0) > 0 && (
+                        {(product.sizes?.length || 0) > 0 && (
                             <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest mt-0.5">Variants Available</span>
                         )}
                     </div>
 
                     {/* Inline Quantifier */}
-                    {!isOutOfStock && (
+                    {!isDisabled && (
                         qtyInCart > 0 ? (
                             <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-full p-1 shadow-sm">
                                 <button
@@ -113,6 +128,14 @@ export function ProductCard({ product, qtyInCart, onAdd, onUpdateQty }: ProductC
                 <div className="absolute inset-0 z-10 flex items-center justify-center">
                     <div className="bg-red-500 text-white text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded-full shadow-lg transform -rotate-12 border-2 border-white">
                         Sold Out
+                    </div>
+                </div>
+            )}
+
+            {isUnavailable && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center">
+                    <div className="bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-full shadow-xl transform rotate-12 border-2 border-white">
+                        {isNotStarted ? 'Coming Soon' : 'Expired'}
                     </div>
                 </div>
             )}

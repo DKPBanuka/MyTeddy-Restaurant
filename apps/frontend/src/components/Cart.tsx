@@ -165,7 +165,7 @@ export function Cart({
                                                         + {item.selectedAddons.map(a => a.name).join(', ')}
                                                     </div>
                                                 )}
-                                                {!item.packageId && (
+                                                {!item.packageId && (item.product?.category?.name && ['Foods', 'Drinks', 'Bites', 'Appetizers', 'Main Course', 'Desserts', 'Beverages'].includes(item.product.category.name)) && (
                                                     <button 
                                                         onClick={() => onEdit(item)}
                                                         className="text-[10px] font-black text-blue-500 hover:text-blue-700 uppercase tracking-widest mt-1 underline"

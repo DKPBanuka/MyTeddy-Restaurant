@@ -3,7 +3,9 @@ import { api } from '../api';
 import type { Category, Product } from '../types';
 import { ProductType } from '../types';
 import { toast } from 'sonner';
-import { Plus, Trash2, Edit2, Save, X, Layers, ShoppingBag, Search, Upload, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, Layers, ShoppingBag, Search, Upload, Loader2, Calendar as CalendarIcon } from 'lucide-react';
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
 
 export function MenuManagement() {
     const [categories, setCategories] = useState<Category[]>([]);
@@ -654,8 +656,11 @@ function PackageModal({ initialData, onClose, onSuccess }: { initialData: any | 
         description: initialData?.description || '',
         price: initialData?.price ? Number(initialData.price) : 0,
         imageUrl: initialData?.imageUrl || '',
-        isActive: initialData?.isActive ?? true
+        isActive: initialData?.isActive ?? true,
+        validFrom: initialData?.validFrom ? new Date(initialData.validFrom).toISOString().slice(0, 16) : '',
+        validUntil: initialData?.validUntil ? new Date(initialData.validUntil).toISOString().slice(0, 16) : ''
     });
+    const [showCalendar, setShowCalendar] = useState(false);
     const [items, setItems] = useState<{ productId: string, sizeId: string | null, quantity: number }[]>(
         initialData?.items?.map((it: any) => ({
             productId: it.productId,
@@ -663,6 +668,23 @@ function PackageModal({ initialData, onClose, onSuccess }: { initialData: any | 
             quantity: it.quantity
         })) || []
     );
+    const [isUploading, setIsUploading] = useState(false);
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setIsUploading(true);
+            const { imageUrl } = await api.uploadProductImage(file);
+            setFormData(prev => ({ ...prev, imageUrl }));
+            toast.success('Image uploaded successfully');
+        } catch (error) {
+            toast.error('Failed to upload image');
+        } finally {
+            setIsUploading(false);
+        }
+    };
 
     useEffect(() => {
         api.getProducts().then(setAllProducts);
@@ -692,7 +714,12 @@ function PackageModal({ initialData, onClose, onSuccess }: { initialData: any | 
             return;
         }
         try {
-            const payload = { ...formData, items };
+            const payload = { 
+                ...formData, 
+                items,
+                validFrom: formData.validFrom || null,
+                validUntil: formData.validUntil || null
+            };
             if (initialData) {
                 await api.updatePackage(initialData.id, payload);
                 toast.success('Package updated');
@@ -717,6 +744,38 @@ function PackageModal({ initialData, onClose, onSuccess }: { initialData: any | 
                 </div>
                 
                 <div className="p-8 space-y-6 overflow-y-auto">
+                    {/* Image Upload Section */}
+                    <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 group hover:border-blue-400 hover:bg-blue-50/30 transition-all relative overflow-hidden h-44">
+                        {formData.imageUrl ? (
+                            <>
+                                <img src={formData.imageUrl} alt="Preview" className="absolute inset-0 w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                    <label className="p-3 bg-white rounded-xl text-slate-800 cursor-pointer hover:scale-110 transition-transform shadow-lg">
+                                        <Upload size={20} />
+                                        <input type="file" className="hidden" aria-label='Upload bundle image' accept="image/*" onChange={handleImageUpload} disabled={isUploading} />
+                                    </label>
+                                    <button 
+                                        onClick={() => setFormData(prev => ({ ...prev, imageUrl: '' }))}
+                                        className="p-3 bg-white rounded-xl text-red-500 hover:scale-110 transition-transform shadow-lg"
+                                    >
+                                        <Trash2 size={20} />
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <label className="flex flex-col items-center gap-3 cursor-pointer">
+                                <div className="w-14 h-14 rounded-2xl bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-blue-500 group-hover:scale-110 transition-all">
+                                    {isUploading ? <Loader2 size={24} className="animate-spin text-blue-500" /> : <Upload size={24} />}
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-sm font-bold text-slate-700">Click to upload bundle image</p>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">JPG, PNG or WEBP (Max 5MB)</p>
+                                </div>
+                                <input type="file" className="hidden" accept="image/*" aria-label="Upload bundle image" onChange={handleImageUpload} disabled={isUploading} />
+                            </label>
+                        )}
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                         <div className="col-span-2">
                             <label className="block text-xs font-bold text-slate-400 uppercase mb-2 tracking-widest">Package Name</label>
@@ -747,6 +806,55 @@ function PackageModal({ initialData, onClose, onSuccess }: { initialData: any | 
                                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-black outline-none focus:border-blue-500" 
                             />
                         </div>
+                        <div className="col-span-1 border-r border-slate-100 pr-4">
+                            <label className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase mb-2 tracking-widest">
+                                Valid From
+                                <button onClick={() => setShowCalendar(!showCalendar)} className="text-blue-500 hover:text-blue-700 transition-colors">
+                                    <CalendarIcon size={14} />
+                                </button>
+                            </label>
+                            <input 
+                                type="datetime-local" 
+                                value={formData.validFrom} 
+                                onChange={e => setFormData({ ...formData, validFrom: e.target.value })} 
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold outline-none focus:border-blue-500" 
+                            />
+                        </div>
+                        <div className="col-span-1">
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2 tracking-widest">Valid Until</label>
+                            <input 
+                                type="datetime-local" 
+                                value={formData.validUntil} 
+                                onChange={e => setFormData({ ...formData, validUntil: e.target.value })} 
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold outline-none focus:border-blue-500" 
+                            />
+                        </div>
+
+                        {showCalendar && (
+                            <div className="col-span-2 bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col items-center">
+                                <div className="text-[10px] font-black uppercase text-slate-400 mb-4 tracking-widest">Select Validity Range</div>
+                                <Calendar 
+                                    selectRange={true}
+                                    onChange={(value: any) => {
+                                        if (Array.isArray(value)) {
+                                            const [start, end] = value;
+                                            setFormData({
+                                                ...formData,
+                                                validFrom: start ? new Date(start.setHours(0,0,0,0)).toISOString().slice(0, 16) : '',
+                                                validUntil: end ? new Date(end.setHours(23,59,59,999)).toISOString().slice(0, 16) : ''
+                                            });
+                                        }
+                                    }}
+                                    value={formData.validFrom && formData.validUntil ? [new Date(formData.validFrom), new Date(formData.validUntil)] : null}
+                                    className="rounded-xl border-none shadow-sm"
+                                />
+                                <style>{`
+                                    .react-calendar { width: 100%; max-width: 400px; background: white; border: 1px solid #f1f5f9 !important; border-radius: 1rem; padding: 1rem; }
+                                    .react-calendar__tile--active { background: #3b82f6 !important; border-radius: 0.5rem; }
+                                    .react-calendar__tile--rangeBetween { background: #eff6ff !important; color: #3b82f6; }
+                                `}</style>
+                            </div>
+                        )}
                     </div>
 
                     <div className="space-y-4">

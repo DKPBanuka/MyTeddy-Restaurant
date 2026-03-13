@@ -15,6 +15,11 @@ import { OpenOrdersModal } from '../components/OpenOrdersModal';
 import { ProductSelectionModal } from '../components/ProductSelectionModal';
 import type { ProductSize, GlobalAddon } from '../types';
 
+const FOOD_CATEGORIES = ['Foods', 'Drinks', 'Bites', 'Appetizers', 'Main Course', 'Desserts', 'Beverages'];
+const isFoodProduct = (product: Product) => {
+    return product.category?.name && FOOD_CATEGORIES.includes(product.category.name);
+};
+
 type OrderType = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
 
 export function POSDashboard() {
@@ -163,8 +168,11 @@ export function POSDashboard() {
             result = result.filter(p => p.name.toLowerCase().includes(query));
         }
         if (activeFilter !== 'ALL') {
-             // Only products have categories currently. Packages could be shown under a special "BUNDLES" filter or just shown in "ALL"
-             result = result.filter((p: any) => p.categoryId === activeFilter);
+            if (activeFilter === 'PACKAGES') {
+                result = result.filter((p: any) => p.isPackage);
+            } else {
+                result = result.filter((p: any) => p.categoryId === activeFilter);
+            }
         }
         return result;
     }, [products, packages, activeFilter, searchQuery]);
@@ -589,6 +597,13 @@ export function POSDashboard() {
                             >
                                 All
                             </button>
+                            <button
+                                onClick={() => setActiveFilter('PACKAGES')}
+                                className={`flex-1 sm:flex-none px-4 md:px-6 py-2 md:py-1.5 text-xs md:text-sm font-bold rounded-lg transition-colors whitespace-nowrap flex items-center gap-2 ${activeFilter === 'PACKAGES' ? 'bg-orange-500 text-white' : 'text-orange-600 hover:bg-orange-50'}`}
+                            >
+                                <PackageSearch size={16} />
+                                Packages
+                            </button>
                             {categories.map((cat) => (
                                 <button
                                     key={cat.id}
@@ -760,7 +775,7 @@ export function POSDashboard() {
             {selectedProductForModal && (
                 <ProductSelectionModal
                     product={selectedProductForModal}
-                    globalAddons={globalAddons}
+                    globalAddons={isFoodProduct(selectedProductForModal) ? globalAddons : []}
                     initialSize={editingItemIndex !== null ? cartItems[editingItemIndex].size : undefined}
                     initialAddons={editingItemIndex !== null ? cartItems[editingItemIndex].selectedAddons : undefined}
                     onClose={() => {

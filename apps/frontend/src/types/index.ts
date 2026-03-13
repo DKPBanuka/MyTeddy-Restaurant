@@ -60,6 +60,9 @@ export interface Package {
     price: string;
     imageUrl?: string | null;
     isActive?: boolean;
+    validFrom?: string;
+    validUntil?: string;
+    isAvailable?: boolean;
     items?: PackageItem[];
 }
 
