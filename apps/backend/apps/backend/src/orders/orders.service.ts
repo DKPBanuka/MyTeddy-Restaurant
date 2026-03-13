@@ -56,7 +56,7 @@ export class OrdersService {
         };
     }
 
-    async refundOrder(id: string) {
+    async refundOrder(id: string, reason: string) {
         const order = await this.prisma.order.findUnique({ where: { id } });
         if (!order) throw new NotFoundException(`Order ${id} not found`);
 
@@ -64,7 +64,8 @@ export class OrdersService {
             where: { id },
             data: {
                 paymentStatus: 'REFUNDED',
-                status: 'CANCELLED'
+                status: 'CANCELLED',
+                refundReason: reason
             },
             include: { orderItems: true }
         });
@@ -251,6 +252,36 @@ export class OrdersService {
         return this.prisma.order.update({
             where: { id },
             data: { status: status as any },
+            include: { orderItems: { include: { product: true } } },
+        });
+    }
+
+    async undoOrderStatus(id: string) {
+        const order = await this.prisma.order.findUnique({ where: { id } });
+        if (!order) throw new NotFoundException(`Order ${id} not found`);
+
+        let prevStatus: string;
+        switch (order.status) {
+            case 'COMPLETED':
+                prevStatus = 'READY';
+                break;
+            case 'READY':
+                prevStatus = 'PREPARING';
+                break;
+            case 'PREPARING':
+                prevStatus = 'PENDING';
+                break;
+            default:
+                throw new BadRequestException(`Cannot undo status for order in ${order.status} state`);
+        }
+
+        return this.prisma.order.update({
+            where: { id },
+            data: { 
+                status: prevStatus as any,
+                // If undoing COMPLETED, we should also revert paymentStatus if it was linked
+                ...(order.status === 'COMPLETED' ? { paymentStatus: 'UNPAID' } : {})
+            },
             include: { orderItems: { include: { product: true } } },
         });
     }

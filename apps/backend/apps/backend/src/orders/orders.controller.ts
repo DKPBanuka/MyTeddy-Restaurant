@@ -38,8 +38,8 @@ export class OrdersController {
     }
 
     @Patch(':id/refund')
-    async refundOrder(@Param('id') id: string) {
-        return this.ordersService.refundOrder(id);
+    async refundOrder(@Param('id') id: string, @Body() body: { reason: string }) {
+        return this.ordersService.refundOrder(id, body.reason);
     }
 
     @Post()
@@ -68,8 +68,13 @@ export class OrdersController {
     }
 
     @Patch(':id/status')
-    async updateStatus(@Param('id') id: string, @Body() body: { status: string }) {
-        return this.ordersService.updateOrderStatus(id, body.status);
+    async updateStatus(@Param('id') id: string, @Body() body: { orderStatus: string }) {
+        return this.ordersService.updateOrderStatus(id, body.orderStatus);
+    }
+
+    @Patch(':id/undo')
+    async undoStatus(@Param('id') id: string) {
+        return this.ordersService.undoOrderStatus(id);
     }
 
     @Patch(':id/items')

@@ -86,6 +86,7 @@ model Category {
   id        String    @id @default(uuid())
   name      String    @unique
   products  Product[]
+  addons    GlobalAddon[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
@@ -125,9 +126,10 @@ model ProductSize {
 
 model GlobalAddon {
   id        String   @id @default(uuid())
-  name      String   @unique
-  price     Decimal  @db.Decimal(10, 2)
-  createdAt DateTime @default(now())
+  name       String   @unique
+  price      Decimal  @db.Decimal(10, 2)
+  categories Category[]
+  createdAt  DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
@@ -218,6 +220,7 @@ model Order {
   paymentMethod   PaymentMethod?
   amountReceived  Decimal?      @db.Decimal(10, 2)
   change          Decimal?      @db.Decimal(10, 2)
+  refundReason    String?
   userId          String
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -233,7 +236,7 @@ model OrderItem {
   packageId          String?
   quantity           Int
   unitPrice          Decimal  @db.Decimal(10, 2) // Current price at time of snapshot
-  priceAtTimeOfSale  Decimal  @db.Decimal(10, 2) // Immutable historical price
+  priceAtTimeOfSale  Decimal? @db.Decimal(10, 2) // Immutable historical price
   subtotal           Decimal  @db.Decimal(10, 2)
   notes              String?
   sizeId             String?

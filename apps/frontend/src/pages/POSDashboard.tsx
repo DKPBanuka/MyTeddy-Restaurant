@@ -6,11 +6,12 @@ import { ProductType } from '../types';
 import { ProductCard } from '../components/ProductCard';
 import { Cart } from '../components/Cart';
 import { toast } from 'sonner';
-import { Store, PackageSearch, Coffee, Search, Bell, ShoppingBag, X } from 'lucide-react';
+import { Store, PackageSearch, Coffee, Search, ShoppingBag, X } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { CheckoutModal } from '../components/CheckoutModal';
 import { ActiveOrdersPanel } from '../components/ActiveOrdersPanel';
+import { NotificationBell } from '../components/NotificationBell';
 import { ProductSelectionModal } from '../components/ProductSelectionModal';
 import { HeldOrdersModal } from '../components/HeldOrdersModal';
 import { useCart } from '../context/CartContext';
@@ -82,6 +83,32 @@ export function POSDashboard() {
     const activeOrdersCount = activeOrders.length;
 
 
+    const handleRecallOrder = (order: any) => {
+        setActiveOrderId(order.id);
+        setOrderType(order.orderType as OrderType);
+        setGeneratedToken(order.tokenId || null);
+        setOrderMetadata({
+            tableNo: order.tableNumber || '',
+            customerName: order.customerName || '',
+            customerPhone: order.customerPhone || '',
+            deliveryAddress: order.deliveryAddress || ''
+        });
+        setCartItems(order.orderItems?.map((item: any) => ({
+            productId: item.productId,
+            packageId: item.packageId,
+            quantity: item.quantity,
+            type: (item.product?.type || (item.package ? 'PACKAGE' : ProductType.FOOD)) as any,
+            product: item.product,
+            package: item.package,
+            sizeId: item.sizeId,
+            size: item.size,
+            addonIds: item.addonIds,
+            selectedAddons: item.selectedAddons,
+            notes: item.notes || ''
+        })) || []);
+        setIsActiveOrdersPanelOpen(false);
+    };
+
     useEffect(() => {
         const state = location.state as { tableNo?: string; orderId?: string } | null;
         if (state?.tableNo && !state.orderId) {
@@ -96,22 +123,7 @@ export function POSDashboard() {
                     const data = await api.getPendingOrders();
                     const orderToOpen = data.find((o: any) => o.id === state.orderId);
                     if (orderToOpen) {
-                        setActiveOrderId(orderToOpen.id);
-                        setOrderType(orderToOpen.orderType as OrderType);
-                        setGeneratedToken(orderToOpen.tokenId || null);
-                        setOrderMetadata({
-                            tableNo: orderToOpen.tableNumber || '',
-                            customerName: orderToOpen.customerName || '',
-                            customerPhone: orderToOpen.customerPhone || '',
-                            deliveryAddress: orderToOpen.deliveryAddress || ''
-                        });
-                        setCartItems(orderToOpen.orderItems?.map((item: any) => ({
-                            productId: item.productId,
-                            quantity: item.quantity,
-                            type: item.product?.type || ProductType.FOOD,
-                            product: item.product,
-                            notes: item.notes || ''
-                        })) || []);
+                        handleRecallOrder(orderToOpen);
                     }
                 } catch (error) {
                     console.error('Failed to load order from Floor Plan:', error);
@@ -456,10 +468,7 @@ export function POSDashboard() {
                                 </span>
                             )}
                         </button>
-                        <button className="relative p-2 text-slate-500 hover:bg-slate-200 rounded-full transition-colors bg-white border border-slate-200 shadow-sm">
-                            <Bell size={20} />
-                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-                        </button>
+                        <NotificationBell onRecall={handleRecallOrder} />
                     </div>
 
                     <div className="relative w-full max-w-xl">
@@ -485,10 +494,7 @@ export function POSDashboard() {
                                 </span>
                             )}
                         </button>
-                        <button className="relative p-2 text-slate-500 hover:bg-slate-200 rounded-full transition-colors bg-white border border-slate-200 shadow-sm">
-                            <Bell size={20} />
-                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-                        </button>
+                        <NotificationBell onRecall={handleRecallOrder} />
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold overflow-hidden border border-slate-200 shadow-sm">
                                 {user?.name?.charAt(0).toUpperCase()}
@@ -684,29 +690,7 @@ export function POSDashboard() {
             <ActiveOrdersPanel
                 isOpen={isActiveOrdersPanelOpen}
                 onClose={() => setIsActiveOrdersPanelOpen(false)}
-                onSelectOrder={(order) => {
-                    setActiveOrderId(order.id);
-                    setOrderType(order.orderType as OrderType);
-                    setGeneratedToken(order.tokenId || null);
-                    setOrderMetadata({
-                        tableNo: order.tableNumber || '',
-                        customerName: order.customerName || '',
-                        customerPhone: order.customerPhone || '',
-                        deliveryAddress: order.deliveryAddress || ''
-                    });
-                    setCartItems(order.orderItems?.map((item: any) => ({
-                        productId: item.productId,
-                        quantity: item.quantity,
-                        type: item.product?.type || ProductType.FOOD,
-                        product: item.product,
-                        sizeId: item.sizeId,
-                        size: item.size,
-                        addonIds: item.addonIds,
-                        selectedAddons: item.selectedAddons,
-                        notes: item.notes || ''
-                    })) || []);
-                    setIsActiveOrdersPanelOpen(false);
-                }}
+                onSelectOrder={handleRecallOrder}
             />
 
             {/* Product Selection Modal */}

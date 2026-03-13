@@ -1,7 +1,6 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
-import { X, Clock, Play, CheckCircle, ChevronRight, User, Coffee, PackageSearch, Store, Info, ShoppingBag } from 'lucide-react';
-import { toast } from 'sonner';
+import { X, Clock, User, Coffee, PackageSearch, Store, Info, ShoppingBag } from 'lucide-react';
 
 interface ActiveOrdersPanelProps {
     isOpen: boolean;
@@ -10,7 +9,6 @@ interface ActiveOrdersPanelProps {
 }
 
 export function ActiveOrdersPanel({ isOpen, onClose, onSelectOrder }: ActiveOrdersPanelProps) {
-    const queryClient = useQueryClient();
 
     const { data: activeOrders = [], isLoading } = useQuery({
         queryKey: ['active-orders'],
@@ -25,15 +23,6 @@ export function ActiveOrdersPanel({ isOpen, onClose, onSelectOrder }: ActiveOrde
         enabled: isOpen,
     });
 
-    const handleUpdateStatus = async (orderId: string, newStatus: string) => {
-        try {
-            await api.updateOrderStatus(orderId, newStatus);
-            toast.success(`Order moved to ${newStatus}`);
-            queryClient.invalidateQueries({ queryKey: ['active-orders'] });
-        } catch (error) {
-            toast.error('Failed to update status');
-        }
-    };
 
     if (!isOpen) return null;
 
@@ -80,7 +69,6 @@ export function ActiveOrdersPanel({ isOpen, onClose, onSelectOrder }: ActiveOrde
                             <OrderCard 
                                 key={order.id} 
                                 order={order} 
-                                onUpdateStatus={(status) => handleUpdateStatus(order.id, status)}
                                 onClick={() => onSelectOrder?.(order)}
                             />
                         ))
@@ -91,7 +79,7 @@ export function ActiveOrdersPanel({ isOpen, onClose, onSelectOrder }: ActiveOrde
     );
 }
 
-function OrderCard({ order, onUpdateStatus, onClick }: { order: any, onUpdateStatus: (s: string) => void, onClick: () => void }) {
+function OrderCard({ order, onClick }: { order: any, onClick: () => void }) {
     const elapsed = Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000);
     const urgency = elapsed > 15 ? 'ERROR' : elapsed > 10 ? 'WARNING' : 'NORMAL';
 
@@ -178,35 +166,6 @@ function OrderCard({ order, onUpdateStatus, onClick }: { order: any, onUpdateSta
                 ))}
             </div>
 
-            <div className="p-3 bg-slate-50 border-t border-slate-100 grid grid-cols-1 gap-2">
-                {order.status === 'PENDING' && (
-                    <button
-                        onClick={() => onUpdateStatus('PREPARING')}
-                        className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-sm"
-                    >
-                        <Play size={14} fill="currentColor" />
-                        Start Preparing
-                    </button>
-                )}
-                {order.status === 'PREPARING' && (
-                    <button
-                        onClick={() => onUpdateStatus('READY')}
-                        className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-sm"
-                    >
-                        <CheckCircle size={14} />
-                        Mark as Ready
-                    </button>
-                )}
-                {order.status === 'READY' && (
-                    <button
-                        onClick={() => onUpdateStatus('COMPLETED')}
-                        className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
-                    >
-                        <ChevronRight size={16} />
-                        Complete Order
-                    </button>
-                )}
-            </div>
         </div>
     );
 }

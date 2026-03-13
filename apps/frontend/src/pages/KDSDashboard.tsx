@@ -1,7 +1,11 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { api } from '../api';
 import { toast } from 'sonner';
-import { Clock, CheckCircle2, Play, CheckCircle, Package, User, Coffee, Info, ChevronRight } from 'lucide-react';
+import { 
+    Clock, CheckCircle2, Play, CheckCircle, 
+    Package, User, Coffee, Info, ChevronRight, RotateCcw 
+} from 'lucide-react';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 
 interface KitchenOrderItem {
     id: string;
@@ -33,24 +37,20 @@ interface KitchenOrder {
 }
 
 export function KDSDashboard() {
-    const [orders, setOrders] = useState<KitchenOrder[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const queryClient = useQueryClient();
+    const [lastActionOrderId, setLastActionOrderId] = useState<string | null>(null);
     const prevOrdersCount = useRef(0);
 
-    // Audio beep for new orders (Base64 for a short clear "ding")
+    // Audio beep for new orders
     const playNotification = () => {
         const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
         audio.play().catch(e => console.warn('Audio play blocked:', e));
     };
 
-    useEffect(() => {
-        fetchOrders();
-        const interval = setInterval(fetchOrders, 5000);
-        return () => clearInterval(interval);
-    }, []);
-
-    const fetchOrders = async () => {
-        try {
+    // React Query for Kitchen Orders
+    const { data: orders = [], isLoading } = useQuery({
+        queryKey: ['kitchen-orders'],
+        queryFn: async () => {
             const data = await api.getKitchenOrders();
             
             // Check for new orders to play sound
@@ -60,24 +60,36 @@ export function KDSDashboard() {
             }
             prevOrdersCount.current = currentPendingCount;
             
-            setOrders(data);
-        } catch (error) {
-            console.error('Failed to fetch kitchen orders:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+            return data as KitchenOrder[];
+        },
+        refetchInterval: 5000,
+    });
 
-    const handleUpdateStatus = async (orderId: string, newStatus: string) => {
-        try {
-            await api.updateOrderStatus(orderId, newStatus);
-            toast.success(`Order moved to ${newStatus}`);
-            fetchOrders();
-        } catch (error) {
+    // Mutations for Status Updates
+    const statusMutation = useMutation({
+        mutationFn: ({ id, status }: { id: string, status: string }) => 
+            api.updateOrderStatus(id, status),
+        onSuccess: (_, variables) => {
+            setLastActionOrderId(variables.id);
+            toast.success(`Order moved to ${variables.status}`);
+            queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] });
+        },
+        onError: () => {
             toast.error('Failed to update order status');
-            console.error(error);
         }
-    };
+    });
+
+    const undoMutation = useMutation({
+        mutationFn: (id: string) => api.undoOrderStatus(id),
+        onSuccess: () => {
+            toast.success('Action undone successfully');
+            setLastActionOrderId(null);
+            queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] });
+        },
+        onError: () => {
+            toast.error('Failed to undo last action');
+        }
+    });
 
     // Aggregate Summary Calculation
     const aggregateSummary = useMemo(() => {
@@ -93,7 +105,7 @@ export function KDSDashboard() {
         return Object.entries(summary).sort((a, b) => b[1] - a[1]);
     }, [orders]);
 
-    const columns: { title: string, status: string, color: string }[] = [
+    const columns: { title: string, status: KitchenOrder['status'], color: string }[] = [
         { title: 'New Orders', status: 'PENDING', color: 'border-amber-500/50 bg-amber-500/10' },
         { title: 'In Progress', status: 'PREPARING', color: 'border-blue-500/50 bg-blue-500/10' },
         { title: 'Ready / Served', status: 'READY', color: 'border-emerald-500/50 bg-emerald-500/10' }
@@ -121,13 +133,25 @@ export function KDSDashboard() {
                     </div>
                 </div>
 
-                <div className="flex gap-3">
-                    {columns.map(col => (
-                        <div key={col.status} className="flex flex-col items-center bg-slate-900/50 px-4 py-1.5 rounded-lg border border-white/5">
-                            <span className="text-lg font-black leading-none">{orders.filter(o => o.status === col.status).length}</span>
-                            <span className="text-[9px] uppercase font-bold text-slate-500">{col.title}</span>
-                        </div>
-                    ))}
+                <div className="flex items-center gap-4">
+                    {lastActionOrderId && (
+                        <button
+                            onClick={() => undoMutation.mutate(lastActionOrderId)}
+                            disabled={undoMutation.isPending}
+                            className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center gap-2 transition-all shadow-lg shadow-orange-900/40 animate-in fade-in slide-in-from-right-2 disabled:opacity-50"
+                        >
+                            {undoMutation.isPending ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <RotateCcw size={14} />}
+                            Recall Last Action
+                        </button>
+                    )}
+                    <div className="flex gap-3">
+                        {columns.map(col => (
+                            <div key={col.status} className="flex flex-col items-center bg-slate-900/50 px-4 py-1.5 rounded-lg border border-white/5">
+                                <span className="text-lg font-black leading-none">{orders.filter(o => o.status === col.status).length}</span>
+                                <span className="text-[9px] uppercase font-bold text-slate-500">{col.title}</span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </header>
 
@@ -147,7 +171,8 @@ export function KDSDashboard() {
                                         <KDSOrderCard 
                                             key={order.id} 
                                             order={order} 
-                                            onUpdateStatus={(s) => handleUpdateStatus(order.id, s)} 
+                                            onUpdateStatus={(s) => statusMutation.mutate({ id: order.id, status: s })} 
+                                            isUpdating={statusMutation.isPending && statusMutation.variables?.id === order.id}
                                         />
                                     ))
                                 }
@@ -188,7 +213,7 @@ export function KDSDashboard() {
     );
 }
 
-function KDSOrderCard({ order, onUpdateStatus }: { order: KitchenOrder, onUpdateStatus: (s: string) => void }) {
+function KDSOrderCard({ order, onUpdateStatus, isUpdating }: { order: KitchenOrder, onUpdateStatus: (s: string) => void, isUpdating: boolean }) {
     const elapsed = Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000);
     const urgency = elapsed > 15 ? 'ERROR' : elapsed > 10 ? 'WARNING' : 'NORMAL';
 
@@ -263,27 +288,30 @@ function KDSOrderCard({ order, onUpdateStatus }: { order: KitchenOrder, onUpdate
                 {order.status === 'PENDING' && (
                     <button
                         onClick={() => onUpdateStatus('PREPARING')}
-                        className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-xl shadow-blue-900/20 border border-blue-400/30"
+                        disabled={isUpdating}
+                        className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-xl shadow-blue-900/20 border border-blue-400/30 disabled:opacity-50"
                     >
-                        <Play size={16} fill="currentColor" />
+                        {isUpdating ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <Play size={16} fill="currentColor" />}
                         Start Preparing
                     </button>
                 )}
                 {order.status === 'PREPARING' && (
                     <button
                         onClick={() => onUpdateStatus('READY')}
-                        className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-xl shadow-emerald-900/20 border border-emerald-400/30"
+                        disabled={isUpdating}
+                        className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-xl shadow-emerald-900/20 border border-emerald-400/30 disabled:opacity-50"
                     >
-                        <CheckCircle size={16} />
+                        {isUpdating ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <CheckCircle size={16} />}
                         Mark as Ready
                     </button>
                 )}
                 {order.status === 'READY' && (
                     <button
                         onClick={() => onUpdateStatus('COMPLETED')}
-                        className="w-full py-3.5 bg-slate-700 hover:bg-slate-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all border border-slate-500/30"
+                        disabled={isUpdating}
+                        className="w-full py-3.5 bg-slate-700 hover:bg-slate-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all border border-slate-500/30 disabled:opacity-50"
                     >
-                        <ChevronRight size={18} />
+                        {isUpdating ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <ChevronRight size={18} />}
                         Complete / Clear
                     </button>
                 )}

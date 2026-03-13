@@ -97,6 +97,7 @@ export interface OrderItemDto {
     addonIds?: string[];
     selectedAddons?: GlobalAddon[];
     notes?: string;
+    priceAtTimeOfSale?: number | string;
 }
 
 export interface CreateOrderDto {
@@ -145,5 +146,6 @@ export interface Order {
     userId: string;
     createdAt: string;
     updatedAt: string;
+    refundReason?: string | null;
     orderItems?: any[];
 }

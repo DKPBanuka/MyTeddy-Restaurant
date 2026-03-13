@@ -132,12 +132,16 @@ export const api = {
         const res = await apiClient.get(`/orders`, { params });
         return res.data;
     },
-    refundOrder: async (id: string) => {
-        const res = await apiClient.patch(`/orders/${id}/refund`);
+    refundOrder: async (id: string, reason: string) => {
+        const res = await apiClient.patch(`/orders/${id}/refund`, { reason });
         return res.data;
     },
-    updateOrderStatus: async (id: string, status: string) => {
-        const res = await apiClient.patch(`/orders/${id}/status`, { status });
+    updateOrderStatus: async (id: string, orderStatus: string) => {
+        const res = await apiClient.patch(`/orders/${id}/status`, { orderStatus });
+        return res.data;
+    },
+    undoOrderStatus: async (id: string) => {
+        const res = await apiClient.patch(`/orders/${id}/undo`);
         return res.data;
     },
 

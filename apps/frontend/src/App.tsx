@@ -14,6 +14,7 @@ import { InventoryDashboard } from './pages/InventoryDashboard';
 import { ReportsDashboard } from './pages/ReportsDashboard';
 import { StaffDashboard } from './pages/StaffDashboard';
 import { MenuManagement } from './pages/MenuManagement.tsx';
+import { OrdersDashboard } from './pages/OrdersDashboard';
 
 function App() {
   const { isAuthenticated } = useAuth();
@@ -48,6 +49,7 @@ function App() {
 
             <Route element={<ProtectedRoute requiredPermission="REPORTS" />}>
               <Route path="/reports" element={<ReportsDashboard />} />
+              <Route path="/orders" element={<OrdersDashboard />} />
             </Route>
 
             <Route element={<ProtectedRoute requiredPermission="STAFF" />}>

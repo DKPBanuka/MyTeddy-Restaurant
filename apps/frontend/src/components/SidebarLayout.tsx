@@ -54,7 +54,7 @@ export function SidebarLayout() {
                         </NavLink>
                     )}
                     {hasPermission('REPORTS') && (
-                        <NavLink to="/reports" className={navLinkClass} title="Orders / Reports">
+                        <NavLink to="/orders" className={navLinkClass} title="Orders / Reconciliation">
                             <TrendingUp size={24} className="shrink-0" />
                             {isExpanded && <span className="whitespace-nowrap">Orders</span>}
                         </NavLink>
