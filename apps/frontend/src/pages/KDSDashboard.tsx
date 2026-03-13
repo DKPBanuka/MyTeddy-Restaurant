@@ -1,18 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../api';
 import { toast } from 'sonner';
-import { Clock, CheckCircle2, AlertCircle } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { Clock, CheckCircle2, Play, CheckCircle, Package, User, Coffee, Info, ChevronRight } from 'lucide-react';
 
 interface KitchenOrderItem {
     id: string;
     quantity: number;
     notes?: string;
-    product: {
+    product?: {
         id: string;
         name: string;
         type: string;
     };
+    package?: {
+        id: string;
+        name: string;
+    };
+    addonIds?: string[];
 }
 
 interface KitchenOrder {
@@ -23,22 +27,24 @@ interface KitchenOrder {
     orderType: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
     tableNumber?: string;
     customerName?: string;
-    customerPhone?: string;
-    deliveryAddress?: string;
     tokenId?: string;
     orderItems: KitchenOrderItem[];
+    invoiceNumber?: string;
 }
 
 export function KDSDashboard() {
     const [orders, setOrders] = useState<KitchenOrder[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    // Track checked items globally or per order. 
-    // Format: "orderId-itemId": boolean
-    const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
+    const prevOrdersCount = useRef(0);
+
+    // Audio beep for new orders (Base64 for a short clear "ding")
+    const playNotification = () => {
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.play().catch(e => console.warn('Audio play blocked:', e));
+    };
 
     useEffect(() => {
         fetchOrders();
-        // Polling every 5 seconds
         const interval = setInterval(fetchOrders, 5000);
         return () => clearInterval(interval);
     }, []);
@@ -46,219 +52,241 @@ export function KDSDashboard() {
     const fetchOrders = async () => {
         try {
             const data = await api.getKitchenOrders();
+            
+            // Check for new orders to play sound
+            const currentPendingCount = data.filter((o: any) => o.status === 'PENDING').length;
+            if (currentPendingCount > prevOrdersCount.current) {
+                playNotification();
+            }
+            prevOrdersCount.current = currentPendingCount;
+            
             setOrders(data);
         } catch (error) {
             console.error('Failed to fetch kitchen orders:', error);
-            // Using a silent fail here to not spam toast on polling if backend bounces
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleMarkAsReady = async (orderId: string) => {
+    const handleUpdateStatus = async (orderId: string, newStatus: string) => {
         try {
-            await api.updateOrderStatus(orderId, 'READY');
-            toast.success(`Order marked as READY`);
-            // Optimistic update
-            setOrders(prev => prev.filter(o => o.id !== orderId));
-
-            // Clean up checked items for this order to avoid memory leaks
-            setCheckedItems(prev => {
-                const next = { ...prev };
-                Object.keys(next).forEach(key => {
-                    if (key.startsWith(`${orderId}-`)) {
-                        delete next[key];
-                    }
-                });
-                return next;
-            });
+            await api.updateOrderStatus(orderId, newStatus);
+            toast.success(`Order moved to ${newStatus}`);
+            fetchOrders();
         } catch (error) {
             toast.error('Failed to update order status');
             console.error(error);
         }
     };
 
-    const toggleItemCheck = (orderId: string, itemId: string) => {
-        const key = `${orderId}-${itemId}`;
-        setCheckedItems(prev => ({
-            ...prev,
-            [key]: !prev[key]
-        }));
-    };
+    // Aggregate Summary Calculation
+    const aggregateSummary = useMemo(() => {
+        const summary: Record<string, number> = {};
+        orders
+            .filter(o => o.status === 'PENDING' || o.status === 'PREPARING')
+            .forEach(order => {
+                order.orderItems.forEach(item => {
+                    const name = item.product?.name || item.package?.name || 'Unknown Item';
+                    summary[name] = (summary[name] || 0) + item.quantity;
+                });
+            });
+        return Object.entries(summary).sort((a, b) => b[1] - a[1]);
+    }, [orders]);
 
-    const pendingOrders = orders.filter(o => o.status === 'PENDING');
-    const preparingOrders = orders.filter(o => o.status === 'PREPARING');
+    const columns: { title: string, status: string, color: string }[] = [
+        { title: 'New Orders', status: 'PENDING', color: 'border-amber-500/50 bg-amber-500/10' },
+        { title: 'In Progress', status: 'PREPARING', color: 'border-blue-500/50 bg-blue-500/10' },
+        { title: 'Ready / Served', status: 'READY', color: 'border-emerald-500/50 bg-emerald-500/10' }
+    ];
+
+    if (isLoading && orders.length === 0) {
+        return (
+            <div className="flex-1 flex items-center justify-center bg-slate-950 h-screen">
+                <div className="w-16 h-16 border-4 border-slate-800 border-t-blue-500 rounded-full animate-spin"></div>
+            </div>
+        );
+    }
 
     return (
-        <div className="flex-1 flex flex-col h-full bg-slate-900 overflow-hidden font-sans text-slate-100">
-            {/* Dark Header */}
-            <header className="px-8 py-5 flex items-center justify-between border-b border-slate-800 bg-slate-950 shrink-0 z-10 shadow-lg">
-                <div>
-                    <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3">
-                        Kitchen Display System
-                        <span className="bg-blue-500/20 text-blue-400 text-xs font-bold px-2.5 py-1 rounded-full border border-blue-500/30">
-                            LIVE
-                        </span>
-                    </h1>
-                    <p className="text-sm font-medium text-slate-400 mt-1">Real-time F&B order synchronisation</p>
+        <div className="flex-1 flex flex-col h-screen bg-slate-950 overflow-hidden font-sans text-slate-100">
+            {/* Header */}
+            <header className="px-6 py-4 flex items-center justify-between border-b border-white/5 bg-slate-950/80 backdrop-blur-md shrink-0 z-20">
+                <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/40">
+                        <Coffee className="text-white" size={20} />
+                    </div>
+                    <div>
+                        <h1 className="text-xl font-black text-white tracking-tight uppercase">Kitchen Portal</h1>
+                        <p className="text-[10px] font-bold text-slate-500 tracking-[0.2em] uppercase">Real-time Order Management</p>
+                    </div>
                 </div>
-                <div className="flex gap-4">
-                    <div className="bg-slate-800 text-slate-300 font-bold px-4 py-2 rounded-xl border border-slate-700 shadow-inner flex flex-col items-center justify-center">
-                        <span className="text-xl text-white leading-none">{pendingOrders.length}</span>
-                        <span className="text-[10px] uppercase tracking-wider">Pending</span>
-                    </div>
-                    <div className="bg-blue-900/40 text-blue-300 font-bold px-4 py-2 rounded-xl border border-blue-800/50 shadow-inner flex flex-col items-center justify-center">
-                        <span className="text-xl text-white leading-none">{preparingOrders.length}</span>
-                        <span className="text-[10px] uppercase tracking-wider">Preparing</span>
-                    </div>
+
+                <div className="flex gap-3">
+                    {columns.map(col => (
+                        <div key={col.status} className="flex flex-col items-center bg-slate-900/50 px-4 py-1.5 rounded-lg border border-white/5">
+                            <span className="text-lg font-black leading-none">{orders.filter(o => o.status === col.status).length}</span>
+                            <span className="text-[9px] uppercase font-bold text-slate-500">{col.title}</span>
+                        </div>
+                    ))}
                 </div>
             </header>
 
-            {/* Kanban Board Area */}
-            <main className="flex-1 overflow-x-auto overflow-y-hidden p-6 relative">
-                {isLoading && orders.length === 0 ? (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-12 h-12 border-4 border-slate-700 border-t-blue-500 rounded-full animate-spin"></div>
-                    </div>
-                ) : orders.length === 0 ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 space-y-4">
-                        <div className="bg-slate-800/50 p-6 rounded-full border border-slate-800">
-                            <CheckCircle2 size={48} className="text-slate-600" />
+            <div className="flex-1 flex overflow-hidden">
+                {/* Kanban Columns */}
+                <div className="flex-1 flex gap-4 p-4 overflow-x-auto overflow-y-hidden custom-scrollbar bg-slate-950">
+                    {columns.map(col => (
+                        <div key={col.status} className="flex flex-col w-[380px] shrink-0 h-full">
+                            <div className={`px-4 py-3 rounded-t-2xl border-t border-x ${col.color} flex justify-between items-center bg-slate-900/40`}>
+                                <h2 className="font-black text-sm uppercase tracking-widest">{col.title}</h2>
+                                <span className="bg-white/10 px-2 py-0.5 rounded text-xs font-bold">{orders.filter(o => o.status === col.status).length}</span>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-2 bg-slate-900/20 border-x border-b border-white/5 rounded-b-2xl space-y-4 custom-scrollbar">
+                                {orders
+                                    .filter(o => o.status === col.status)
+                                    .map(order => (
+                                        <KDSOrderCard 
+                                            key={order.id} 
+                                            order={order} 
+                                            onUpdateStatus={(s) => handleUpdateStatus(order.id, s)} 
+                                        />
+                                    ))
+                                }
+                            </div>
                         </div>
-                        <h2 className="text-xl font-bold text-slate-400">All Caught Up!</h2>
-                        <p className="text-sm">No active food orders in the queue.</p>
+                    ))}
+                </div>
+
+                {/* Aggregate Summary Panel */}
+                <aside className="w-[320px] bg-slate-900/50 border-l border-white/10 flex flex-col shrink-0">
+                    <div className="p-5 border-b border-white/5 bg-slate-900/80">
+                        <h2 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                            <Package size={16} className="text-blue-400" />
+                            To Cook Summary
+                        </h2>
                     </div>
-                ) : (
-                    <div className="flex h-full gap-6 w-max min-w-full pb-2">
-                        {orders.map((order) => (
-                            <OrderCard
-                                key={order.id}
-                                order={order}
-                                onMarkReady={() => handleMarkAsReady(order.id)}
-                                checkedItems={checkedItems}
-                                onToggleItem={(itemId) => toggleItemCheck(order.id, itemId)}
-                            />
-                        ))}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                        {aggregateSummary.length > 0 ? (
+                            aggregateSummary.map(([name, qty]) => (
+                                <div key={name} className="flex items-center justify-between p-3 bg-slate-800/40 border border-white/5 rounded-xl hover:bg-slate-800/60 transition-all">
+                                    <span className="font-bold text-[13px] text-slate-200">{name}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-black text-slate-500">QTY</span>
+                                        <span className="text-lg font-black text-blue-400">×{qty}</span>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-40 text-slate-600 gap-3">
+                                <CheckCircle2 size={32} />
+                                <span className="text-xs font-bold uppercase tracking-widest">Nothing to prep</span>
+                            </div>
+                        )}
                     </div>
-                )}
-            </main>
+                </aside>
+            </div>
         </div>
     );
 }
 
-function OrderCard({ order, onMarkReady, checkedItems, onToggleItem }: { order: KitchenOrder, onMarkReady: () => void, checkedItems: Record<string, boolean>, onToggleItem: (itemId: string) => void }) {
-    // Determine urgency color based on time (e.g. > 15 mins is red)
-    const minutesElapsed = Math.floor((new Date().getTime() - new Date(order.createdAt).getTime()) / 60000);
-    const isUrgent = minutesElapsed >= 15;
-    const isWarning = minutesElapsed >= 10 && minutesElapsed < 15;
+function KDSOrderCard({ order, onUpdateStatus }: { order: KitchenOrder, onUpdateStatus: (s: string) => void }) {
+    const elapsed = Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000);
+    const urgency = elapsed > 15 ? 'ERROR' : elapsed > 10 ? 'WARNING' : 'NORMAL';
 
-    let headerColor = 'bg-slate-800 border-slate-700';
-    let timeColor = 'text-slate-400';
-
-    if (isUrgent) {
-        headerColor = 'bg-red-900/40 border-red-500/50';
-        timeColor = 'text-red-400 font-bold';
-    } else if (isWarning) {
-        headerColor = 'bg-orange-900/30 border-orange-500/50';
-        timeColor = 'text-orange-400 font-bold';
-    }
-
-    let typeBorder = 'border-slate-700';
-    let typeBadge = 'bg-blue-500 text-white';
-    if (order.orderType === 'TAKEAWAY') {
-        typeBorder = 'border-orange-500/40';
-        typeBadge = 'bg-orange-500 text-white';
-    } else if (order.orderType === 'DELIVERY') {
-        typeBorder = 'border-green-500/40';
-        typeBadge = 'bg-green-500 text-white';
-    } else {
-        typeBorder = 'border-blue-500/40';
-    }
+    const getUrgencyStyles = () => {
+        if (urgency === 'ERROR') return 'border-red-500/50 bg-red-950/20';
+        if (urgency === 'WARNING') return 'border-orange-500/50 bg-orange-950/20';
+        return 'border-white/10 bg-slate-800/50';
+    };
 
     return (
-        <div className={`w-[320px] flex flex-col bg-slate-800 rounded-3xl border-2 ${typeBorder} shadow-[0_8px_32px_rgba(0,0,0,0.4)] shrink-0 overflow-hidden max-h-full`}>
+        <div className={`rounded-3xl border-2 ${getUrgencyStyles()} overflow-hidden shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-bottom-2`}>
             {/* Card Header */}
-            <div className={`p-4 border-b ${headerColor} transition-colors duration-500`}>
-                <div className="flex justify-between items-start mb-2">
-                    <div className="flex flex-col">
-                        <h3 className="font-black text-white text-3xl tracking-tight leading-none">
-                            {order.tokenId ? `${order.tokenId}` : order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Pending Order'}
-                        </h3>
-                        {order.customerName && order.tokenId && (
-                            <span className="text-slate-400 text-[11px] font-bold mt-1 tracking-wider uppercase">{order.customerName}</span>
-                        )}
+            <div className={`p-4 border-b border-white/5 ${urgency === 'ERROR' ? 'bg-red-500/10' : ''}`}>
+                <div className="flex justify-between items-start mb-1">
+                    <h3 className="text-2xl font-black text-white leading-none tracking-tight">
+                        {order.tokenId ? `#${order.tokenId}` : order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Order'}
+                    </h3>
+                    <div className="flex flex-col items-end">
+                        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-black uppercase ${urgency === 'ERROR' ? 'bg-red-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                            <Clock size={10} />
+                            {elapsed}m ago
+                        </div>
                     </div>
-                    {isUrgent && <AlertCircle size={24} className="text-red-400 animate-pulse mt-1" />}
                 </div>
-
-                <div className="mb-3">
-                    <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-md ${typeBadge}`}>{order.orderType?.replace('_', ' ')}</span>
-                </div>
-
-                <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-1.5 font-semibold text-slate-300">
-                        <span className="bg-slate-700/50 px-2.5 py-1 rounded-lg border border-slate-600 capitalize text-xs">{order.status.toLowerCase()}</span>
-                    </div>
-                    <div className={`flex items-center gap-1.5 ${timeColor}`}>
-                        <Clock size={14} />
-                        <span>{formatDistanceToNow(new Date(order.createdAt))}</span>
-                    </div>
+                
+                <div className="flex items-center gap-2 mt-2">
+                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded tracking-[0.1em] uppercase ${order.orderType === 'DINE_IN' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                        {order.orderType?.replace('_', ' ')}
+                    </span>
+                    {order.customerName && (
+                        <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                            <User size={10} /> {order.customerName}
+                        </span>
+                    )}
                 </div>
             </div>
 
-            {/* Items List (Checklist) */}
-            <div className="flex-1 overflow-y-auto p-2 scroll-smooth custom-scrollbar">
-                <div className="space-y-1">
-                    {order.orderItems.map((item, idx) => {
-                        const isChecked = checkedItems[`${order.id}-${item.id}`];
-                        return (
-                            <div
-                                key={item.id}
-                                onClick={() => onToggleItem(item.id)}
-                                className={`flex items-start gap-3 p-3 rounded-2xl cursor-pointer transition-all ${isChecked
-                                        ? 'bg-slate-800/20 opacity-60'
-                                        : idx % 2 === 0 ? 'bg-slate-800/50 hover:bg-slate-700/50' : 'bg-transparent hover:bg-slate-800/30'
-                                    }`}
-                            >
-                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black border shrink-0 transition-colors shadow-inner ${isChecked
-                                        ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30'
-                                        : 'bg-slate-700 text-white border-slate-600'
-                                    }`}>
-                                    {isChecked ? <CheckCircle2 size={16} strokeWidth={3} /> : item.quantity}
-                                </div>
-                                <div className="flex flex-col pt-1 w-full">
-                                    <span className={`font-bold text-[15px] leading-tight flex-1 transition-all ${isChecked ? 'text-slate-500 line-through' : 'text-slate-100'
-                                        }`}>
-                                        {item.product.name}
-                                        {/* If checked, still show quantity so they remember what they made */}
-                                        {isChecked && <span className="ml-2 text-xs font-semibold text-emerald-500/50">(x{item.quantity})</span>}
-                                    </span>
+            {/* Items List */}
+            <div className="p-4 space-y-3">
+                {order.orderItems.map((item, idx) => (
+                    <div key={item.id} className="flex gap-3 animate-in slide-in-from-left duration-300" style={{ animationDelay: `${idx * 100}ms` }}>
+                        <div className="w-8 h-8 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center font-black text-blue-400 shrink-0">
+                            {item.quantity}
+                        </div>
+                        <div className="flex-1">
+                            <div className="text-[14px] font-bold text-slate-100 leading-tight">
+                                {item.product?.name || item.package?.name}
+                            </div>
+                            
+                            {(item.notes || (item.addonIds && item.addonIds.length > 0)) && (
+                                <div className="mt-1 space-y-1">
                                     {item.notes && (
-                                        <div className="mt-1.5 inline-flex">
-                                            <span className={`text-[13px] tracking-wide font-black px-2 py-0.5 rounded uppercase border transition-colors ${isChecked
-                                                    ? 'text-slate-500 bg-slate-800/30 border-slate-700/50'
-                                                    : 'text-red-500 bg-red-500/10 border-red-500/20'
-                                                }`}>
-                                                NOTE: {item.notes}
-                                            </span>
+                                        <div className="inline-flex items-center gap-1.5 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-md">
+                                            <Info size={10} className="text-red-400" />
+                                            <span className="text-[10px] font-black text-red-500 uppercase tracking-tight">NOTE: {item.notes}</span>
+                                        </div>
+                                    )}
+                                    {item.addonIds && item.addonIds.length > 0 && (
+                                        <div className="inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md ml-1">
+                                            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-tight">ADDONS: {item.addonIds.length}</span>
                                         </div>
                                     )}
                                 </div>
-                            </div>
-                        );
-                    })}
-                </div>
+                            )}
+                        </div>
+                    </div>
+                ))}
             </div>
 
-            {/* Action Footer */}
-            <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0">
-                <button
-                    onClick={onMarkReady}
-                    className="w-full py-4 rounded-xl font-black text-[15px] tracking-wide text-white bg-blue-600 hover:bg-blue-500 active:bg-blue-700 transition-colors shadow-[0_0_20px_rgba(37,99,235,0.2)] border border-blue-500/50 flex items-center justify-center gap-2 group"
-                >
-                    <CheckCircle2 size={20} className="text-blue-300 group-hover:text-white transition-colors" />
-                    MARK AS READY
-                </button>
+            {/* Action Buttons */}
+            <div className="p-3 bg-slate-900/50 border-t border-white/5">
+                {order.status === 'PENDING' && (
+                    <button
+                        onClick={() => onUpdateStatus('PREPARING')}
+                        className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-xl shadow-blue-900/20 border border-blue-400/30"
+                    >
+                        <Play size={16} fill="currentColor" />
+                        Start Preparing
+                    </button>
+                )}
+                {order.status === 'PREPARING' && (
+                    <button
+                        onClick={() => onUpdateStatus('READY')}
+                        className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-xl shadow-emerald-900/20 border border-emerald-400/30"
+                    >
+                        <CheckCircle size={16} />
+                        Mark as Ready
+                    </button>
+                )}
+                {order.status === 'READY' && (
+                    <button
+                        onClick={() => onUpdateStatus('COMPLETED')}
+                        className="w-full py-3.5 bg-slate-700 hover:bg-slate-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all border border-slate-500/30"
+                    >
+                        <ChevronRight size={18} />
+                        Complete / Clear
+                    </button>
+                )}
             </div>
         </div>
     );

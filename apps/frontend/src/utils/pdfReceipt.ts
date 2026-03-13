@@ -14,67 +14,90 @@ pdfMake.vfs = vfs;
  * @param orderData The completed CreateOrderDto representing the cart.
  * @param orderId   (Optional) The generated Order ID from the backend to display.
  */
-export const generatePDFReceipt = (orderData: CreateOrderDto, orderId: string = 'PENDING') => {
-
-    // Construct the Table Body dynamically from the cart items
+/**
+ * Generates and downloads an English PDF Receipt for a thermal 80mm POS printer.
+ * 
+ * @param orderData The completed order data with totals and line items.
+ * @param orderId   The generated Order ID or Invoice Number.
+ */
+export const generatePDFReceipt = (orderData: any, orderId: string) => {
+    // Construct the Table Body dynamically from the order items
     const tableBody: any[][] = [
         // Table Header
         [
-            { text: 'Item', style: 'tableHeader' },
-            { text: 'Qty', style: 'tableHeader', alignment: 'center' },
-            { text: 'Unit Price', style: 'tableHeader', alignment: 'right' },
-            { text: 'Total', style: 'tableHeader', alignment: 'right' }
+            { text: 'ITEM', style: 'tableHeader' },
+            { text: 'QTY', style: 'tableHeader', alignment: 'center' },
+            { text: 'PRICE', style: 'tableHeader', alignment: 'right' },
+            { text: 'TOTAL', style: 'tableHeader', alignment: 'right' }
         ]
     ];
 
     // Populate Table Rows
-    orderData.items.forEach(item => {
-        // Safely map properties depending on if standard CreateOrderDto or extended UI type is passed
-        const name = (item as any)?.product?.name || item.productId;
-        const price = (item as any)?.product?.price || 0;
+    const items = orderData.orderItems || orderData.items || [];
+    items.forEach((item: any) => {
+        const name = item.product?.name || item.package?.name || 'Item';
+        const price = item.priceAtTimeOfSale || item.unitPrice || 0;
         const lineTotal = price * item.quantity;
 
         tableBody.push([
             { text: name, style: 'tableCell' },
             { text: item.quantity.toString(), style: 'tableCell', alignment: 'center' },
-            { text: `Rs. ${Number(price).toFixed(2)}`, style: 'tableCell', alignment: 'right' },
-            { text: `Rs. ${Number(lineTotal).toFixed(2)}`, style: 'tableCell', alignment: 'right' }
+            { text: Number(price).toFixed(0), style: 'tableCell', alignment: 'right' },
+            { text: Number(lineTotal).toFixed(0), style: 'tableCell', alignment: 'right' }
         ]);
+        
+        // Show addons if any
+        if (item.addonIds && item.addonIds.length > 0) {
+            tableBody.push([
+                { text: ` + Addons (${item.addonIds.length})`, style: 'addonCell', colSpan: 4 },
+                {}, {}, {}
+            ]);
+        }
     });
 
-    // Custom layout to remove inner borders for a clean receipt look
+    // Custom layout to remove inner borders for a clean thermal receipt look
     const cleanReceiptLayout: CustomTableLayout = {
         hLineWidth: function (i, node) {
-            return (i === 0 || i === node.table.body.length) ? 1 : (i === 1) ? 1 : 0;
+            return (i === 0 || i === node.table.body.length) ? 1 : 0;
         },
         vLineWidth: function () { return 0; },
-        hLineColor: function () { return '#dddddd'; },
-        paddingTop: function () { return 5; },
-        paddingBottom: function () { return 5; }
+        hLineStyle: function () { return { dash: { length: 2 } }; },
+        paddingTop: function () { return 2; },
+        paddingBottom: function () { return 2; }
     };
+
+    const subTotal = orderData.subTotal || orderData.totalAmount || 0;
+    const discount = orderData.discount || 0;
+    const grandTotal = orderData.grandTotal || orderData.totalAmount || 0;
 
     // Construct the Document Definition
     const documentDefinition: TDocumentDefinitions = {
         defaultStyle: {
-            font: 'Roboto', // Use standard built-in Roboto font
-            fontSize: 10
+            font: 'Roboto',
+            fontSize: 9
         },
-        pageSize: 'A5', // Standard receipt size (or use roll widths like { width: 226, height: 'auto' } for thermal)
-        pageMargins: [20, 30, 20, 30],
+        // 80mm thermal paper is ~226 points wide
+        pageSize: { width: 226, height: 'auto' },
+        pageMargins: [12, 12, 12, 12],
         content: [
             // Header
-            { text: 'Teddy Co. POS', style: 'header', alignment: 'center' },
-            { text: '123 Main Street, City', alignment: 'center', margin: [0, 0, 0, 2] },
-            { text: 'Tel: +94 11 234 5678', alignment: 'center', margin: [0, 0, 0, 15] },
+            { text: 'MY TEDDY RESTAURANT', style: 'header', alignment: 'center' },
+            { text: '123, Galle Road, Colombo', alignment: 'center', fontSize: 8 },
+            { text: 'Tel: +94 11 234 5678', alignment: 'center', fontSize: 8, margin: [0, 0, 0, 10] },
 
+            { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 202, y2: 0, lineWidth: 1 }] },
+            
             // Order Info
             {
-                columns: [
-                    { text: `Receipt #: ${orderId.substring(0, 8).toUpperCase()}`, alignment: 'left' },
-                    { text: `Date: ${new Date().toLocaleDateString()}`, alignment: 'right' }
-                ],
-                margin: [0, 0, 0, 10]
+                margin: [0, 8, 0, 8],
+                stack: [
+                    { text: `INVOICE: ${orderData.invoiceNumber || orderId}`, bold: true },
+                    { text: `Date: ${new Date().toLocaleString()}`, fontSize: 8 },
+                    { text: `Type: ${orderData.orderType || 'TAKEAWAY'}`, fontSize: 8 }
+                ]
             },
+
+            { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 202, y2: 0, lineWidth: 1 }] },
 
             // Items Table
             {
@@ -84,55 +107,81 @@ export const generatePDFReceipt = (orderData: CreateOrderDto, orderId: string = 
                     body: tableBody
                 },
                 layout: cleanReceiptLayout,
+                margin: [0, 5, 0, 5]
+            },
+
+            { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 202, y2: 0, lineWidth: 1 }] },
+
+            // Totals
+            {
+                margin: [0, 8, 0, 12],
+                stack: [
+                    {
+                        columns: [
+                            { text: 'Sub Total:', alignment: 'right' },
+                            { text: `Rs. ${Number(subTotal).toFixed(2)}`, alignment: 'right', width: 60 }
+                        ]
+                    },
+                    {
+                        columns: [
+                            { text: 'Discount:', alignment: 'right' },
+                            { text: `-Rs. ${Number(discount).toFixed(2)}`, alignment: 'right', width: 60 }
+                        ]
+                    },
+                    {
+                        columns: [
+                            { text: 'GRAND TOTAL:', style: 'totalLabel', alignment: 'right' },
+                            { text: `Rs. ${Number(grandTotal).toFixed(2)}`, style: 'totalLabel', alignment: 'right', width: 60 }
+                        ],
+                        margin: [0, 4, 0, 0]
+                    }
+                ]
+            },
+
+            // Payment Details
+            {
+                text: `Payment Mode: ${orderData.paymentMethod || 'CASH'}`,
+                fontSize: 8,
+                alignment: 'center',
                 margin: [0, 0, 0, 15]
             },
 
-            // Grand Total
-            {
-                columns: [
-                    { text: 'GRAND TOTAL:', style: 'totalLabel', alignment: 'right', width: '*' },
-                    { text: `Rs. ${orderData.totalAmount.toFixed(2)}`, style: 'totalValue', alignment: 'right', width: 70 }
-                ],
-                margin: [0, 0, 0, 20]
-            },
-
-            // English Greeting Footer
-            { text: 'Thank you! Come again.', style: 'englishGreeting', alignment: 'center' }
+            // Footer
+            { text: 'THANK YOU! COME AGAIN', style: 'footer', alignment: 'center' },
+            { text: 'Software by MyTeddy POS', fontSize: 7, alignment: 'center', color: '#888888', margin: [0, 5, 0, 0] }
         ],
 
-        // Styles dictionary
         styles: {
             header: {
-                fontSize: 18,
+                fontSize: 12,
                 bold: true,
-                margin: [0, 0, 0, 5]
+                margin: [0, 0, 0, 2]
             },
             tableHeader: {
                 bold: true,
-                fontSize: 11,
-                color: '#333333'
+                fontSize: 8,
+                color: '#000000'
             },
             tableCell: {
-                fontSize: 10,
-                color: '#555555'
+                fontSize: 8
+            },
+            addonCell: {
+                fontSize: 7,
+                italics: true,
+                color: '#444444'
             },
             totalLabel: {
                 bold: true,
-                fontSize: 12
+                fontSize: 10
             },
-            totalValue: {
-                bold: true,
-                fontSize: 14
-            },
-            englishGreeting: {
-                fontSize: 11,
-                italics: true,
-                bold: true,
-                color: '#444444'
+            footer: {
+                fontSize: 9,
+                bold: true
             }
         }
     };
 
-    // Build and Download the PDF
-    pdfMake.createPdf(documentDefinition).download(`Receipt_${orderId.substring(0, 8)}.pdf`);
+    // Build and Download the PDF (In a real browser this triggers download, 
+    // for thermal printers we usually use print() on an iframe or similar)
+    pdfMake.createPdf(documentDefinition).download(`Invoice_${orderData.invoiceNumber || orderId}.pdf`);
 };

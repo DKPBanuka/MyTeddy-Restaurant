@@ -6,32 +6,32 @@ import { toast } from 'sonner';
 import { Plus, Trash2, Edit2, Save, X, Layers, ShoppingBag, Search, Upload, Loader2, Calendar as CalendarIcon } from 'lucide-react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 export function MenuManagement() {
-    const [categories, setCategories] = useState<Category[]>([]);
-    const [products, setProducts] = useState<Product[]>([]);
+    const queryClient = useQueryClient();
 
     // Form States
     const [catName, setCatName] = useState('');
     const [editingCatId, setEditingCatId] = useState<string | null>(null);
-
     const [activeTab, setActiveTab] = useState<'CATEGORIES' | 'PRODUCTS' | 'GLOBAL_ADDONS' | 'PACKAGES'>('CATEGORIES');
 
-    useEffect(() => {
-        fetchData();
-    }, []);
+    // Queries
+    const { data: categories = [] } = useQuery({
+        queryKey: ['categories'],
+        queryFn: () => api.getCategories(),
+    });
 
-    const fetchData = async () => {
-        try {
-            const [catData, prodData] = await Promise.all([
-                api.getCategories(),
-                api.getProducts(),
-            ]);
-            setCategories(catData);
-            setProducts(prodData);
-        } catch (error) {
-            toast.error('Failed to load menu data');
-        }
+    const { data: products = [] } = useQuery({
+        queryKey: ['products'],
+        queryFn: () => api.getProducts(),
+    });
+
+    const invalidateAll = () => {
+        queryClient.invalidateQueries({ queryKey: ['categories'] });
+        queryClient.invalidateQueries({ queryKey: ['products'] });
+        queryClient.invalidateQueries({ queryKey: ['packages'] });
+        queryClient.invalidateQueries({ queryKey: ['global-addons'] });
     };
 
     const handleCreateCategory = async () => {
@@ -46,7 +46,7 @@ export function MenuManagement() {
             }
             setCatName('');
             setEditingCatId(null);
-            fetchData();
+            invalidateAll();
         } catch (error) {
             toast.error('Operation failed');
         }
@@ -57,7 +57,7 @@ export function MenuManagement() {
         try {
             await api.deleteCategory(id);
             toast.success('Category removed');
-            fetchData();
+            invalidateAll();
         } catch (error) {
             toast.error('Failed to delete category');
         }
@@ -178,15 +178,15 @@ export function MenuManagement() {
             )}
             
             {activeTab === 'PRODUCTS' && (
-                <ProductList categories={categories} products={products} onRefresh={fetchData} />
+                <ProductList categories={categories} products={products} onRefresh={invalidateAll} />
             )}
 
             {activeTab === 'GLOBAL_ADDONS' && (
-                <GlobalAddonsManager onRefresh={fetchData} />
+                <GlobalAddonsManager onRefresh={invalidateAll} />
             )}
 
             {activeTab === 'PACKAGES' && (
-                <PackagesManager onRefresh={fetchData} />
+                <PackagesManager onRefresh={invalidateAll} />
             )}
         </div>
     );

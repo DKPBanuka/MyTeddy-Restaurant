@@ -1,19 +1,21 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api } from '../api';
-import type { Product, OrderItemDto, Category } from '../types';
+import type { Product, OrderItemDto } from '../types';
 import { ProductType } from '../types';
 import { ProductCard } from '../components/ProductCard';
 import { Cart } from '../components/Cart';
 import { toast } from 'sonner';
 import { Store, PackageSearch, Coffee, Search, Bell, ShoppingBag, X } from 'lucide-react';
 import axios from 'axios';
-import { generatePDFReceipt } from '../utils/pdfReceipt';
 import { useAuth } from '../context/AuthContext';
 import { CheckoutModal } from '../components/CheckoutModal';
-import { OpenOrdersModal } from '../components/OpenOrdersModal';
+import { ActiveOrdersPanel } from '../components/ActiveOrdersPanel';
 import { ProductSelectionModal } from '../components/ProductSelectionModal';
+import { HeldOrdersModal } from '../components/HeldOrdersModal';
+import { useCart } from '../context/CartContext';
 import type { ProductSize, GlobalAddon } from '../types';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 const FOOD_CATEGORIES = ['Foods', 'Drinks', 'Bites', 'Appetizers', 'Main Course', 'Desserts', 'Beverages'];
 const isFoodProduct = (product: Product) => {
@@ -26,96 +28,59 @@ export function POSDashboard() {
     const { user } = useAuth();
     const location = useLocation();
 
-    const [products, setProducts] = useState<Product[]>([]);
-    const [packages, setPackages] = useState<any[]>([]);
-    const [categories, setCategories] = useState<Category[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
     const [activeFilter, setActiveFilter] = useState<string>('ALL'); // Store categoryId or 'ALL'
     const [searchQuery, setSearchQuery] = useState('');
-    const [orderType, setOrderType] = useState<OrderType>('DINE_IN');
+    const { 
+        items: cartItems, setItems: setCartItems, 
+        orderType, setOrderType, 
+        orderMetadata, setOrderMetadata,
+        clearCart: handleClearCart
+    } = useCart();
 
-    const [cartItems, setCartItems] = useState<OrderItemDto[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
     const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
-    const [isOpenOrdersModalOpen, setIsOpenOrdersModalOpen] = useState(false);
+    const [isActiveOrdersPanelOpen, setIsActiveOrdersPanelOpen] = useState(false);
+    const [isHeldOrdersModalOpen, setIsHeldOrdersModalOpen] = useState(false);
     const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
     const [generatedToken, setGeneratedToken] = useState<string | null>(null);
-    const [readyOrdersCount, setReadyOrdersCount] = useState(0);
     const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
     const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
-    const [globalAddons, setGlobalAddons] = useState<GlobalAddon[]>([]);
-    const [orderMetadata, setOrderMetadata] = useState({
-        tableNo: '',
-        customerName: '',
-        customerPhone: '',
-        deliveryAddress: ''
+    const queryClient = useQueryClient();
+
+    // React Query Hooks
+    const { data: products = [], isLoading: productsLoading } = useQuery({
+        queryKey: ['products'],
+        queryFn: () => api.getProducts(),
     });
 
-    useEffect(() => {
-        fetchProducts();
-        fetchCategories();
-        fetchGlobalAddons();
-        fetchPackages();
-    }, []);
+    const { data: categories = [] } = useQuery({
+        queryKey: ['categories'],
+        queryFn: () => api.getCategories(),
+    });
 
-    const fetchPackages = async () => {
-        try {
-            const data = await api.getPackages();
-            setPackages(data);
-        } catch (error) {
-            console.error('Failed to load packages');
-        }
-    };
+    const { data: globalAddons = [] } = useQuery({
+        queryKey: ['global-addons'],
+        queryFn: () => api.getGlobalAddons(),
+    });
 
-    const fetchGlobalAddons = async () => {
-        try {
-            const data = await api.getGlobalAddons();
-            setGlobalAddons(data);
-        } catch (error) {
-            console.error('Failed to load global addons');
-        }
-    };
+    const { data: packages = [] } = useQuery({
+        queryKey: ['packages'],
+        queryFn: () => api.getPackages(),
+    });
 
-    const fetchCategories = async () => {
-        try {
-            const data = await api.getCategories();
-            setCategories(data);
-        } catch (error) {
-            console.error('Failed to load categories');
-        }
-    };
+    const { data: activeOrders = [] } = useQuery({
+        queryKey: ['active-orders'],
+        queryFn: async () => {
+            const data = await api.getKitchenOrders();
+            return data.filter((o: any) => ['PENDING', 'PREPARING', 'READY'].includes(o.status));
+        },
+        refetchInterval: 5000,
+    });
 
-    const fetchProducts = async () => {
-        try {
-            setIsLoading(true);
-            const data = await api.getProducts();
-            setProducts(data);
-        } catch (error) {
-            toast.error('Failed to load products. Is the backend running?');
-            console.error(error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    const isLoading = productsLoading;
+    const activeOrdersCount = activeOrders.length;
 
-    const fetchReadyOrders = async () => {
-        try {
-            const data = await api.getPendingOrders();
-            const readyCount = data.filter((o: any) => o.status === 'READY').length;
-            setReadyOrdersCount(readyCount);
-        } catch (error) {
-            console.error('Failed to fetch ready orders:', error);
-        }
-    };
-
-    useEffect(() => {
-        // Initial fetch
-        fetchReadyOrders();
-        // Poll every 10 seconds for READY orders
-        const interval = setInterval(fetchReadyOrders, 10000);
-        return () => clearInterval(interval);
-    }, []);
 
     useEffect(() => {
         const state = location.state as { tableNo?: string; orderId?: string } | null;
@@ -288,35 +253,7 @@ export function POSDashboard() {
         setSelectedProductForModal(item.product as Product);
     };
 
-    const handleUpdateQty = (index: number, delta: number) => {
-        setCartItems((prev) => {
-            const newItems = [...prev];
-            if (newItems[index]) {
-                newItems[index] = {
-                    ...newItems[index],
-                    quantity: Math.max(0, newItems[index].quantity + delta)
-                };
-            }
-            return newItems.filter(item => item.quantity > 0);
-        });
-    };
 
-    const handleRemoveItem = (index: number) => {
-        setCartItems((prev) => prev.filter((_, i) => i !== index));
-    };
-
-    const handleClearCart = () => {
-        setCartItems([]);
-        setActiveOrderId(null);
-        setGeneratedToken(null);
-        setOrderMetadata({
-            tableNo: '',
-            customerName: '',
-            customerPhone: '',
-            deliveryAddress: ''
-        });
-        setIsMobileCartOpen(false);
-    };
 
     const handleUpdateProductQty = (productId: string, delta: number) => {
         setCartItems((prev) => {
@@ -399,6 +336,9 @@ export function POSDashboard() {
 
             // IMMEDAITELY clear the cart so cashier can serve the next customer
             handleClearCart();
+            setActiveOrderId(null);
+            setGeneratedToken(null);
+            setIsMobileCartOpen(false);
         } catch (error) {
             if (axios.isAxiosError(error) && error.response) {
                 toast.error(`KDS Update Failed: ${error.response.data.message || 'Validation error'}`);
@@ -410,18 +350,26 @@ export function POSDashboard() {
         }
     };
 
-    const handleConfirmCheckout = async (paymentDetails: any) => {
+    const handleConfirmCheckout = async (paymentDetails: { 
+        method: string; 
+        amountReceived?: number; 
+        change?: number;
+        subTotal?: number;
+        discount?: number;
+        grandTotal?: number;
+    }) => {
         try {
             setIsSubmitting(true);
 
-            const totalAmount = cartItems.reduce((sum, item) => {
+            const calculatedTotal = cartItems.reduce((sum, item) => {
                 const basePrice = item.size ? Number(item.size.price) : Number(item.product?.price || item.package?.price || 0);
                 const addonsPrice = item.selectedAddons?.reduce((s, a) => s + Number(a.price), 0) || 0;
                 return sum + (basePrice + addonsPrice) * item.quantity;
             }, 0);
 
-            const payloadItems = cartItems.map((item) => ({
+            const payloadItems: any[] = cartItems.map((item) => ({
                 productId: item.productId,
+                packageId: item.packageId || undefined, // FIXED: Type mismatch
                 quantity: item.quantity,
                 type: item.type,
                 sizeId: item.sizeId,
@@ -429,46 +377,42 @@ export function POSDashboard() {
                 notes: item.notes
             }));
 
-            let createdOrderId = activeOrderId;
+            let createdOrder: any = null;
 
             if (activeOrderId) {
                 // Determine whether to update items first (in case they changed after sending)
-                await api.updateOrderItems(activeOrderId, { items: payloadItems, totalAmount });
-                await api.payOrder(activeOrderId, paymentDetails);
+                await api.updateOrderItems(activeOrderId, { 
+                    items: payloadItems, 
+                    totalAmount: paymentDetails.grandTotal || calculatedTotal,
+                    subTotal: paymentDetails.subTotal || calculatedTotal,
+                    discount: paymentDetails.discount || 0,
+                    grandTotal: paymentDetails.grandTotal || calculatedTotal
+                });
+                createdOrder = await api.payOrder(activeOrderId, paymentDetails);
             } else {
-                const createdOrder = await api.createOrder({
+                createdOrder = await api.createOrder({
                     items: payloadItems,
-                    totalAmount,
-                    paymentMethod: paymentDetails.method,
+                    totalAmount: paymentDetails.grandTotal || calculatedTotal,
+                    subTotal: paymentDetails.subTotal || calculatedTotal,
+                    discount: paymentDetails.discount || 0,
+                    grandTotal: paymentDetails.grandTotal || calculatedTotal,
+                    paymentMethod: paymentDetails.method as any,
                     amountReceived: paymentDetails.amountReceived,
                     change: paymentDetails.change,
-                    paymentStatus: 'PAID'
+                    paymentStatus: 'PAID',
+                    orderType,
+                    ...orderMetadata
                 });
-                createdOrderId = createdOrder.id;
             }
 
-            toast.success('Payment processed successfully!', {
-                action: {
-                    label: 'Print Receipt',
-                    onClick: () => {
-                        const fullReceiptData = {
-                            items: cartItems,
-                            totalAmount,
-                            paymentMethod: paymentDetails.method,
-                            amountReceived: paymentDetails.amountReceived,
-                            change: paymentDetails.change
-                        };
-                        generatePDFReceipt(fullReceiptData, createdOrderId || 'NEW');
-                    }
-                },
-                duration: 10000
-            });
+            toast.success('Payment processed successfully!');
 
-            setCartItems([]);
+            handleClearCart();
             setActiveOrderId(null);
             setIsMobileCartOpen(false);
-            setIsCheckoutModalOpen(false);
-            fetchProducts();
+            queryClient.invalidateQueries({ queryKey: ['products'] });
+
+            return createdOrder;
 
         } catch (error) {
             if (axios.isAxiosError(error) && error.response) {
@@ -477,6 +421,7 @@ export function POSDashboard() {
                 toast.error('An unexpected error occurred during checkout.');
             }
             console.error(error);
+            throw error;
         } finally {
             setIsSubmitting(false);
         }
@@ -501,13 +446,13 @@ export function POSDashboard() {
                             </div>
                         </div>
                         <button
-                            onClick={() => setIsOpenOrdersModalOpen(true)}
+                            onClick={() => setIsActiveOrdersPanelOpen(true)}
                             className="relative bg-slate-800 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors shadow-sm"
                         >
-                            Open Orders
-                            {readyOrdersCount > 0 && (
+                            Active Orders
+                            {activeOrdersCount > 0 && (
                                 <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-slate-50 shadow-sm animate-pulse">
-                                    {readyOrdersCount}
+                                    {activeOrdersCount}
                                 </span>
                             )}
                         </button>
@@ -530,13 +475,13 @@ export function POSDashboard() {
 
                     <div className="hidden md:flex items-center gap-6">
                         <button
-                            onClick={() => setIsOpenOrdersModalOpen(true)}
+                            onClick={() => setIsActiveOrdersPanelOpen(true)}
                             className="relative bg-slate-800 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-slate-700 transition shadow-sm"
                         >
-                            Open Orders
-                            {readyOrdersCount > 0 && (
+                            Active Orders
+                            {activeOrdersCount > 0 && (
                                 <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full border-2 border-slate-50 shadow-sm animate-pulse">
-                                    {readyOrdersCount}
+                                    {activeOrdersCount}
                                 </span>
                             )}
                         </button>
@@ -679,22 +624,16 @@ export function POSDashboard() {
             {/* RIGHT COLUMN: Sidebar Cart (Desktop >= 1024px) */}
             <aside className="hidden lg:flex w-[380px] bg-white h-full shadow-[-4px_0_24px_rgba(0,0,0,0.02)] z-20 flex-shrink-0 flex-col border-l border-slate-100 relative">
                 <Cart
-                    items={cartItems}
-                    onUpdateQty={handleUpdateQty}
-                    onRemove={handleRemoveItem}
-                    onEdit={handleEditCartItem}
-                    onClearCart={handleClearCart}
                     onCheckout={handleOpenCheckout}
                     onSendToKDS={handleSendToKDS}
                     isSubmitting={isSubmitting}
                     hasActiveOrder={!!activeOrderId}
-                    orderType={orderType}
-                    orderMetadata={orderMetadata}
-                    setOrderMetadata={setOrderMetadata}
                     generatedToken={generatedToken}
+                    onViewHeldOrders={() => setIsHeldOrdersModalOpen(true)}
                     onUpdateItemNote={(productId, note) => {
                         setCartItems(prev => prev.map(item => item.productId === productId ? { ...item, notes: note } : item));
                     }}
+                    onEdit={handleEditCartItem}
                 />
             </aside>
 
@@ -712,26 +651,26 @@ export function POSDashboard() {
                             </button>
                         </div>
                         <Cart
-                            items={cartItems}
-                            onUpdateQty={handleUpdateQty}
-                            onRemove={handleRemoveItem}
-                            onEdit={handleEditCartItem}
-                            onClearCart={handleClearCart}
                             onCheckout={handleOpenCheckout}
                             onSendToKDS={handleSendToKDS}
                             isSubmitting={isSubmitting}
                             hasActiveOrder={!!activeOrderId}
-                            orderType={orderType}
-                            orderMetadata={orderMetadata}
-                            setOrderMetadata={setOrderMetadata}
                             generatedToken={generatedToken}
+                            onViewHeldOrders={() => setIsHeldOrdersModalOpen(true)}
                             onUpdateItemNote={(productId, note) => {
                                 setCartItems(prev => prev.map(item => item.productId === productId ? { ...item, notes: note } : item));
                             }}
+                            onEdit={handleEditCartItem}
                         />
                     </div>
                 </div>
             )}
+
+            {/* Held Orders Modal */}
+            <HeldOrdersModal 
+                isOpen={isHeldOrdersModalOpen} 
+                onClose={() => setIsHeldOrdersModalOpen(false)} 
+            />
 
             {/* Payment Modal */}
             <CheckoutModal
@@ -741,10 +680,10 @@ export function POSDashboard() {
                 onConfirm={handleConfirmCheckout}
             />
 
-            {/* Open Orders Modal */}
-            <OpenOrdersModal
-                isOpen={isOpenOrdersModalOpen}
-                onClose={() => setIsOpenOrdersModalOpen(false)}
+            {/* Active Orders Panel */}
+            <ActiveOrdersPanel
+                isOpen={isActiveOrdersPanelOpen}
+                onClose={() => setIsActiveOrdersPanelOpen(false)}
                 onSelectOrder={(order) => {
                     setActiveOrderId(order.id);
                     setOrderType(order.orderType as OrderType);
@@ -763,11 +702,10 @@ export function POSDashboard() {
                         sizeId: item.sizeId,
                         size: item.size,
                         addonIds: item.addonIds,
-                        selectedAddons: item.selectedAddons, // These should be fetched/populated if possible, or we represent them as IDs
+                        selectedAddons: item.selectedAddons,
                         notes: item.notes || ''
                     })) || []);
-                    setIsOpenOrdersModalOpen(false);
-                    fetchReadyOrders(); // Update count when an order is opened
+                    setIsActiveOrdersPanelOpen(false);
                 }}
             />
 

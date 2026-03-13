@@ -7,20 +7,118 @@ import { ProductType } from '@prisma/client';
 export class OrdersService {
     constructor(private readonly prisma: PrismaService) { }
 
+    private generateInvoiceNumber(): string {
+        const now = new Date();
+        const yyyymmdd = now.toISOString().split('T')[0].replace(/-/g, '');
+        const random = Math.floor(1000 + Math.random() * 9000);
+        return `INV-${yyyymmdd}-${random}`;
+    }
+
+    async getOrders(query: { page?: number; limit?: number; status?: string; paymentStatus?: string; search?: string; startDate?: string; endDate?: string }) {
+        const { page = 1, limit = 10, status, paymentStatus, search, startDate, endDate } = query;
+        const skip = (page - 1) * limit;
+
+        const where: any = {};
+
+        if (status) where.status = status;
+        if (paymentStatus) where.paymentStatus = paymentStatus;
+        if (search) {
+            where.OR = [
+                { invoiceNumber: { contains: search, mode: 'insensitive' } },
+                { customerPhone: { contains: search, mode: 'insensitive' } },
+                { customerName: { contains: search, mode: 'insensitive' } },
+            ];
+        }
+
+        if (startDate || endDate) {
+            where.createdAt = {};
+            if (startDate) where.createdAt.gte = new Date(startDate);
+            if (endDate) where.createdAt.lte = new Date(endDate);
+        }
+
+        const [orders, total] = await Promise.all([
+            this.prisma.order.findMany({
+                where,
+                skip,
+                take: Number(limit),
+                include: { orderItems: { include: { product: true, package: true } } },
+                orderBy: { createdAt: 'desc' },
+            }),
+            this.prisma.order.count({ where }),
+        ]);
+
+        return {
+            orders,
+            total,
+            page: Number(page),
+            limit: Number(limit),
+            totalPages: Math.ceil(total / limit),
+        };
+    }
+
+    async refundOrder(id: string) {
+        const order = await this.prisma.order.findUnique({ where: { id } });
+        if (!order) throw new NotFoundException(`Order ${id} not found`);
+
+        return this.prisma.order.update({
+            where: { id },
+            data: {
+                paymentStatus: 'REFUNDED',
+                status: 'CANCELLED'
+            },
+            include: { orderItems: true }
+        });
+    }
+
     async createOrder(createOrderDto: CreateOrderDto) {
-        const { items, totalAmount, paymentMethod, paymentStatus, amountReceived, change, orderType, tableNo, customerName, customerPhone, deliveryAddress } = createOrderDto;
+        const { items, discount = 0, paymentMethod, paymentStatus, amountReceived, change, orderType, tableNo, customerName, customerPhone, deliveryAddress } = createOrderDto;
 
         return this.prisma.$transaction(async (tx) => {
             const cashier = await tx.user.findFirst({ where: { role: 'CASHIER' } });
             if (!cashier) throw new BadRequestException('No cashier found to process order');
 
+            const invoiceNumber = this.generateInvoiceNumber();
+            let calculatedSubTotal = 0;
+
+            // Pre-process items to get snapshot prices
+            const itemsWithPrices = await Promise.all(items.map(async (item) => {
+                let currentItemPrice = 0;
+                if (item.packageId) {
+                    const pkg = await tx.package.findUnique({ where: { id: item.packageId } });
+                    currentItemPrice = Number(pkg?.price || 0);
+                } else if (item.productId) {
+                    if (item.sizeId) {
+                        const size = await tx.productSize.findUnique({ where: { id: item.sizeId } });
+                        currentItemPrice = Number(size?.price || 0);
+                    } else {
+                        const product = await tx.product.findUnique({ where: { id: item.productId } });
+                        currentItemPrice = Number(product?.price || 0);
+                    }
+                }
+                
+                const subtotal = currentItemPrice * item.quantity;
+                calculatedSubTotal += subtotal;
+
+                return {
+                    ...item,
+                    snapshotPrice: currentItemPrice,
+                    itemSubtotal: subtotal
+                };
+            }));
+
+            const grandTotal = calculatedSubTotal - discount;
+
             const order = await tx.order.create({
                 data: {
                     orderNumber: `ORD-${Date.now()}`,
-                    totalAmount,
+                    invoiceNumber,
+                    subTotal: calculatedSubTotal,
+                    discount,
+                    grandTotal,
+                    totalAmount: grandTotal, // for backward compatibility if used in UI
                     userId: cashier.id,
-                    paymentMethod: paymentMethod || null,
-                    paymentStatus: paymentStatus || 'UNPAID',
+                    paymentMethod: (paymentMethod as any) || null,
+                    paymentStatus: (paymentStatus as any) || 'UNPAID',
                     amountReceived: amountReceived || null,
                     change: change || null,
                     orderType: (orderType as any) || 'TAKEAWAY',
@@ -29,20 +127,23 @@ export class OrdersService {
                     customerPhone: customerPhone || null,
                     deliveryAddress: deliveryAddress || null,
                     orderItems: {
-                        create: items.map((item) => ({
-                            productId: item.productId,
+                        create: itemsWithPrices.map((item) => ({
+                            productId: item.productId || null,
+                            packageId: item.packageId || null,
                             quantity: item.quantity,
-                            unitPrice: 0,
-                            subtotal: 0,
+                            unitPrice: item.snapshotPrice,
+                            priceAtTimeOfSale: item.snapshotPrice,
+                            subtotal: item.itemSubtotal,
                             notes: item.notes || null,
                             sizeId: item.sizeId || null,
                             addonIds: item.addonIds || [],
                         })),
                     },
                 },
-                include: { orderItems: { include: { product: true } } },
+                include: { orderItems: { include: { product: true, package: true } } },
             });
 
+            // Stock deduction logic remains the same
             for (const item of items) {
                 if (item.packageId) {
                     const pkg = await tx.package.findUnique({
@@ -81,9 +182,16 @@ export class OrdersService {
     async getKitchenOrders() {
         return this.prisma.order.findMany({
             where: {
-                status: { in: ['PENDING', 'PREPARING'] },
+                status: { in: ['PENDING', 'PREPARING', 'READY'] },
             },
-            include: { orderItems: { include: { product: true } } },
+            include: { 
+                orderItems: { 
+                    include: { 
+                        product: true,
+                        package: true
+                    } 
+                } 
+            },
             orderBy: { createdAt: 'asc' },
         });
     }
@@ -117,7 +225,7 @@ export class OrdersService {
         }));
     }
 
-    async payOrder(id: string, paymentDetails: { method: string; amountReceived?: number; change?: number }) {
+    async payOrder(id: string, paymentDetails: { method: string; amountReceived?: number; change?: number; discount?: number; grandTotal?: number }) {
         const order = await this.prisma.order.findUnique({ where: { id } });
         if (!order) throw new NotFoundException(`Order ${id} not found`);
 
@@ -125,9 +233,11 @@ export class OrdersService {
             where: { id },
             data: {
                 paymentStatus: 'PAID',
-                paymentMethod: paymentDetails.method,
+                paymentMethod: paymentDetails.method as any,
                 amountReceived: paymentDetails.amountReceived || null,
                 change: paymentDetails.change || null,
+                discount: paymentDetails.discount ?? order.discount,
+                grandTotal: paymentDetails.grandTotal ?? order.grandTotal,
                 status: 'COMPLETED',
             },
             include: { orderItems: { include: { product: true } } },
@@ -145,31 +255,55 @@ export class OrdersService {
         });
     }
 
-    async updateOrderItems(id: string, body: { items: any[]; totalAmount: number }) {
+    async updateOrderItems(id: string, body: { items: any[]; totalAmount: number; subTotal?: number; discount?: number; grandTotal?: number }) {
         const order = await this.prisma.order.findUnique({ where: { id } });
         if (!order) throw new NotFoundException(`Order ${id} not found`);
 
-        // Delete existing items and re-create
-        await this.prisma.orderItem.deleteMany({ where: { orderId: id } });
+        return this.prisma.$transaction(async (tx) => {
+            // Fetch prices for snapshotting
+            const itemsWithPrices = await Promise.all(body.items.map(async (item) => {
+                let currentItemPrice = 0;
+                if (item.packageId) {
+                    const pkg = await tx.package.findUnique({ where: { id: item.packageId } });
+                    currentItemPrice = Number(pkg?.price || 0);
+                } else if (item.productId) {
+                    if (item.sizeId) {
+                        const size = await tx.productSize.findUnique({ where: { id: item.sizeId } });
+                        currentItemPrice = Number(size?.price || 0);
+                    } else {
+                        const product = await tx.product.findUnique({ where: { id: item.productId } });
+                        currentItemPrice = Number(product?.price || 0);
+                    }
+                }
+                return { ...item, price: currentItemPrice };
+            }));
 
-        return this.prisma.order.update({
-            where: { id },
-            data: {
-                totalAmount: body.totalAmount,
-                orderItems: {
-                    create: body.items.map((item) => ({
-                        productId: item.productId,
-                        packageId: item.packageId || null,
-                        quantity: item.quantity,
-                        unitPrice: 0,
-                        subtotal: 0,
-                        notes: item.notes || null,
-                        sizeId: item.sizeId || null,
-                        addonIds: item.addonIds || [],
-                    })),
+            // Delete existing items and re-create
+            await tx.orderItem.deleteMany({ where: { orderId: id } });
+
+            return tx.order.update({
+                where: { id },
+                data: {
+                    totalAmount: body.totalAmount,
+                    subTotal: body.subTotal ?? body.totalAmount,
+                    discount: body.discount ?? 0,
+                    grandTotal: body.grandTotal ?? body.totalAmount,
+                    orderItems: {
+                        create: itemsWithPrices.map((item) => ({
+                            productId: item.productId || null,
+                            packageId: item.packageId || null,
+                            quantity: item.quantity,
+                            unitPrice: item.price,
+                            priceAtTimeOfSale: item.price,
+                            subtotal: item.price * item.quantity,
+                            notes: item.notes || null,
+                            sizeId: item.sizeId || null,
+                            addonIds: item.addonIds || [],
+                        })),
+                    },
                 },
-            },
-            include: { orderItems: { include: { product: true } } },
+                include: { orderItems: { include: { product: true, package: true } } },
+            });
         });
     }
 

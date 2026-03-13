@@ -1,50 +1,34 @@
-import { ShoppingCart, Trash, Layers } from 'lucide-react';
-import type { OrderItemDto, OrderType } from '../types';
+import { ShoppingCart, Trash2, Layers, Archive, History as HistoryIcon } from 'lucide-react';
+import type { OrderItemDto } from '../types';
 import { ProductType } from '../types';
+import { useCart } from '../context/CartContext';
 
 interface CartProps {
-    items: OrderItemDto[];
-    onUpdateQty: (index: number, delta: number) => void;
-    onRemove: (index: number) => void;
-    onEdit: (item: OrderItemDto) => void;
-    onClearCart: () => void;
     onCheckout: () => void;
     onSendToKDS: () => void;
     isSubmitting: boolean;
     hasActiveOrder?: boolean;
-    orderType: OrderType;
-    orderMetadata: {
-        tableNo: string;
-        customerName: string;
-        customerPhone: string;
-        deliveryAddress: string;
-    };
-    setOrderMetadata: React.Dispatch<React.SetStateAction<{
-        tableNo: string;
-        customerName: string;
-        customerPhone: string;
-        deliveryAddress: string;
-    }>>;
     generatedToken: string | null;
     onUpdateItemNote: (productId: string, note: string) => void;
+    onViewHeldOrders: () => void;
+    onEdit: (item: OrderItemDto) => void;
 }
 
 export function Cart({
-    items,
-    onUpdateQty,
-    onRemove,
-    onClearCart,
     onCheckout,
     onSendToKDS,
     isSubmitting,
     hasActiveOrder,
-    orderType,
-    orderMetadata,
-    setOrderMetadata,
     generatedToken,
     onUpdateItemNote,
+    onViewHeldOrders,
     onEdit
 }: CartProps) {
+    const { 
+        items, orderType, orderMetadata, setOrderMetadata, 
+        removeItem, updateQty, clearCart, holdOrder, heldOrders 
+    } = useCart();
+
     const subTotal = items.reduce((sum, item) => {
         const basePrice = item.size ? Number(item.size.price) : Number(item.product?.price || item.package?.price || 0);
         const addonsPrice = item.selectedAddons?.reduce((s, a) => s + Number(a.price), 0) || 0;
@@ -52,6 +36,14 @@ export function Cart({
     }, 0);
     const tax = subTotal * 0.04;
     const totalAmount = subTotal + tax;
+
+    const handleHoldClick = () => {
+        const ref = window.prompt("Enter a reference name for this order (e.g., 'Guy in red shirt')", `Order ${heldOrders.length + 1}`);
+        if (ref) {
+            holdOrder(ref);
+        }
+    };
+
     return (
         <div className="flex flex-col h-full bg-white relative">
             {/* Header */}
@@ -64,39 +56,80 @@ export function Cart({
                                 #{generatedToken}
                             </div>
                         )}
+                        {heldOrders.length > 0 && (
+                            <button 
+                                onClick={onViewHeldOrders}
+                                className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-600 border border-amber-100 rounded-lg text-[10px] font-black uppercase tracking-widest animate-pulse"
+                            >
+                                <HistoryIcon size={12} />
+                                {heldOrders.length} Held
+                            </button>
+                        )}
                     </div>
-                    {items.length > 0 && (
-                        <button
-                            onClick={onClearCart}
-                            className="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 rounded-xl transition-all"
-                            title="Clear Cart"
-                        >
-                            <Trash size={18} strokeWidth={2} />
-                        </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {items.length > 0 && (
+                            <>
+                                <button
+                                    onClick={handleHoldClick}
+                                    className="p-2 text-slate-400 hover:text-blue-500 bg-slate-50 hover:bg-blue-50 rounded-xl transition-all"
+                                    title="Hold Order"
+                                >
+                                    <Archive size={18} />
+                                </button>
+                                <button
+                                    onClick={clearCart}
+                                    className="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 rounded-xl transition-all"
+                                    title="Clear Cart"
+                                >
+                                    <Trash2 size={18} strokeWidth={2} />
+                                </button>
+                            </>
+                        )}
+                    </div>
                 </div>
 
                 {/* Metadata Inputs */}
                 <div className="space-y-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                        {orderType === 'DINE_IN' ? 'Table Details' : orderType === 'TAKEAWAY' ? 'Customer Details' : 'Delivery Details'}
+                    <div className="flex items-center justify-between">
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                            {orderType === 'DINE_IN' ? 'Table Details' : orderType === 'TAKEAWAY' ? 'Customer Details' : 'Delivery Details'}
+                        </div>
                     </div>
 
                     {orderType === 'DINE_IN' && (
-                        <input
-                            type="text"
-                            placeholder="Table Number (e.g., T-12)"
-                            value={orderMetadata.tableNo}
-                            onChange={(e) => setOrderMetadata(prev => ({ ...prev, tableNo: e.target.value }))}
-                            className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-400"
-                        />
+                        <div className="space-y-2">
+                            <input
+                                type="text"
+                                placeholder="Table Number (e.g., T-12)"
+                                value={orderMetadata.tableNo}
+                                onChange={(e) => setOrderMetadata(prev => ({ ...prev, tableNo: e.target.value }))}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-400"
+                            />
+                            {/* Optional Customer Tagging for Dine-in too */}
+                            <div className="grid grid-cols-2 gap-2">
+                                <input
+                                    type="text"
+                                    placeholder="Cust. Name (Optional)"
+                                    value={orderMetadata.customerName}
+                                    onChange={(e) => setOrderMetadata(prev => ({ ...prev, customerName: e.target.value }))}
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-[11px] font-semibold text-slate-800 focus:outline-none"
+                                />
+                                <input
+                                    type="tel"
+                                    placeholder="Phone (Optional)"
+                                    value={orderMetadata.customerPhone}
+                                    onChange={(e) => setOrderMetadata(prev => ({ ...prev, customerPhone: e.target.value }))}
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-[11px] font-semibold text-slate-800 focus:outline-none"
+                                />
+                            </div>
+                        </div>
                     )}
 
                     {(orderType === 'TAKEAWAY' || orderType === 'DELIVERY') && (
                         <div className="grid grid-cols-2 gap-2">
                             <input
                                 type="text"
-                                placeholder="Name"
+                                placeholder="Customer Name"
                                 value={orderMetadata.customerName}
                                 onChange={(e) => setOrderMetadata(prev => ({ ...prev, customerName: e.target.value }))}
                                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-400"
@@ -185,10 +218,10 @@ export function Cart({
                                             </span>
                                             {/* Quantity Adjusters */}
                                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
-                                                <button onClick={() => onUpdateQty(index, -1)} className="w-6 h-6 rounded bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300 font-bold leading-none">-</button>
-                                                <button onClick={() => onUpdateQty(index, 1)} className="w-6 h-6 rounded bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300 font-bold leading-none">+</button>
-                                                <button onClick={() => onRemove(index)} className="w-6 h-6 rounded bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-200 ml-1">
-                                                    <Trash size={12} />
+                                                <button onClick={() => updateQty(index, -1)} className="w-6 h-6 rounded bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300 font-bold leading-none">-</button>
+                                                <button onClick={() => updateQty(index, 1)} className="w-6 h-6 rounded bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300 font-bold leading-none">+</button>
+                                                <button onClick={() => removeItem(index)} className="w-6 h-6 rounded bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-200 ml-1">
+                                                    <Trash2 size={12} />
                                                 </button>
                                             </div>
                                         </div>
@@ -214,7 +247,15 @@ export function Cart({
             {/* Footer Summary & Payment */}
             <div className="p-6 pt-0 bg-white shrink-0 mt-auto">
                 <div className="bg-slate-50 rounded-3xl p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
-                    <h3 className="font-bold text-slate-800 mb-4">Payment Summary</h3>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-bold text-slate-800">Payment Summary</h3>
+                        <button
+                            onClick={onViewHeldOrders}
+                            className="text-[10px] font-black text-slate-400 hover:text-slate-600 uppercase tracking-widest underline"
+                        >
+                            Held Orders
+                        </button>
+                    </div>
 
                     <div className="space-y-3 mb-4">
                         <div className="flex justify-between items-center text-sm">

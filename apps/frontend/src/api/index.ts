@@ -108,7 +108,7 @@ export const api = {
         const res = await apiClient.post(`/orders`, orderData);
         return res.data;
     },
-    updateOrderItems: async (id: string, updateData: { items: any[], totalAmount: number }) => {
+    updateOrderItems: async (id: string, updateData: { items: any[], totalAmount: number, subTotal?: number, discount?: number, grandTotal?: number }) => {
         const res = await apiClient.patch(`/orders/${id}/items`, updateData);
         return res.data;
     },
@@ -126,6 +126,14 @@ export const api = {
     },
     getTableStatus: async () => {
         const res = await apiClient.get(`/orders/tables/status`);
+        return res.data;
+    },
+    getOrders: async (params: { page?: number; limit?: number; status?: string; paymentStatus?: string; search?: string; startDate?: string; endDate?: string }) => {
+        const res = await apiClient.get(`/orders`, { params });
+        return res.data;
+    },
+    refundOrder: async (id: string) => {
+        const res = await apiClient.patch(`/orders/${id}/refund`);
         return res.data;
     },
     updateOrderStatus: async (id: string, status: string) => {

@@ -102,10 +102,13 @@ export interface OrderItemDto {
 export interface CreateOrderDto {
     items: Omit<OrderItemDto, 'product'>[];
     totalAmount: number;
-    paymentMethod?: string;
+    subTotal?: number;
+    discount?: number;
+    grandTotal?: number;
+    paymentMethod?: 'CASH' | 'CARD' | 'ONLINE';
     amountReceived?: number;
     change?: number;
-    paymentStatus?: 'UNPAID' | 'PAID';
+    paymentStatus?: 'UNPAID' | 'PAID' | 'REFUNDED';
     orderType?: OrderType;
     tableNo?: string;
     customerName?: string;

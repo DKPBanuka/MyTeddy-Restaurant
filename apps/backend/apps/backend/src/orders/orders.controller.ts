@@ -2,7 +2,8 @@ import { Controller, Post, Get, Patch, Body, Param, Query } from '@nestjs/common
 import { OrdersService } from './orders.service';
 
 export interface OrderItemDto {
-    productId: string;
+    productId?: string;
+    packageId?: string;
     quantity: number;
     type: string;
     notes?: string;
@@ -13,10 +14,13 @@ export interface OrderItemDto {
 export interface CreateOrderDto {
     items: OrderItemDto[];
     totalAmount: number;
-    paymentMethod?: string;
+    subTotal?: number;
+    discount?: number;
+    grandTotal?: number;
+    paymentMethod?: 'CASH' | 'CARD' | 'ONLINE';
     amountReceived?: number;
     change?: number;
-    paymentStatus?: 'UNPAID' | 'PAID';
+    paymentStatus?: 'UNPAID' | 'PAID' | 'REFUNDED';
     orderType?: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
     tableNo?: string;
     customerName?: string;
@@ -27,6 +31,16 @@ export interface CreateOrderDto {
 @Controller('orders')
 export class OrdersController {
     constructor(private readonly ordersService: OrdersService) { }
+
+    @Get()
+    async getOrders(@Query() query: any) {
+        return this.ordersService.getOrders(query);
+    }
+
+    @Patch(':id/refund')
+    async refundOrder(@Param('id') id: string) {
+        return this.ordersService.refundOrder(id);
+    }
 
     @Post()
     async createOrder(@Body() createOrderDto: CreateOrderDto) {

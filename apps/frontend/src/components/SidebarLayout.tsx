@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Store, LayoutDashboard, Calendar, ShoppingBag, TrendingUp, Users, Settings, LogOut, Layers, ChevronLeft, Menu, ChefHat } from 'lucide-react';
+import { Store, LayoutDashboard, Calendar, TrendingUp, Users, Settings, LogOut, Layers, ChevronLeft, Menu, ChefHat } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export function SidebarLayout() {
@@ -51,12 +51,6 @@ export function SidebarLayout() {
                         <NavLink to="/kds" className={navLinkClass} title="Kitchen Display">
                             <ChefHat size={24} className="shrink-0" />
                             {isExpanded && <span className="whitespace-nowrap">Kitchen (KDS)</span>}
-                        </NavLink>
-                    )}
-                    {hasPermission('POS') && ( // Assuming Cart uses POS permission or we can add CART
-                        <NavLink to="/cart" className={navLinkClass} title="Cart">
-                            <ShoppingBag size={24} className="shrink-0" />
-                            {isExpanded && <span className="whitespace-nowrap">Cart</span>}
                         </NavLink>
                     )}
                     {hasPermission('REPORTS') && (
