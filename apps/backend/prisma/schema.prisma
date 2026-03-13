@@ -99,7 +99,58 @@ model Product {
   recipeBOMs   RecipeBOM[]
   retailStock  RetailStock?
   orderItems   OrderItem[]
+  sizes        ProductSize[]
+  packageItems PackageItem[]
 }
+
+model ProductSize {
+  id        String   @id @default(uuid())
+  name      String
+  price     Decimal  @db.Decimal(10, 2)
+  productId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  packageItems PackageItem[]
+}
+
+model GlobalAddon {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  price     Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Package {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items       PackageItem[]
+  orderItems  OrderItem[]
+}
+
+model PackageItem {
+  id        String   @id @default(uuid())
+  packageId String
+  productId String
+  sizeId    String?
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  package   Package      @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  product   Product      @relation(fields: [productId], references: [id])
+  size      ProductSize? @relation(fields: [sizeId], references: [id])
+}
+
 
 model Ingredient {
   id            String      @id @default(uuid())
@@ -164,14 +215,18 @@ model Order {
 model OrderItem {
   id        String   @id @default(uuid())
   orderId   String
-  productId String
+  productId String?
+  packageId String?
   quantity  Int
   unitPrice Decimal  @db.Decimal(10, 2)
   subtotal  Decimal  @db.Decimal(10, 2)
   notes     String?
+  sizeId    String?
+  addonIds  String[] // Array of GlobalAddon IDs
 
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product   Product  @relation(fields: [productId], references: [id])
+  product   Product? @relation(fields: [productId], references: [id])
+  package   Package? @relation(fields: [packageId], references: [id])
 }
 
 model PartyBooking {

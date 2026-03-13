@@ -1,11 +1,12 @@
-import { ShoppingCart, Trash } from 'lucide-react';
+import { ShoppingCart, Trash, Layers } from 'lucide-react';
 import type { OrderItemDto, OrderType } from '../types';
 import { ProductType } from '../types';
 
 interface CartProps {
     items: OrderItemDto[];
-    onUpdateQty: (productId: string, delta: number) => void;
-    onRemove: (productId: string) => void;
+    onUpdateQty: (index: number, delta: number) => void;
+    onRemove: (index: number) => void;
+    onEdit: (item: OrderItemDto) => void;
     onClearCart: () => void;
     onCheckout: () => void;
     onSendToKDS: () => void;
@@ -31,6 +32,7 @@ interface CartProps {
 export function Cart({
     items,
     onUpdateQty,
+    onRemove,
     onClearCart,
     onCheckout,
     onSendToKDS,
@@ -40,10 +42,15 @@ export function Cart({
     orderMetadata,
     setOrderMetadata,
     generatedToken,
-    onUpdateItemNote
+    onUpdateItemNote,
+    onEdit
 }: CartProps) {
-    const subTotal = items.reduce((sum, item) => sum + Number(item.product.price) * item.quantity, 0);
-    const tax = subTotal * 0.04; // e.g. 4% tax based on Dribbble reference visuals
+    const subTotal = items.reduce((sum, item) => {
+        const basePrice = item.size ? Number(item.size.price) : Number(item.product?.price || item.package?.price || 0);
+        const addonsPrice = item.selectedAddons?.reduce((s, a) => s + Number(a.price), 0) || 0;
+        return sum + (basePrice + addonsPrice) * item.quantity;
+    }, 0);
+    const tax = subTotal * 0.04;
     const totalAmount = subTotal + tax;
     return (
         <div className="flex flex-col h-full bg-white relative">
@@ -125,22 +132,50 @@ export function Cart({
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        {items.map((item) => (
-                            <div key={item.productId} className="flex items-start justify-between group">
+                        {items.map((item, index) => (
+                            <div key={`${item.productId || item.packageId}-${index}`} className="flex items-start justify-between group">
                                 <div className="flex items-center gap-3">
                                     {/* Thumbnail Image Placeholder */}
-                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border border-slate-100 shadow-sm overflow-hidden ${item.product.type === ProductType.RETAIL ? 'bg-indigo-50 text-indigo-200' : 'bg-orange-50 text-orange-200'}`}>
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border border-slate-100 shadow-sm overflow-hidden ${item.packageId ? 'bg-blue-50 text-blue-200' : item.product?.type === ProductType.RETAIL ? 'bg-indigo-50 text-indigo-200' : 'bg-orange-50 text-orange-200'}`}>
                                         <div className="w-10 h-10 bg-white rounded-lg shadow-sm border border-slate-50 flex items-center justify-center">
-                                            {/* Dummy Image representing food */}
-                                            <div className="w-6 h-6 rounded-full bg-slate-200"></div>
+                                            {item.packageId ? (
+                                                <Layers size={16} className="text-blue-500" />
+                                            ) : (
+                                                <div className="w-6 h-6 rounded-full bg-slate-200"></div>
+                                            )}
                                         </div>
                                     </div>
 
                                     <div className="flex flex-col flex-1 pl-1">
                                         <div className="flex justify-between items-start">
-                                            <h4 className="font-bold text-slate-800 text-sm leading-tight line-clamp-1 py-1">{item.product.name}</h4>
+                                            <div>
+                                                <h4 className="font-bold text-slate-800 text-sm leading-tight line-clamp-1 pt-1">{item.product?.name || item.package?.name}</h4>
+                                                {item.package && item.package.items && (
+                                                    <div className="text-[10px] font-bold text-slate-500 mt-1 leading-relaxed bg-slate-50 p-1.5 rounded-lg border border-slate-100 italic">
+                                                        Includes: {item.package.items.map(it => `${it.quantity}x ${it.product?.name}${it.size ? ` (${it.size.name})` : ''}`).join(', ')}
+                                                    </div>
+                                                )}
+                                                {item.size && (
+                                                    <div className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-0.5">
+                                                        Size: {item.size.name}
+                                                    </div>
+                                                )}
+                                                {item.selectedAddons && item.selectedAddons.length > 0 && (
+                                                    <div className="text-[10px] font-bold text-emerald-600 mt-0.5">
+                                                        + {item.selectedAddons.map(a => a.name).join(', ')}
+                                                    </div>
+                                                )}
+                                                {!item.packageId && (
+                                                    <button 
+                                                        onClick={() => onEdit(item)}
+                                                        className="text-[10px] font-black text-blue-500 hover:text-blue-700 uppercase tracking-widest mt-1 underline"
+                                                    >
+                                                        Add-ons / Edit
+                                                    </button>
+                                                )}
+                                            </div>
                                             <span className="text-sm font-black text-slate-800 tracking-tight shrink-0 ml-2">
-                                                Rs. {(Number(item.product.price) * item.quantity).toFixed(1)}
+                                                Rs. {(((item.size ? Number(item.size.price) : Number(item.product?.price || item.package?.price || 0)) + (item.selectedAddons?.reduce((s, a) => s + Number(a.price), 0) || 0)) * item.quantity).toFixed(1)}
                                             </span>
                                         </div>
 
@@ -149,19 +184,22 @@ export function Cart({
                                                 {item.quantity}x
                                             </span>
                                             {/* Quantity Adjusters */}
-                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => onUpdateQty(item.productId, -1)} className="w-6 h-6 rounded bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300 font-bold leading-none">-</button>
-                                                <button onClick={() => onUpdateQty(item.productId, 1)} className="w-6 h-6 rounded bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300 font-bold leading-none">+</button>
+                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
+                                                <button onClick={() => onUpdateQty(index, -1)} className="w-6 h-6 rounded bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300 font-bold leading-none">-</button>
+                                                <button onClick={() => onUpdateQty(index, 1)} className="w-6 h-6 rounded bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300 font-bold leading-none">+</button>
+                                                <button onClick={() => onRemove(index)} className="w-6 h-6 rounded bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-200 ml-1">
+                                                    <Trash size={12} />
+                                                </button>
                                             </div>
                                         </div>
 
                                         {/* Notes Input (FOOD ONLY) */}
-                                        {item.product.type === ProductType.FOOD && (
+                                        {item.product?.type === ProductType.FOOD && (
                                             <input
                                                 type="text"
                                                 placeholder="Special instructions..."
                                                 value={item.notes || ''}
-                                                onChange={(e) => onUpdateItemNote(item.productId, e.target.value)}
+                                                onChange={(e) => onUpdateItemNote(item.productId!, e.target.value)}
                                                 className="mt-2 w-full text-xs bg-red-50/50 border border-red-100 text-red-700 placeholder:text-red-300 rounded px-2 py-1.5 focus:outline-none focus:border-red-300 focus:bg-red-50 transition-colors"
                                             />
                                         )}

@@ -211,4 +211,139 @@ export class InventoryService {
             where: { id }
         });
     }
+
+    // --- Categories CRUD ---
+
+    async getCategories() {
+        return this.prisma.category.findMany();
+    }
+
+    async createCategory(data: { name: string }) {
+        return this.prisma.category.create({
+            data: { name: data.name }
+        });
+    }
+
+    async updateCategory(id: string, data: { name: string }) {
+        return this.prisma.category.update({
+            where: { id },
+            data: { name: data.name }
+        });
+    }
+
+    async deleteCategory(id: string) {
+        return this.prisma.category.delete({
+            where: { id }
+        });
+    }
+
+    // --- Global Addons CRUD ---
+    async getGlobalAddons() {
+        return this.prisma.globalAddon.findMany();
+    }
+
+    async createGlobalAddon(data: any) {
+        return this.prisma.globalAddon.create({
+            data: {
+                name: data.name,
+                price: data.price
+            }
+        });
+    }
+
+    async updateGlobalAddon(id: string, data: any) {
+        return this.prisma.globalAddon.update({
+            where: { id },
+            data: {
+                name: data.name,
+                price: data.price
+            }
+        });
+    }
+
+    async deleteGlobalAddon(id: string) {
+        return this.prisma.globalAddon.delete({
+            where: { id }
+        });
+    }
+
+    // --- Packages CRUD ---
+    async getPackages() {
+        return this.prisma.package.findMany({
+            include: {
+                items: {
+                    include: {
+                        product: true,
+                        size: true
+                    }
+                }
+            }
+        });
+    }
+
+    async createPackage(data: any) {
+        return this.prisma.package.create({
+            data: {
+                name: data.name,
+                description: data.description,
+                price: Number(data.price),
+                imageUrl: data.imageUrl,
+                isActive: data.isActive ?? true,
+                items: {
+                    create: data.items?.map((item: any) => ({
+                        productId: item.productId,
+                        sizeId: item.sizeId || null,
+                        quantity: Number(item.quantity) || 1
+                    })) || []
+                }
+            },
+            include: {
+                items: {
+                    include: {
+                        product: true,
+                        size: true
+                    }
+                }
+            }
+        });
+    }
+
+    async updatePackage(id: string, data: any) {
+        return this.prisma.$transaction(async (tx) => {
+            // Remove existing items
+            await tx.packageItem.deleteMany({ where: { packageId: id } });
+
+            return tx.package.update({
+                where: { id },
+                data: {
+                    name: data.name,
+                    description: data.description,
+                    price: data.price !== undefined ? Number(data.price) : undefined,
+                    imageUrl: data.imageUrl,
+                    isActive: data.isActive,
+                    items: {
+                        create: data.items?.map((item: any) => ({
+                            productId: item.productId,
+                            sizeId: item.sizeId || null,
+                            quantity: Number(item.quantity) || 1
+                        })) || []
+                    }
+                },
+                include: {
+                    items: {
+                        include: {
+                            product: true,
+                            size: true
+                        }
+                    }
+                }
+            });
+        });
+    }
+
+    async deletePackage(id: string) {
+        return this.prisma.package.delete({
+            where: { id }
+        });
+    }
 }

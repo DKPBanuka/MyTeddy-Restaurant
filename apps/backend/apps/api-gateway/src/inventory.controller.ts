@@ -9,15 +9,19 @@ export class InventoryGatewayController {
     private async callService(cmd: string, payload: any = {}) {
         try {
             return await firstValueFrom(
-                this.inventoryClient.send({ cmd }, payload).pipe(
-                    catchError(error => throwError(() => new RpcException(error)))
-                )
+                this.inventoryClient.send({ cmd }, payload)
             );
         } catch (error: any) {
+            console.error(`Error calling ${cmd}:`, error);
+            // If it's an RpcException or contains a status/message from microservice
+            const errorMessage = error?.message || error?.error || error;
+            const status = error?.status || HttpStatus.INTERNAL_SERVER_ERROR;
+            
             throw new HttpException({
-                status: HttpStatus.INTERNAL_SERVER_ERROR,
-                error: error.message || `Microservice error calling ${cmd}`,
-            }, HttpStatus.INTERNAL_SERVER_ERROR);
+                status: status,
+                error: errorMessage,
+                message: `Microservice error: ${errorMessage}`
+            }, status);
         }
     }
 
@@ -79,24 +83,47 @@ export class InventoryGatewayController {
         return this.callService('delete_recipe_bom', id);
     }
 
-    // --- Categories (Backup Routes) ---
-    @Get('/categories')
-    async findAllCategories() {
-        return this.callService('get_categories');
+    // --- Global Addons ---
+    @Get('global-addons')
+    async getGlobalAddons() {
+        return this.callService('get_global_addons');
     }
 
-    @Post('/categories')
-    async createCategory(@Body() data: { name: string }) {
-        return this.callService('create_category', data);
+    @Post('global-addons')
+    async createGlobalAddon(@Body() data: any) {
+        return this.callService('create_global_addon', data);
     }
 
-    @Patch('/categories/:id')
-    async updateCategory(@Param('id') id: string, @Body() data: { name: string }) {
-        return this.callService('update_category', { id, ...data });
+    @Patch('global-addons/:id')
+    async updateGlobalAddon(@Param('id') id: string, @Body() data: any) {
+        return this.callService('update_global_addon', { id, data });
     }
 
-    @Delete('/categories/:id')
-    async removeCategory(@Param('id') id: string) {
-        return this.callService('delete_category', id);
+    @Delete('global-addons/:id')
+    async deleteGlobalAddon(@Param('id') id: string) {
+        return this.callService('delete_global_addon', id);
     }
+
+    // --- Packages ---
+    @Get('packages')
+    async getPackages() {
+        return this.callService('get_packages');
+    }
+
+    @Post('packages')
+    async createPackage(@Body() data: any) {
+        return this.callService('create_package', data);
+    }
+
+    @Patch('packages/:id')
+    async updatePackage(@Param('id') id: string, @Body() data: any) {
+        return this.callService('update_package', { id, data });
+    }
+
+    @Delete('packages/:id')
+    async deletePackage(@Param('id') id: string) {
+        return this.callService('delete_package', id);
+    }
+
 }
+

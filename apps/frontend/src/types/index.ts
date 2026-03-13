@@ -30,6 +30,39 @@ export interface Category {
     updatedAt?: string;
 }
 
+export interface ProductSize {
+    id: string;
+    name: string;
+    price: string;
+    productId: string;
+}
+
+export interface GlobalAddon {
+    id: string;
+    name: string;
+    price: string;
+}
+
+export interface PackageItem {
+    id: string;
+    packageId: string;
+    productId: string;
+    sizeId?: string | null;
+    quantity: number;
+    product?: Product;
+    size?: ProductSize;
+}
+
+export interface Package {
+    id: string;
+    name: string;
+    description: string;
+    price: string;
+    imageUrl?: string | null;
+    isActive?: boolean;
+    items?: PackageItem[];
+}
+
 export interface Product {
     id: string;
     name: string;
@@ -42,6 +75,7 @@ export interface Product {
     categoryId?: string | null;
     // Included relations
     category?: Category | null;
+    sizes?: ProductSize[];
     retailStock?: {
         stockQty: number;
         supplierDetails: string;
@@ -49,10 +83,16 @@ export interface Product {
 }
 
 export interface OrderItemDto {
-    productId: string;
+    productId?: string;
+    packageId?: string;
     quantity: number;
-    type: ProductType;
-    product: Product; // Keep local reference for UI details (name, price)
+    type: ProductType | 'PACKAGE';
+    product?: Product;
+    package?: Package;
+    sizeId?: string;
+    size?: ProductSize;
+    addonIds?: string[];
+    selectedAddons?: GlobalAddon[];
     notes?: string;
 }
 

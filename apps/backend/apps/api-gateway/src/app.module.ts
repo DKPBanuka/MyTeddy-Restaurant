@@ -25,7 +25,7 @@ import { CategoriesGatewayController } from './categories.controller';
         ReportsGatewayController,
         StaffGatewayController,
         PartyBookingsGatewayController,
-        CategoriesGatewayController
+        CategoriesGatewayController,
     ],
     providers: [],
 })

@@ -109,4 +109,46 @@ export class InventoryController {
     async deleteCategory(@Payload() id: string) {
         return this.inventoryService.deleteCategory(id);
     }
+
+    // --- Global Addons ---
+    @MessagePattern({ cmd: 'get_global_addons' })
+    async getGlobalAddons() {
+        return this.inventoryService.getGlobalAddons();
+    }
+
+    @MessagePattern({ cmd: 'create_global_addon' })
+    async createGlobalAddon(@Payload() data: any) {
+        return this.inventoryService.createGlobalAddon(data);
+    }
+
+    @MessagePattern({ cmd: 'update_global_addon' })
+    async updateGlobalAddon(@Payload() payload: { id: string, data: any }) {
+        return this.inventoryService.updateGlobalAddon(payload.id, payload.data);
+    }
+
+    @MessagePattern({ cmd: 'delete_global_addon' })
+    async deleteGlobalAddon(@Payload() id: string) {
+        return this.inventoryService.deleteGlobalAddon(id);
+    }
+
+    // --- Packages ---
+    @MessagePattern({ cmd: 'get_packages' })
+    async getPackages() {
+        return this.inventoryService.getPackages();
+    }
+
+    @MessagePattern({ cmd: 'create_package' })
+    async createPackage(@Payload() data: any) {
+        return this.inventoryService.createPackage(data);
+    }
+
+    @MessagePattern({ cmd: 'update_package' })
+    async updatePackage(@Payload() payload: { id: string, data: any }) {
+        return this.inventoryService.updatePackage(payload.id, payload.data);
+    }
+
+    @MessagePattern({ cmd: 'delete_package' })
+    async deletePackage(@Payload() id: string) {
+        return this.inventoryService.deletePackage(id);
+    }
 }

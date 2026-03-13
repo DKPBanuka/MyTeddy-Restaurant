@@ -88,4 +88,46 @@ export class InventoryController {
     async removeCategory(@Param('id') id: string) {
         return (this.inventoryService as any).deleteCategory(id);
     }
+
+    // --- Global Addons ---
+    @Get('global-addons')
+    async getGlobalAddons() {
+        return this.inventoryService.getGlobalAddons();
+    }
+
+    @Post('global-addons')
+    async createGlobalAddon(@Body() data: any) {
+        return this.inventoryService.createGlobalAddon(data);
+    }
+
+    @Patch('global-addons/:id')
+    async updateGlobalAddon(@Param('id') id: string, @Body() data: any) {
+        return this.inventoryService.updateGlobalAddon(id, data);
+    }
+
+    @Delete('global-addons/:id')
+    async deleteGlobalAddon(@Param('id') id: string) {
+        return this.inventoryService.deleteGlobalAddon(id);
+    }
+
+    // --- Packages ---
+    @Get('packages')
+    async getPackages() {
+        return this.inventoryService.getPackages();
+    }
+
+    @Post('packages')
+    async createPackage(@Body() data: any) {
+        return this.inventoryService.createPackage(data);
+    }
+
+    @Patch('packages/:id')
+    async updatePackage(@Param('id') id: string, @Body() data: any) {
+        return this.inventoryService.updatePackage(id, data);
+    }
+
+    @Delete('packages/:id')
+    async deletePackage(@Param('id') id: string) {
+        return this.inventoryService.deletePackage(id);
+    }
 }

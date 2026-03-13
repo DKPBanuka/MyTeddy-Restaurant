@@ -34,6 +34,9 @@ export class OrdersService {
                             quantity: item.quantity,
                             unitPrice: 0,
                             subtotal: 0,
+                            notes: item.notes || null,
+                            sizeId: item.sizeId || null,
+                            addonIds: item.addonIds || [],
                         })),
                     },
                 },
@@ -41,33 +44,21 @@ export class OrdersService {
             });
 
             for (const item of items) {
-                if (item.type === ProductType.RETAIL) {
-                    const stock = await tx.retailStock.findUnique({ where: { productId: item.productId } });
-                    if (!stock || stock.stockQty < item.quantity) {
-                        throw new BadRequestException(`Insufficient stock for retail product ID ${item.productId}`);
-                    }
-                    await tx.retailStock.update({
-                        where: { productId: item.productId },
-                        data: { stockQty: stock.stockQty - item.quantity },
+                if (item.packageId) {
+                    const pkg = await tx.package.findUnique({
+                        where: { id: item.packageId },
+                        include: { items: { include: { product: true } } }
                     });
-                } else if (item.type === ProductType.FOOD) {
-                    const productWithBOM = await tx.product.findUnique({
-                        where: { id: item.productId },
-                        include: { recipeBOMs: true },
-                    });
-                    if (!productWithBOM) throw new BadRequestException(`Food product ID ${item.productId} not found`);
-                    if (productWithBOM.recipeBOMs.length === 0) continue;
-
-                    for (const bom of productWithBOM.recipeBOMs) {
-                        const requiredQty = Number(bom.quantity) * item.quantity;
-                        const ingredient = await tx.ingredient.findUnique({ where: { id: bom.ingredientId } });
-                        if (!ingredient || Number(ingredient.stockQty) < requiredQty) {
-                            throw new BadRequestException(`Insufficient ingredient stock for ingredient ID ${bom.ingredientId}`);
+                    if (pkg) {
+                        for (const pkgItem of pkg.items) {
+                            const totalQty = pkgItem.quantity * item.quantity;
+                            await this.processStockDeduction(tx, pkgItem.productId, pkgItem.product.type, totalQty);
                         }
-                        await tx.ingredient.update({
-                            where: { id: bom.ingredientId },
-                            data: { stockQty: Number(ingredient.stockQty) - requiredQty },
-                        });
+                    }
+                } else if (item.productId) {
+                    const product = await tx.product.findUnique({ where: { id: item.productId } });
+                    if (product) {
+                        await this.processStockDeduction(tx, item.productId, product.type, item.quantity);
                     }
                 }
             }
@@ -168,13 +159,49 @@ export class OrdersService {
                 orderItems: {
                     create: body.items.map((item) => ({
                         productId: item.productId,
+                        packageId: item.packageId || null,
                         quantity: item.quantity,
                         unitPrice: 0,
                         subtotal: 0,
+                        notes: item.notes || null,
+                        sizeId: item.sizeId || null,
+                        addonIds: item.addonIds || [],
                     })),
                 },
             },
             include: { orderItems: { include: { product: true } } },
         });
+    }
+
+    private async processStockDeduction(tx: any, productId: string, productType: ProductType, quantity: number) {
+        if (productType === ProductType.RETAIL) {
+            const stock = await tx.retailStock.findUnique({ where: { productId } });
+            if (!stock || stock.stockQty < quantity) {
+                throw new BadRequestException(`Insufficient stock for product ID ${productId}`);
+            }
+            await tx.retailStock.update({
+                where: { productId },
+                data: { stockQty: stock.stockQty - quantity },
+            });
+        } else if (productType === ProductType.FOOD) {
+            const productWithBOM = await tx.product.findUnique({
+                where: { id: productId },
+                include: { recipeBOMs: true },
+            });
+            if (!productWithBOM) return; // Or throw error
+            if (productWithBOM.recipeBOMs.length === 0) return;
+
+            for (const bom of productWithBOM.recipeBOMs) {
+                const requiredQty = Number(bom.quantity) * quantity;
+                const ingredient = await tx.ingredient.findUnique({ where: { id: bom.ingredientId } });
+                if (!ingredient || Number(ingredient.stockQty) < requiredQty) {
+                    throw new BadRequestException(`Insufficient ingredient stock for ID ${bom.ingredientId}`);
+                }
+                await tx.ingredient.update({
+                    where: { id: bom.ingredientId },
+                    data: { stockQty: Number(ingredient.stockQty) - requiredQty },
+                });
+            }
+        }
     }
 }

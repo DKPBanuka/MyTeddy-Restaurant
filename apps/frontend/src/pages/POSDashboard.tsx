@@ -12,6 +12,8 @@ import { generatePDFReceipt } from '../utils/pdfReceipt';
 import { useAuth } from '../context/AuthContext';
 import { CheckoutModal } from '../components/CheckoutModal';
 import { OpenOrdersModal } from '../components/OpenOrdersModal';
+import { ProductSelectionModal } from '../components/ProductSelectionModal';
+import type { ProductSize, GlobalAddon } from '../types';
 
 type OrderType = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
 
@@ -20,6 +22,7 @@ export function POSDashboard() {
     const location = useLocation();
 
     const [products, setProducts] = useState<Product[]>([]);
+    const [packages, setPackages] = useState<any[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [activeFilter, setActiveFilter] = useState<string>('ALL'); // Store categoryId or 'ALL'
@@ -34,6 +37,9 @@ export function POSDashboard() {
     const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
     const [generatedToken, setGeneratedToken] = useState<string | null>(null);
     const [readyOrdersCount, setReadyOrdersCount] = useState(0);
+    const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
+    const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+    const [globalAddons, setGlobalAddons] = useState<GlobalAddon[]>([]);
     const [orderMetadata, setOrderMetadata] = useState({
         tableNo: '',
         customerName: '',
@@ -44,7 +50,27 @@ export function POSDashboard() {
     useEffect(() => {
         fetchProducts();
         fetchCategories();
+        fetchGlobalAddons();
+        fetchPackages();
     }, []);
+
+    const fetchPackages = async () => {
+        try {
+            const data = await api.getPackages();
+            setPackages(data);
+        } catch (error) {
+            console.error('Failed to load packages');
+        }
+    };
+
+    const fetchGlobalAddons = async () => {
+        try {
+            const data = await api.getGlobalAddons();
+            setGlobalAddons(data);
+        } catch (error) {
+            console.error('Failed to load global addons');
+        }
+    };
 
     const fetchCategories = async () => {
         try {
@@ -126,46 +152,149 @@ export function POSDashboard() {
         }
     }, [location.state]);
 
-    const filteredProducts = useMemo(() => {
-        let result = products;
+    const filteredItems = useMemo(() => {
+        let result = [
+            ...products.map(p => ({ ...p, isPackage: false })),
+            ...packages.map(p => ({ ...p, isPackage: true, type: 'PACKAGE' as const }))
+        ];
+
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase();
-            result = result.filter(p => p.name.toLowerCase().includes(query) || (p.barcode && p.barcode.includes(query)));
+            result = result.filter(p => p.name.toLowerCase().includes(query));
         }
         if (activeFilter !== 'ALL') {
-            result = result.filter((p) => p.categoryId === activeFilter);
+             // Only products have categories currently. Packages could be shown under a special "BUNDLES" filter or just shown in "ALL"
+             result = result.filter((p: any) => p.categoryId === activeFilter);
         }
         return result;
-    }, [products, activeFilter, searchQuery]);
+    }, [products, packages, activeFilter, searchQuery]);
 
-    const handleAddToCart = (product: Product) => {
+    const handleAddToCart = (item: any) => {
+        if (item.isPackage) {
+            setCartItems((prev) => {
+                const existing = prev.find(i => i.packageId === item.id);
+                if (existing) {
+                    return prev.map(i => i.packageId === item.id ? { ...i, quantity: i.quantity + 1 } : i);
+                }
+                return [...prev, {
+                    packageId: item.id,
+                    quantity: 1,
+                    type: 'PACKAGE',
+                    package: item,
+                    addonIds: []
+                }];
+            });
+            toast.success(`Added bundle ${item.name} to order`);
+            return;
+        }
+
+        const product = item as Product;
+        // Crucial Logic: If the product has ONLY ONE size and no global addons available, it can bypass the modal.
+
+        // Bypass: use the only size if it exists, or just the product price
+        const selectedSize = product.sizes && product.sizes.length === 1 ? product.sizes[0] : undefined;
+
         setCartItems((prev) => {
-            const existing = prev.find((item) => item.productId === product.id);
+            const existing = prev.find((item) => 
+                item.productId === product.id && 
+                item.sizeId === selectedSize?.id && 
+                (!item.addonIds || item.addonIds.length === 0)
+            );
             if (existing) {
                 return prev.map((item) =>
-                    item.productId === product.id
+                    (item.productId === product.id && item.sizeId === selectedSize?.id && (!item.addonIds || item.addonIds.length === 0))
                         ? { ...item, quantity: item.quantity + 1 }
                         : item
                 );
             }
-            return [...prev, { productId: product.id, quantity: 1, type: product.type, product }];
+            return [...prev, { 
+                productId: product.id, 
+                quantity: 1, 
+                type: product.type, 
+                product,
+                sizeId: selectedSize?.id,
+                size: selectedSize,
+                addonIds: []
+            }];
+        });
+        toast.success(`Added ${product.name} to order`);
+    };
+
+    const handleSelectionConfirm = (size?: ProductSize, selectedAddons?: GlobalAddon[]) => {
+        if (!selectedProductForModal) return;
+
+        const product = selectedProductForModal;
+        const sortedAddonIds = selectedAddons?.map(a => a.id).sort() || [];
+
+        setCartItems((prev) => {
+            if (editingItemIndex !== null) {
+                // Replace existing item
+                const newItems = [...prev];
+                newItems[editingItemIndex] = {
+                    ...newItems[editingItemIndex],
+                    sizeId: size?.id,
+                    size: size,
+                    addonIds: sortedAddonIds,
+                    selectedAddons: selectedAddons
+                };
+                return newItems;
+            }
+
+            // Regular Add logic (Check for identical item to merge)
+            const existingIndex = prev.findIndex((item) => 
+                item.productId === product.id && 
+                item.sizeId === size?.id &&
+                JSON.stringify(item.addonIds?.sort() || []) === JSON.stringify(sortedAddonIds)
+            );
+
+            if (existingIndex !== -1) {
+                const newItems = [...prev];
+                newItems[existingIndex] = {
+                    ...newItems[existingIndex],
+                    quantity: newItems[existingIndex].quantity + 1
+                };
+                return newItems;
+            }
+
+            return [...prev, { 
+                productId: product.id, 
+                quantity: 1, 
+                type: product.type, 
+                product,
+                sizeId: size?.id,
+                size: size,
+                addonIds: sortedAddonIds,
+                selectedAddons: selectedAddons
+            }];
+        });
+
+        setSelectedProductForModal(null);
+        setEditingItemIndex(null);
+        toast.success(editingItemIndex !== null ? `Updated ${product.name}` : `Added ${product.name} to order`);
+    };
+
+    const handleEditCartItem = (item: OrderItemDto) => {
+        const index = cartItems.indexOf(item);
+        if (index === -1) return;
+        setEditingItemIndex(index);
+        setSelectedProductForModal(item.product as Product);
+    };
+
+    const handleUpdateQty = (index: number, delta: number) => {
+        setCartItems((prev) => {
+            const newItems = [...prev];
+            if (newItems[index]) {
+                newItems[index] = {
+                    ...newItems[index],
+                    quantity: Math.max(0, newItems[index].quantity + delta)
+                };
+            }
+            return newItems.filter(item => item.quantity > 0);
         });
     };
 
-    const handleUpdateQty = (productId: string, delta: number) => {
-        setCartItems((prev) =>
-            prev.map((item) => {
-                if (item.productId === productId) {
-                    const newQty = Math.max(0, item.quantity + delta);
-                    return { ...item, quantity: newQty };
-                }
-                return item;
-            }).filter(item => item.quantity > 0)
-        );
-    };
-
-    const handleRemoveItem = (productId: string) => {
-        setCartItems((prev) => prev.filter((item) => item.productId !== productId));
+    const handleRemoveItem = (index: number) => {
+        setCartItems((prev) => prev.filter((_, i) => i !== index));
     };
 
     const handleClearCart = () => {
@@ -181,13 +310,31 @@ export function POSDashboard() {
         setIsMobileCartOpen(false);
     };
 
+    const handleUpdateProductQty = (productId: string, delta: number) => {
+        setCartItems((prev) => {
+            const index = prev.findIndex(item => item.productId === productId);
+            if (index === -1) return prev;
+            
+            const newItems = [...prev];
+            newItems[index] = {
+                ...newItems[index],
+                quantity: Math.max(0, newItems[index].quantity + delta)
+            };
+            return newItems.filter(item => item.quantity > 0);
+        });
+    };
+
     const getProductQtyInCart = (productId: string) => {
         const item = cartItems.find((itm) => itm.productId === productId);
         return item ? item.quantity : 0;
     };
 
     const cartTotalQty = cartItems.reduce((sum, item) => sum + item.quantity, 0);
-    const cartTotalPrice = cartItems.reduce((sum, item) => sum + Number(item.product.price) * item.quantity, 0);
+    const cartTotalPrice = cartItems.reduce((sum, item) => {
+        const basePrice = item.size ? Number(item.size.price) : Number(item.product?.price || item.package?.price || 0);
+        const addonsPrice = item.selectedAddons?.reduce((s, a) => s + Number(a.price), 0) || 0;
+        return sum + (basePrice + addonsPrice) * item.quantity;
+    }, 0);
 
     const handleOpenCheckout = () => {
         if (cartItems.length === 0) return;
@@ -199,14 +346,19 @@ export function POSDashboard() {
 
         try {
             setIsSubmitting(true);
-            const totalAmount = cartItems.reduce(
-                (sum, item) => sum + Number(item.product.price) * item.quantity,
-                0
-            );
-            const payloadItems = cartItems.map(({ productId, quantity, type }) => ({
-                productId,
-                quantity,
-                type,
+            const totalAmount = cartItems.reduce((sum, item) => {
+                const basePrice = item.size ? Number(item.size.price) : Number(item.product?.price || item.package?.price || 0);
+                const addonsPrice = item.selectedAddons?.reduce((s, a) => s + Number(a.price), 0) || 0;
+                return sum + (basePrice + addonsPrice) * item.quantity;
+            }, 0);
+            
+            const payloadItems = cartItems.map((item) => ({
+                productId: item.productId,
+                quantity: item.quantity,
+                type: item.type,
+                sizeId: item.sizeId,
+                addonIds: item.addonIds,
+                notes: item.notes
             }));
 
             if (activeOrderId) {
@@ -254,15 +406,19 @@ export function POSDashboard() {
         try {
             setIsSubmitting(true);
 
-            const totalAmount = cartItems.reduce(
-                (sum, item) => sum + Number(item.product.price) * item.quantity,
-                0
-            );
+            const totalAmount = cartItems.reduce((sum, item) => {
+                const basePrice = item.size ? Number(item.size.price) : Number(item.product?.price || item.package?.price || 0);
+                const addonsPrice = item.selectedAddons?.reduce((s, a) => s + Number(a.price), 0) || 0;
+                return sum + (basePrice + addonsPrice) * item.quantity;
+            }, 0);
 
-            const payloadItems = cartItems.map(({ productId, quantity, type }) => ({
-                productId,
-                quantity,
-                type,
+            const payloadItems = cartItems.map((item) => ({
+                productId: item.productId,
+                quantity: item.quantity,
+                type: item.type,
+                sizeId: item.sizeId,
+                addonIds: item.addonIds,
+                notes: item.notes
             }));
 
             let createdOrderId = activeOrderId;
@@ -454,16 +610,16 @@ export function POSDashboard() {
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5 content-start">
-                            {filteredProducts.map((product) => (
+                            {filteredItems.map((item: any) => (
                                 <ProductCard
-                                    key={product.id}
-                                    product={product}
-                                    qtyInCart={getProductQtyInCart(product.id)}
-                                    onAdd={() => handleAddToCart(product)}
-                                    onUpdateQty={(delta) => handleUpdateQty(product.id, delta)}
+                                    key={item.id}
+                                    product={item}
+                                    qtyInCart={getProductQtyInCart(item.id)}
+                                    onAdd={() => handleAddToCart(item)}
+                                    onUpdateQty={(delta) => handleUpdateProductQty(item.id, delta)}
                                 />
                             ))}
-                            {filteredProducts.length === 0 && (
+                            {filteredItems.length === 0 && (
                                 <div className="col-span-full h-48 md:h-64 flex flex-col items-center justify-center text-slate-400 space-y-4">
                                     <div className="bg-white border shadow-sm p-4 rounded-full">
                                         <Search size={32} className="md:w-10 md:h-10 text-slate-300" />
@@ -511,6 +667,7 @@ export function POSDashboard() {
                     items={cartItems}
                     onUpdateQty={handleUpdateQty}
                     onRemove={handleRemoveItem}
+                    onEdit={handleEditCartItem}
                     onClearCart={handleClearCart}
                     onCheckout={handleOpenCheckout}
                     onSendToKDS={handleSendToKDS}
@@ -543,6 +700,7 @@ export function POSDashboard() {
                             items={cartItems}
                             onUpdateQty={handleUpdateQty}
                             onRemove={handleRemoveItem}
+                            onEdit={handleEditCartItem}
                             onClearCart={handleClearCart}
                             onCheckout={handleOpenCheckout}
                             onSendToKDS={handleSendToKDS}
@@ -587,12 +745,31 @@ export function POSDashboard() {
                         quantity: item.quantity,
                         type: item.product?.type || ProductType.FOOD,
                         product: item.product,
+                        sizeId: item.sizeId,
+                        size: item.size,
+                        addonIds: item.addonIds,
+                        selectedAddons: item.selectedAddons, // These should be fetched/populated if possible, or we represent them as IDs
                         notes: item.notes || ''
                     })) || []);
                     setIsOpenOrdersModalOpen(false);
                     fetchReadyOrders(); // Update count when an order is opened
                 }}
             />
+
+            {/* Product Selection Modal */}
+            {selectedProductForModal && (
+                <ProductSelectionModal
+                    product={selectedProductForModal}
+                    globalAddons={globalAddons}
+                    initialSize={editingItemIndex !== null ? cartItems[editingItemIndex].size : undefined}
+                    initialAddons={editingItemIndex !== null ? cartItems[editingItemIndex].selectedAddons : undefined}
+                    onClose={() => {
+                        setSelectedProductForModal(null);
+                        setEditingItemIndex(null);
+                    }}
+                    onConfirm={handleSelectionConfirm}
+                />
+            )}
         </div>
     );
 }

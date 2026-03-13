@@ -6,6 +6,8 @@ export interface OrderItemDto {
     quantity: number;
     type: string;
     notes?: string;
+    sizeId?: string;
+    addonIds?: string[];
 }
 
 export interface CreateOrderDto {

@@ -8,13 +8,12 @@ import { Plus, Trash2, Edit2, Save, X, Layers, ShoppingBag, Search, Upload, Load
 export function MenuManagement() {
     const [categories, setCategories] = useState<Category[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
 
     // Form States
     const [catName, setCatName] = useState('');
     const [editingCatId, setEditingCatId] = useState<string | null>(null);
 
-    const [activeTab, setActiveTab] = useState<'CATEGORIES' | 'PRODUCTS'>('CATEGORIES');
+    const [activeTab, setActiveTab] = useState<'CATEGORIES' | 'PRODUCTS' | 'GLOBAL_ADDONS' | 'PACKAGES'>('CATEGORIES');
 
     useEffect(() => {
         fetchData();
@@ -22,7 +21,6 @@ export function MenuManagement() {
 
     const fetchData = async () => {
         try {
-            setIsLoading(true);
             const [catData, prodData] = await Promise.all([
                 api.getCategories(),
                 api.getProducts(),
@@ -31,8 +29,6 @@ export function MenuManagement() {
             setProducts(prodData);
         } catch (error) {
             toast.error('Failed to load menu data');
-        } finally {
-            setIsLoading(false);
         }
     };
 
@@ -85,10 +81,22 @@ export function MenuManagement() {
                     >
                         Products
                     </button>
+                    <button
+                        onClick={() => setActiveTab('GLOBAL_ADDONS')}
+                        className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'GLOBAL_ADDONS' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+                    >
+                        Global Add-ons
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('PACKAGES')}
+                        className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'PACKAGES' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+                    >
+                        Packages
+                    </button>
                 </div>
             </header>
 
-            {activeTab === 'CATEGORIES' ? (
+            {activeTab === 'CATEGORIES' && (
                 <div className="grid md:grid-cols-3 gap-8">
                     {/* Category Creation Form */}
                     <div className="md:col-span-1">
@@ -162,17 +170,21 @@ export function MenuManagement() {
                                     </div>
                                 </div>
                             ))}
-                            {categories.length === 0 && !isLoading && (
-                                <div className="col-span-full py-12 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-3xl">
-                                    <Layers size={40} className="mb-4 opacity-20" />
-                                    <p className="font-bold">No categories added yet</p>
-                                </div>
-                            )}
                         </div>
                     </div>
                 </div>
-            ) : (
+            )}
+            
+            {activeTab === 'PRODUCTS' && (
                 <ProductList categories={categories} products={products} onRefresh={fetchData} />
+            )}
+
+            {activeTab === 'GLOBAL_ADDONS' && (
+                <GlobalAddonsManager onRefresh={fetchData} />
+            )}
+
+            {activeTab === 'PACKAGES' && (
+                <PackagesManager onRefresh={fetchData} />
             )}
         </div>
     );
@@ -305,6 +317,9 @@ function ProductModal({ categories, initialData, onClose, onSuccess }: { categor
         description: initialData?.description || '',
         imageUrl: initialData?.imageUrl || '',
     });
+    const [sizes, setSizes] = useState<{ name: string, price: number }[]>(
+        initialData?.sizes?.map((s: any) => ({ name: s.name, price: Number(s.price) })) || []
+    );
     const [isUploading, setIsUploading] = useState(false);
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -328,12 +343,14 @@ function ProductModal({ categories, initialData, onClose, onSuccess }: { categor
             const productData = {
                 ...formData,
                 price: formData.price.toString(),
+                categoryId: formData.categoryId || null,
+                sizes,
             };
             if (initialData) {
-                await api.updateProduct(initialData.id, productData);
+                await api.updateProduct(initialData.id, productData as any);
                 toast.success('Product updated');
             } else {
-                await api.createProduct(productData);
+                await api.createProduct(productData as any);
                 toast.success('Product created');
             }
             onSuccess();
@@ -344,14 +361,14 @@ function ProductModal({ categories, initialData, onClose, onSuccess }: { categor
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-            <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
                 <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <h2 className="text-xl font-bold text-slate-800">{initialData ? 'Edit Product' : 'Add New Product'}</h2>
                     <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
                         <X size={20} className="text-slate-400" />
                     </button>
                 </div>
-                <div className="p-8 space-y-5">
+                <div className="p-8 space-y-6 overflow-y-auto">
                     {/* Image Upload Section */}
                     <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 group hover:border-blue-400 hover:bg-blue-50/30 transition-all relative overflow-hidden h-48">
                         {formData.imageUrl ? (
@@ -426,6 +443,52 @@ function ProductModal({ categories, initialData, onClose, onSuccess }: { categor
                             </select>
                         </div>
                     </div>
+
+                    <hr className="border-slate-100" />
+
+                    {/* Variants Section */}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Product Sizes</h3>
+                            <button 
+                                onClick={() => setSizes([...sizes, { name: '', price: 0 }])}
+                                className="text-blue-600 text-xs font-bold hover:underline flex items-center gap-1"
+                            >
+                                <Plus size={14} /> Add Size
+                            </button>
+                        </div>
+                        <div className="space-y-2">
+                            {sizes.map((s, i) => (
+                                <div key={i} className="flex gap-2 items-center">
+                                    <input 
+                                        placeholder="Size Name (e.g. Small)"
+                                        value={s.name}
+                                        onChange={(e) => {
+                                            const newS = [...sizes];
+                                            newS[i].name = e.target.value;
+                                            setSizes(newS);
+                                        }}
+                                        className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold"
+                                    />
+                                    <input 
+                                        type="number"
+                                        placeholder="Price"
+                                        value={s.price}
+                                        onChange={(e) => {
+                                            const newS = [...sizes];
+                                            newS[i].price = Number(e.target.value);
+                                            setSizes(newS);
+                                        }}
+                                        className="w-24 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold"
+                                    />
+                                    <button onClick={() => setSizes(sizes.filter((_, idx) => idx !== i))} className="p-2 text-red-400 hover:bg-red-50 rounded-lg">
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                            ))}
+                            {sizes.length === 0 && <p className="text-xs text-slate-400 italic">No sizes added. Product will use the base price.</p>}
+                        </div>
+                    </div>
                 </div>
                 <div className="px-8 py-6 bg-slate-50 border-t border-slate-100 flex gap-4">
                     <button onClick={onClose} className="flex-1 px-6 py-3 font-bold text-slate-500 border border-slate-200 rounded-2xl hover:bg-white transition-all">
@@ -433,6 +496,335 @@ function ProductModal({ categories, initialData, onClose, onSuccess }: { categor
                     </button>
                     <button onClick={handleSubmit} className="flex-1 px-6 py-3 font-bold text-white bg-blue-600 rounded-2xl hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all">
                         Save Product
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function GlobalAddonsManager({ onRefresh }: { onRefresh: () => void }) {
+    const [addons, setAddons] = useState<any[]>([]);
+    const [name, setName] = useState('');
+    const [price, setPrice] = useState(0);
+    const [editingId, setEditingId] = useState<string | null>(null);
+
+    useEffect(() => {
+        fetchAddons();
+    }, []);
+
+    const fetchAddons = async () => {
+        const data = await api.getGlobalAddons();
+        setAddons(data);
+    };
+
+    const handleSubmit = async () => {
+        if (!name) return;
+        try {
+            if (editingId) {
+                await api.updateGlobalAddon(editingId, { name, price });
+                toast.success('Add-on updated');
+            } else {
+                await api.createGlobalAddon({ name, price });
+                toast.success('Add-on created');
+            }
+            setName('');
+            setPrice(0);
+            setEditingId(null);
+            fetchAddons();
+            onRefresh();
+        } catch (error) {
+            toast.error('Operation failed');
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('Delete this add-on?')) return;
+        await api.deleteGlobalAddon(id);
+        toast.success('Add-on deleted');
+        fetchAddons();
+        onRefresh();
+    };
+
+    return (
+        <div className="grid md:grid-cols-3 gap-8">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit">
+                <h3 className="text-lg font-bold mb-4">{editingId ? 'Edit Add-on' : 'New Global Add-on'}</h3>
+                <div className="space-y-4">
+                    <input 
+                        placeholder="Add-on Name" 
+                        value={name} 
+                        onChange={e => setName(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold outline-none"
+                    />
+                    <input 
+                        type="number" 
+                        placeholder="Price" 
+                        value={price} 
+                        onChange={e => setPrice(Number(e.target.value))}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold outline-none"
+                    />
+                    <button onClick={handleSubmit} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold">
+                        {editingId ? 'Update' : 'Create'}
+                    </button>
+                    {editingId && <button onClick={() => { setEditingId(null); setName(''); setPrice(0); }} className="w-full text-slate-500 font-bold">Cancel</button>}
+                </div>
+            </div>
+            <div className="md:col-span-2 grid sm:grid-cols-2 gap-4">
+                {addons.map(a => (
+                    <div key={a.id} className="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center group">
+                        <div>
+                            <div className="font-bold">{a.name}</div>
+                            <div className="text-sm text-slate-500 font-bold">Rs. {Number(a.price).toFixed(2)}</div>
+                        </div>
+                        <div className="flex gap-2 opacity-0 group-hover:opacity-100">
+                            <button onClick={() => { setEditingId(a.id); setName(a.name); setPrice(Number(a.price)); }} className="p-2 text-slate-400 hover:text-blue-600"><Edit2 size={16} /></button>
+                            <button onClick={() => handleDelete(a.id)} className="p-2 text-slate-400 hover:text-red-600"><Trash2 size={16} /></button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function PackagesManager({ onRefresh }: { onRefresh: () => void }) {
+    const [packages, setPackages] = useState<any[]>([]);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingPackage, setEditingPackage] = useState<any | null>(null);
+
+    useEffect(() => {
+        fetchPackages();
+    }, []);
+
+    const fetchPackages = async () => {
+        const data = await api.getPackages();
+        setPackages(data);
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('Delete this package?')) return;
+        await api.deletePackage(id);
+        toast.success('Package deleted');
+        fetchPackages();
+        onRefresh();
+    };
+
+    return (
+        <div className="space-y-6">
+            <button 
+                onClick={() => { setEditingPackage(null); setIsModalOpen(true); }}
+                className="bg-slate-800 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg"
+            >
+                <Plus size={18} /> Add Package
+            </button>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {packages.map(pkg => (
+                    <div key={pkg.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-all group">
+                        {pkg.imageUrl && <img src={pkg.imageUrl} className="w-full h-40 object-cover" />}
+                        <div className="p-5">
+                            <div className="flex justify-between items-start mb-2">
+                                <h3 className="font-bold text-slate-800">{pkg.name}</h3>
+                                <span className="text-blue-600 font-black">Rs. {Number(pkg.price).toFixed(2)}</span>
+                            </div>
+                            <p className="text-sm text-slate-500 mb-4 line-clamp-2">{pkg.description}</p>
+                            <div className="flex justify-end gap-2">
+                                <button onClick={() => { setEditingPackage(pkg); setIsModalOpen(true); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 size={16} /></button>
+                                <button onClick={() => handleDelete(pkg.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+            {isModalOpen && (
+                <PackageModal 
+                    initialData={editingPackage} 
+                    onClose={() => setIsModalOpen(false)} 
+                    onSuccess={() => { setIsModalOpen(false); fetchPackages(); onRefresh(); }} 
+                />
+            )}
+        </div>
+    );
+}
+
+function PackageModal({ initialData, onClose, onSuccess }: { initialData: any | null, onClose: () => void, onSuccess: () => void }) {
+    const [allProducts, setAllProducts] = useState<Product[]>([]);
+    const [formData, setFormData] = useState({
+        name: initialData?.name || '',
+        description: initialData?.description || '',
+        price: initialData?.price ? Number(initialData.price) : 0,
+        imageUrl: initialData?.imageUrl || '',
+        isActive: initialData?.isActive ?? true
+    });
+    const [items, setItems] = useState<{ productId: string, sizeId: string | null, quantity: number }[]>(
+        initialData?.items?.map((it: any) => ({
+            productId: it.productId,
+            sizeId: it.sizeId || null,
+            quantity: it.quantity
+        })) || []
+    );
+
+    useEffect(() => {
+        api.getProducts().then(setAllProducts);
+    }, []);
+
+    const addItem = () => {
+        setItems([...items, { productId: '', sizeId: null, quantity: 1 }]);
+    };
+
+    const removeItem = (index: number) => {
+        setItems(items.filter((_, i) => i !== index));
+    };
+
+    const updateItem = (index: number, field: string, value: any) => {
+        const newItems = [...items];
+        (newItems[index] as any)[field] = value;
+        // Reset size if product changes
+        if (field === 'productId') {
+            newItems[index].sizeId = null;
+        }
+        setItems(newItems);
+    };
+
+    const handleSubmit = async () => {
+        if (!formData.name || items.length === 0) {
+            toast.error('Please provide a name and at least one item');
+            return;
+        }
+        try {
+            const payload = { ...formData, items };
+            if (initialData) {
+                await api.updatePackage(initialData.id, payload);
+                toast.success('Package updated');
+            } else {
+                await api.createPackage(payload);
+                toast.success('Package created');
+            }
+            onSuccess();
+        } catch (error) {
+            toast.error('Operation failed');
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+                <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <h2 className="text-xl font-bold text-slate-800">{initialData ? 'Edit Package bundle' : 'New Package Bundle'}</h2>
+                    <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                        <X size={20} className="text-slate-400" />
+                    </button>
+                </div>
+                
+                <div className="p-8 space-y-6 overflow-y-auto">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="col-span-2">
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2 tracking-widest">Package Name</label>
+                            <input 
+                                placeholder="Combo Meal Title" 
+                                value={formData.name} 
+                                onChange={e => setFormData({ ...formData, name: e.target.value })} 
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold outline-none focus:border-blue-500" 
+                            />
+                        </div>
+                        <div className="col-span-2">
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2 tracking-widest">Description</label>
+                            <textarea 
+                                placeholder="What's included in this bundle?" 
+                                value={formData.description} 
+                                onChange={e => setFormData({ ...formData, description: e.target.value })} 
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold outline-none focus:border-blue-500" 
+                                rows={2} 
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2 tracking-widest">Bundle Price (Rs.)</label>
+                            <input 
+                                type="number" 
+                                placeholder="0.00" 
+                                value={formData.price} 
+                                onChange={e => setFormData({ ...formData, price: Number(e.target.value) })} 
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-black outline-none focus:border-blue-500" 
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                                <Layers size={16} className="text-blue-500" /> Bundle Contents
+                            </h3>
+                            <button 
+                                onClick={addItem}
+                                className="text-blue-600 text-xs font-bold hover:underline py-1 px-3 bg-blue-50 rounded-lg flex items-center gap-1"
+                            >
+                                <Plus size={14} /> Add Item
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            {items.map((it, idx) => {
+                                const selectedProd = allProducts.find(p => p.id === it.productId);
+                                return (
+                                    <div key={idx} className="flex gap-2 items-start bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                                        <div className="flex-1 space-y-2">
+                                            <select 
+                                                value={it.productId}
+                                                onChange={(e) => updateItem(idx, 'productId', e.target.value)}
+                                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold outline-none"
+                                            >
+                                                <option value="">Select Product</option>
+                                                {allProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                            </select>
+                                            
+                                            {selectedProd && selectedProd.sizes && selectedProd.sizes.length > 0 && (
+                                                <select 
+                                                    value={it.sizeId || ''}
+                                                    onChange={(e) => updateItem(idx, 'sizeId', e.target.value || null)}
+                                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-500 outline-none"
+                                                >
+                                                    <option value="">Base Size</option>
+                                                    {selectedProd.sizes.map(s => <option key={s.id} value={s.id}>{s.name} (+ Rs.{s.price})</option>)}
+                                                </select>
+                                            )}
+                                        </div>
+
+                                        <div className="w-20">
+                                            <input 
+                                                type="number"
+                                                min="1"
+                                                placeholder="Qty"
+                                                value={it.quantity}
+                                                onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))}
+                                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-black text-center outline-none"
+                                            />
+                                            <p className="text-[10px] font-black text-slate-400 text-center uppercase tracking-tighter mt-1">Quantity</p>
+                                        </div>
+
+                                        <button 
+                                            onClick={() => removeItem(idx)}
+                                            className="p-2 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl transition-all self-center"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                            {items.length === 0 && (
+                                <div className="text-center py-8 border-2 border-dashed border-slate-100 rounded-2xl">
+                                    <p className="text-sm text-slate-400 italic">No items added to this bundle yet.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="px-8 py-6 bg-slate-50 border-t border-slate-100 flex gap-4">
+                    <button onClick={onClose} className="flex-1 px-6 py-3 font-bold text-slate-500 border border-slate-200 rounded-2xl hover:bg-white transition-all">
+                        Cancel
+                    </button>
+                    <button onClick={handleSubmit} className="flex-1 px-6 py-3 font-bold text-white bg-blue-600 rounded-2xl hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all">
+                        {initialData ? 'Update Bundle' : 'Create Bundle'}
                     </button>
                 </div>
             </div>

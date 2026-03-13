@@ -255,4 +255,40 @@ export const api = {
         const res = await apiClient.delete(`/categories/${id}`);
         return res.data;
     },
+
+    // --- Global Addons ---
+    getGlobalAddons: async (): Promise<any[]> => {
+        const res = await apiClient.get(`/inventory/global-addons`);
+        return res.data;
+    },
+    createGlobalAddon: async (data: { name: string, price: number }) => {
+        const res = await apiClient.post(`/inventory/global-addons`, data);
+        return res.data;
+    },
+    updateGlobalAddon: async (id: string, data: { name: string, price: number }) => {
+        const res = await apiClient.patch(`/inventory/global-addons/${id}`, data);
+        return res.data;
+    },
+    deleteGlobalAddon: async (id: string) => {
+        const res = await apiClient.delete(`/inventory/global-addons/${id}`);
+        return res.data;
+    },
+
+    // --- Packages ---
+    getPackages: async (): Promise<any[]> => {
+        const res = await apiClient.get(`/inventory/packages`);
+        return res.data;
+    },
+    createPackage: async (data: any) => {
+        const res = await apiClient.post(`/inventory/packages`, data);
+        return res.data;
+    },
+    updatePackage: async (id: string, data: any) => {
+        const res = await apiClient.patch(`/inventory/packages/${id}`, data);
+        return res.data;
+    },
+    deletePackage: async (id: string) => {
+        const res = await apiClient.delete(`/inventory/packages/${id}`);
+        return res.data;
+    },
 };

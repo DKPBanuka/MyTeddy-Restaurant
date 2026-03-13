@@ -14,6 +14,7 @@ export class InventoryService {
             include: {
                 category: true,
                 retailStock: true,
+                sizes: true,
                 recipeBOMs: {
                     include: {
                         ingredient: true,
@@ -32,25 +33,48 @@ export class InventoryService {
                 description: data.description,
                 imageUrl: data.imageUrl,
                 isActive: data.isActive ?? true,
-                categoryId: data.categoryId,
+                categoryId: data.categoryId === "" ? null : data.categoryId,
+                barcode: data.barcode || null,
+                sizes: {
+                    create: data.sizes?.map((s: any) => ({
+                        name: s.name,
+                        price: s.price
+                    })) || []
+                }
             },
-            include: { category: true }
+            include: { category: true, sizes: true }
         });
     }
 
     async updateProduct(id: string, data: any) {
+        const updateData: any = {
+            name: data.name,
+            price: data.price,
+            type: data.type,
+            description: data.description,
+            imageUrl: data.imageUrl,
+            categoryId: data.categoryId === "" ? null : data.categoryId,
+        };
+
+        if (data.isActive !== undefined) {
+            updateData.isActive = data.isActive;
+        }
+
+        // Handle variants and addons: Delete existing and recreate for simplicity
+        if (data.sizes) {
+            updateData.sizes = {
+                deleteMany: {},
+                create: data.sizes.map((s: any) => ({
+                    name: s.name,
+                    price: s.price
+                }))
+            };
+        }
+
         return (this.prisma as any).product.update({
             where: { id },
-            data: {
-                name: data.name,
-                price: data.price,
-                type: data.type,
-                description: data.description,
-                imageUrl: data.imageUrl,
-                isActive: data.isActive,
-                categoryId: data.categoryId,
-            },
-            include: { category: true }
+            data: updateData,
+            include: { category: true, sizes: true }
         });
     }
 
@@ -281,6 +305,143 @@ export class InventoryService {
 
     async deleteCategory(id: string) {
         return (this.prisma as any).category.delete({
+            where: { id }
+        });
+    }
+
+    // --- Global Addons CRUD ---
+    async getGlobalAddons() {
+        return (this.prisma as any).globalAddon.findMany();
+    }
+
+    async createGlobalAddon(data: any) {
+        return (this.prisma as any).globalAddon.create({
+            data: {
+                name: data.name,
+                price: data.price
+            }
+        });
+    }
+
+    async updateGlobalAddon(id: string, data: any) {
+        return (this.prisma as any).globalAddon.update({
+            where: { id },
+            data: {
+                name: data.name,
+                price: data.price
+            }
+        });
+    }
+
+    async deleteGlobalAddon(id: string) {
+        return (this.prisma as any).globalAddon.delete({
+            where: { id }
+        });
+    }
+
+    // --- Packages CRUD ---
+    async getPackages() {
+        return (this.prisma as any).package.findMany({
+            include: {
+                items: {
+                    include: {
+                        product: true,
+                        size: true
+                    }
+                }
+            }
+        });
+    }
+
+    async createPackage(data: any) {
+        try {
+            // Filter out items without productId
+            const validItems = data.items?.filter((item: any) => item.productId && item.productId !== "") || [];
+            
+            return await (this.prisma as any).package.create({
+                data: {
+                    name: data.name,
+                    description: data.description,
+                    price: data.price,
+                    imageUrl: data.imageUrl,
+                    isActive: data.isActive ?? true,
+                    items: {
+                        create: validItems.map((item: any) => ({
+                            productId: item.productId,
+                            sizeId: item.sizeId || null,
+                            quantity: item.quantity || 1
+                        }))
+                    }
+                },
+                include: {
+                    items: {
+                        include: {
+                            product: true,
+                            size: true
+                        }
+                    }
+                }
+            });
+        } catch (error: any) {
+            console.error('Error in createPackage:', error);
+            throw new RpcException(error.message || 'Failed to create package');
+        }
+    }
+
+    async updatePackage(id: string, data: any) {
+        try {
+            return await (this.prisma as any).$transaction(async (tx: any) => {
+                // Update basic package info
+                await tx.package.update({
+                    where: { id },
+                    data: {
+                        name: data.name,
+                        description: data.description,
+                        price: data.price,
+                        imageUrl: data.imageUrl,
+                        isActive: data.isActive
+                    }
+                });
+
+                // Update items: delete existing and recreate
+                if (data.items) {
+                    await tx.packageItem.deleteMany({
+                        where: { packageId: id }
+                    });
+
+                    const validItems = data.items.filter((item: any) => item.productId && item.productId !== "");
+                    if (validItems.length > 0) {
+                        await tx.packageItem.createMany({
+                            data: validItems.map((item: any) => ({
+                                packageId: id,
+                                productId: item.productId,
+                                sizeId: item.sizeId || null,
+                                quantity: item.quantity || 1
+                            }))
+                        });
+                    }
+                }
+
+                return tx.package.findUnique({
+                    where: { id },
+                    include: {
+                        items: {
+                            include: {
+                                product: true,
+                                size: true
+                            }
+                        }
+                    }
+                });
+            });
+        } catch (error: any) {
+            console.error('Error in updatePackage:', error);
+            throw new RpcException(error.message || 'Failed to update package');
+        }
+    }
+
+    async deletePackage(id: string) {
+        return (this.prisma as any).package.delete({
             where: { id }
         });
     }

@@ -65,11 +65,16 @@ export function ProductCard({ product, qtyInCart, onAdd, onUpdateQty }: ProductC
                 <p className="text-[11px] font-medium text-slate-400 leading-snug line-clamp-2 mb-3">{product.description || 'Menu item description'}</p>
 
                 <div className="mt-auto flex items-end justify-between pt-2">
-                    <div className="flex items-start">
-                        <span className="text-xs font-bold text-slate-400 mt-1 mr-1">Rs.</span>
-                        <span className="font-extrabold text-2xl text-slate-800 tracking-tight leading-none">
-                            {Number(product.price).toFixed(1)}
-                        </span>
+                    <div className="flex flex-col items-start">
+                        <div className="flex items-center">
+                            <span className="text-[10px] font-bold text-slate-400 mt-1 mr-1">Rs.</span>
+                            <span className="font-extrabold text-2xl text-slate-800 tracking-tight leading-none">
+                                {Number(product.price).toFixed(0)}
+                            </span>
+                        </div>
+                        {(product.variants?.length || 0) > 0 && (
+                            <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest mt-0.5">Variants Available</span>
+                        )}
                     </div>
 
                     {/* Inline Quantifier */}
