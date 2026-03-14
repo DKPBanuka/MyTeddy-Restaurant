@@ -1,5 +1,6 @@
 import { X, Printer, RotateCcw, Clock, CreditCard, Banknote, Globe, Info, Package, User, Hash } from 'lucide-react';
 import { generatePDFReceipt } from '../utils/pdfReceipt';
+import { useSettings } from '../context/SettingsContext';
 import { api } from '../api';
 import { toast } from 'sonner';
 
@@ -12,9 +13,11 @@ interface OrderDetailsModalProps {
 export function OrderDetailsModal({ order, onClose, onRefunded }: OrderDetailsModalProps) {
     if (!order) return null;
 
+    const { settings } = useSettings();
+
     const handleReprint = () => {
         try {
-            generatePDFReceipt(order);
+            generatePDFReceipt(order, order.invoiceNumber || order.id, settings);
             toast.success('Reprinting receipt...');
         } catch (error) {
             toast.error('Failed to generate receipt');
@@ -22,10 +25,11 @@ export function OrderDetailsModal({ order, onClose, onRefunded }: OrderDetailsMo
     };
 
     const handleRefund = async () => {
-        if (!window.confirm('Are you sure you want to VOID/REFUND this order? This action cannot be undone.')) return;
+        const reason = window.prompt('Enter reason for VOID/REFUND:');
+        if (!reason) return;
 
         try {
-            await api.refundOrder(order.id);
+            await api.refundOrder(order.id, reason);
             toast.success('Order refunded successfully');
             onRefunded();
             onClose();

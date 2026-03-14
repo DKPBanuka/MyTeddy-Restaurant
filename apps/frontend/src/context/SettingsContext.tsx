@@ -2,7 +2,7 @@ import React, { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
+import { api } from '../api';
 
 export interface RestaurantSettings {
   id: string;
@@ -27,24 +27,16 @@ interface SettingsContextType {
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
-const API_BASE_URL = 'http://localhost:3000'; // Assuming API Gateway base
-
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const queryClient = useQueryClient();
 
   const { data: settings, isLoading } = useQuery<RestaurantSettings>({
     queryKey: ['settings'],
-    queryFn: async () => {
-      const response = await axios.get(`${API_BASE_URL}/settings`);
-      return response.data;
-    },
+    queryFn: () => api.getSettings(),
   });
 
   const mutation = useMutation({
-    mutationFn: async (dto: Partial<RestaurantSettings>) => {
-      const response = await axios.patch(`${API_BASE_URL}/settings`, dto);
-      return response.data;
-    },
+    mutationFn: (dto: Partial<RestaurantSettings>) => api.updateSettings(dto),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
     },

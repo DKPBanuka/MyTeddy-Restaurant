@@ -19,15 +19,15 @@ pdfMake.vfs = vfs;
  * @param orderData The completed order data with totals and line items.
  * @param orderId   The generated Order ID or Invoice Number.
  */
-export const generatePDFReceipt = (orderData: any, orderId: string) => {
+export const generatePDFReceipt = (orderData: any, orderId: string, settings?: any) => {
     // Construct the Table Body dynamically from the order items
     const tableBody: any[][] = [
         // Table Header
         [
             { text: 'ITEM', style: 'tableHeader' },
-            { text: 'QTY', style: 'tableHeader', alignment: 'center' },
-            { text: 'PRICE', style: 'tableHeader', alignment: 'right' },
-            { text: 'TOTAL', style: 'tableHeader', alignment: 'right' }
+            { text: 'QTY', style: 'tableHeader', alignment: 'center' as const },
+            { text: 'PRICE', style: 'tableHeader', alignment: 'right' as const },
+            { text: 'TOTAL', style: 'tableHeader', alignment: 'right' as const }
         ]
     ];
 
@@ -40,9 +40,9 @@ export const generatePDFReceipt = (orderData: any, orderId: string) => {
 
         tableBody.push([
             { text: name, style: 'tableCell' },
-            { text: item.quantity.toString(), style: 'tableCell', alignment: 'center' },
-            { text: Number(price).toFixed(0), style: 'tableCell', alignment: 'right' },
-            { text: Number(lineTotal).toFixed(0), style: 'tableCell', alignment: 'right' }
+            { text: item.quantity.toString(), style: 'tableCell', alignment: 'center' as const },
+            { text: Number(price).toFixed(0), style: 'tableCell', alignment: 'right' as const },
+            { text: Number(lineTotal).toFixed(0), style: 'tableCell', alignment: 'right' as const }
         ]);
         
         // Show addons if any
@@ -79,17 +79,23 @@ export const generatePDFReceipt = (orderData: any, orderId: string) => {
         pageSize: { width: 226, height: 'auto' },
         pageMargins: [12, 12, 12, 12],
         content: [
-            // Header
-            { text: 'MY TEDDY RESTAURANT', style: 'header', alignment: 'center' },
-            { text: '123, Galle Road, Colombo', alignment: 'center', fontSize: 8 },
-            { text: 'Tel: +94 11 234 5678', alignment: 'center', fontSize: 8, margin: [0, 0, 0, 5] },
+            // Header (Logo or Name)
+            ...(settings?.logoUrl ? [{
+                image: settings.logoUrl,
+                width: 50,
+                alignment: 'center' as const,
+                margin: [0, 0, 0, 5] as [number, number, number, number]
+            }] : []),
+            { text: settings?.restaurantName || 'MY TEDDY RESTAURANT', style: 'header', alignment: 'center' as const },
+            { text: settings?.address || '123, Galle Road, Colombo', alignment: 'center' as const, fontSize: 8 },
+            { text: `Tel: ${settings?.phone || '+94 11 234 5678'}`, alignment: 'center' as const, fontSize: 8, margin: [0, 0, 0, 5] as [number, number, number, number] },
 
             // Token Number (Very Large & Bold)
             { 
                 text: `TOKEN: ${orderData.tokenNumber || '---'}`, 
                 style: 'tokenHeader', 
-                alignment: 'center',
-                margin: [0, 5, 0, 10]
+                alignment: 'center' as const,
+                margin: [0, 5, 0, 10] as [number, number, number, number]
             },
 
             { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 202, y2: 0, lineWidth: 1 }] },
@@ -125,22 +131,22 @@ export const generatePDFReceipt = (orderData: any, orderId: string) => {
                 stack: [
                     {
                         columns: [
-                            { text: 'Sub Total:', alignment: 'right' },
-                            { text: `Rs. ${Number(subTotal).toFixed(2)}`, alignment: 'right', width: 60 }
+                            { text: 'Sub Total:', alignment: 'right' as const },
+                            { text: `Rs. ${Number(subTotal).toFixed(2)}`, alignment: 'right' as const, width: 60 }
                         ]
                     },
                     {
                         columns: [
-                            { text: 'Discount:', alignment: 'right' },
-                            { text: `-Rs. ${Number(discount).toFixed(2)}`, alignment: 'right', width: 60 }
+                            { text: 'Discount:', alignment: 'right' as const },
+                            { text: `-Rs. ${Number(discount).toFixed(2)}`, alignment: 'right' as const, width: 60 }
                         ]
                     },
                     {
                         columns: [
-                            { text: 'GRAND TOTAL:', style: 'totalLabel', alignment: 'right' },
-                            { text: `Rs. ${Number(grandTotal).toFixed(2)}`, style: 'totalLabel', alignment: 'right', width: 60 }
+                            { text: 'GRAND TOTAL:', style: 'totalLabel', alignment: 'right' as const },
+                            { text: `Rs. ${Number(grandTotal).toFixed(2)}`, style: 'totalLabel', alignment: 'right' as const, width: 60 }
                         ],
-                        margin: [0, 4, 0, 0]
+                        margin: [0, 4, 0, 0] as [number, number, number, number]
                     }
                 ]
             },
@@ -149,13 +155,13 @@ export const generatePDFReceipt = (orderData: any, orderId: string) => {
             {
                 text: `Payment Mode: ${orderData.paymentMethod || 'CASH'}`,
                 fontSize: 8,
-                alignment: 'center',
-                margin: [0, 0, 0, 15]
+                alignment: 'center' as const,
+                margin: [0, 0, 0, 15] as [number, number, number, number]
             },
 
             // Footer
-            { text: 'THANK YOU! COME AGAIN', style: 'footer', alignment: 'center' },
-            { text: 'Software by MyTeddy POS', fontSize: 7, alignment: 'center', color: '#888888', margin: [0, 5, 0, 0] }
+            { text: settings?.receiptFooter || 'THANK YOU! COME AGAIN', style: 'footer', alignment: 'center' as const },
+            { text: 'Software by MyTeddy POS', fontSize: 7, alignment: 'center' as const, color: '#888888', margin: [0, 5, 0, 0] as [number, number, number, number] }
         ],
 
         styles: {

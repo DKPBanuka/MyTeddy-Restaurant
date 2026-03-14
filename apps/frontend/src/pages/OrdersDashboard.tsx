@@ -9,8 +9,10 @@ import {
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { generatePDFReceipt } from '../utils/pdfReceipt';
+import { useSettings } from '../context/SettingsContext';
 
 export function OrdersDashboard() {
+    const { settings } = useSettings();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
@@ -63,6 +65,16 @@ export function OrdersDashboard() {
             console.error(error);
         } finally {
             setIsLoadingRefund(false);
+        }
+    };
+
+    const handleReprint = () => {
+        try {
+            generatePDFReceipt(selectedOrder, selectedOrder.invoiceNumber || selectedOrder.id, settings);
+            toast.success('Reprinting receipt...');
+        } catch (error) {
+            toast.error('Failed to reprint receipt.');
+            console.error(error);
         }
     };
 
@@ -393,10 +405,7 @@ export function OrdersDashboard() {
                         {/* Modal Actions */}
                         <div className="px-10 py-8 bg-slate-50/80 border-t border-slate-100 flex items-center gap-4">
                             <button 
-                                onClick={() => {
-                                    generatePDFReceipt(selectedOrder, selectedOrder.invoiceNumber || selectedOrder.id);
-                                    toast.success("Receipt generated successfully.");
-                                }}
+                                onClick={handleReprint}
                                 className="flex-1 flex items-center justify-center gap-3 px-8 py-5 bg-white border border-slate-200 rounded-2xl font-black text-[10px] uppercase tracking-widest text-slate-700 hover:bg-slate-100 transition-all shadow-sm"
                             >
                                 <Printer size={20} />

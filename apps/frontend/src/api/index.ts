@@ -303,4 +303,13 @@ export const api = {
         const res = await apiClient.delete(`/inventory/packages/${id}`);
         return res.data;
     },
+    // --- Settings ---
+    getSettings: async () => {
+        const res = await apiClient.get(`/settings`);
+        return res.data;
+    },
+    updateSettings: async (data: any) => {
+        const res = await apiClient.patch(`/settings`, data);
+        return res.data;
+    },
 };

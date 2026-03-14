@@ -196,11 +196,14 @@ function ProductList({ categories, products, onRefresh }: { categories: Category
     const [search, setSearch] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+    const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-    const filtered = products.filter(p =>
-        p.name.toLowerCase().includes(search.toLowerCase()) ||
-        p.category?.name?.toLowerCase().includes(search.toLowerCase())
-    );
+    const filtered = products.filter(p => {
+        const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
+            p.category?.name?.toLowerCase().includes(search.toLowerCase());
+        const matchesCategory = selectedCategory === 'all' || p.categoryId === selectedCategory;
+        return matchesSearch && matchesCategory;
+    });
 
     const handleDelete = async (id: string) => {
         if (!confirm('Delete this product?')) return;
@@ -216,15 +219,27 @@ function ProductList({ categories, products, onRefresh }: { categories: Category
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row gap-4 justify-between">
-                <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input
-                        type="text"
-                        placeholder="Search products..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all font-semibold shadow-sm text-sm"
-                    />
+                <div className="relative flex-1 max-w-md flex gap-2">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                        <input
+                            type="text"
+                            placeholder="Search products..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all font-semibold shadow-sm text-sm"
+                        />
+                    </div>
+                    <select
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                        className="px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all font-semibold shadow-sm text-sm min-w-[150px]"
+                    >
+                        <option value="all">All Categories</option>
+                        {categories.map(cat => (
+                            <option key={cat.id} value={cat.id}>{cat.name}</option>
+                        ))}
+                    </select>
                 </div>
                 <button
                     onClick={() => { setEditingProduct(null); setIsModalOpen(true); }}
@@ -511,6 +526,7 @@ function GlobalAddonsManager({ categories, onRefresh }: { categories: Category[]
     const [price, setPrice] = useState(0);
     const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [filterCategoryId, setFilterCategoryId] = useState<string>('all');
 
     useEffect(() => {
         fetchAddons();
@@ -549,9 +565,34 @@ function GlobalAddonsManager({ categories, onRefresh }: { categories: Category[]
         fetchAddons();
         onRefresh();
     };
+    const filteredAddons = addons.filter(a => {
+        if (filterCategoryId === 'all') return true;
+        return a.categories?.some((c: any) => c.id === filterCategoryId);
+    });
 
     return (
-        <div className="grid md:grid-cols-3 gap-8">
+        <div className="space-y-6">
+            <div className="flex justify-end">
+                <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm overflow-x-auto max-w-full">
+                    <button
+                        onClick={() => setFilterCategoryId('all')}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${filterCategoryId === 'all' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                    >
+                        All Categories
+                    </button>
+                    {categories.map(cat => (
+                        <button
+                            key={cat.id}
+                            onClick={() => setFilterCategoryId(cat.id)}
+                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${filterCategoryId === cat.id ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                        >
+                            {cat.name}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            
+            <div className="grid md:grid-cols-3 gap-8">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit">
                 <h3 className="text-lg font-bold mb-4">{editingId ? 'Edit Add-on' : 'New Global Add-on'}</h3>
                 <div className="space-y-4">
@@ -611,14 +652,28 @@ function GlobalAddonsManager({ categories, onRefresh }: { categories: Category[]
                     )}
                 </div>
             </div>
-            <div className="md:col-span-2 grid sm:grid-cols-2 gap-4">
-                {addons.map(a => (
-                    <div key={a.id} className="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center group">
-                        <div>
-                            <div className="font-bold">{a.name}</div>
-                            <div className="text-sm text-slate-500 font-bold">Rs. {Number(a.price).toFixed(2)}</div>
+            <div className="md:col-span-2 space-y-3">
+                {filteredAddons.map(a => (
+                    <div key={a.id} className="bg-white p-3 rounded-xl border border-slate-200 flex justify-between items-center group hover:border-blue-200 hover:shadow-sm transition-all">
+                        <div className="flex items-center gap-4 flex-1 min-w-0">
+                            <div className="flex-1 min-w-0">
+                                <div className="font-bold text-slate-800 truncate">{a.name}</div>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                    {a.categories?.map((c: any) => (
+                                        <span key={c.id} className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[9px] font-black uppercase tracking-tighter inline-block">
+                                            {c.name}
+                                        </span>
+                                    ))}
+                                    {(!a.categories || a.categories.length === 0) && (
+                                        <span className="text-[9px] font-bold text-slate-300 italic">Global</span>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="text-sm font-black text-slate-900 px-4 whitespace-nowrap">
+                                Rs. {Number(a.price).toFixed(2)}
+                            </div>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-1">
                             <button 
                                 onClick={() => { 
                                     setEditingId(a.id); 
@@ -626,16 +681,28 @@ function GlobalAddonsManager({ categories, onRefresh }: { categories: Category[]
                                     setPrice(Number(a.price)); 
                                     setSelectedCategoryIds(a.categories?.map((c: any) => c.id) || []);
                                 }} 
-                                className="p-2 text-slate-400 hover:text-blue-600"
+                                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                             >
                                 <Edit2 size={16} />
                             </button>
-                            <button onClick={() => handleDelete(a.id)} className="p-2 text-slate-400 hover:text-red-600"><Trash2 size={16} /></button>
+                            <button 
+                                onClick={() => handleDelete(a.id)} 
+                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                            >
+                                <Trash2 size={16} />
+                            </button>
                         </div>
                     </div>
                 ))}
+                {filteredAddons.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400">
+                        <Layers size={32} className="mb-2 opacity-20" />
+                        <p className="text-sm font-bold">No add-ons found for this category</p>
+                    </div>
+                )}
             </div>
         </div>
+    </div>
     );
 }
 

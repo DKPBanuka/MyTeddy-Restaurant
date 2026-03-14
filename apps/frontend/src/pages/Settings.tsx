@@ -129,16 +129,82 @@ export const Settings: React.FC = () => {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-tight">Logo URL</label>
-                <div className="relative">
-                  <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                  <input
-                    type="text"
-                    name="logoUrl"
-                    value={formData.logoUrl || ''}
-                    onChange={handleChange}
-                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-600 outline-none transition-all font-medium"
-                  />
+                <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-tight">Restaurant Logo</label>
+                <div className="flex items-center gap-6">
+                  <div className="w-24 h-24 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden relative group">
+                    {formData.logoUrl ? (
+                      <>
+                        <img src={formData.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                        <button 
+                          onClick={() => setFormData({ ...formData, logoUrl: '' })}
+                          className="absolute inset-0 bg-red-500/80 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center font-bold text-xs"
+                        >
+                          Remove
+                        </button>
+                      </>
+                    ) : (
+                      <Globe className="text-slate-300" size={32} />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <label className="inline-block px-4 py-2 bg-slate-800 text-white rounded-xl font-bold text-xs cursor-pointer hover:bg-slate-700 transition-all shadow-md">
+                      Upload Logo
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+
+                          // Helper to resize image
+                          const resizeImage = (file: File): Promise<string> => {
+                            return new Promise((resolve) => {
+                              const reader = new FileReader();
+                              reader.readAsDataURL(file);
+                              reader.onload = (event) => {
+                                const img = new Image();
+                                img.src = event.target?.result as string;
+                                img.onload = () => {
+                                  const canvas = document.createElement('canvas');
+                                  const MAX_WIDTH = 400;
+                                  const MAX_HEIGHT = 400;
+                                  let width = img.width;
+                                  let height = img.height;
+
+                                  if (width > height) {
+                                    if (width > MAX_WIDTH) {
+                                      height *= MAX_WIDTH / width;
+                                      width = MAX_WIDTH;
+                                    }
+                                  } else {
+                                    if (height > MAX_HEIGHT) {
+                                      width *= MAX_HEIGHT / height;
+                                      height = MAX_HEIGHT;
+                                    }
+                                  }
+                                  canvas.width = width;
+                                  canvas.height = height;
+                                  const ctx = canvas.getContext('2d');
+                                  ctx?.drawImage(img, 0, 0, width, height);
+                                  resolve(canvas.toDataURL('image/png', 0.8));
+                                };
+                              };
+                            });
+                          };
+
+                          try {
+                            const base64 = await resizeImage(file);
+                            setFormData({ ...formData, logoUrl: base64 });
+                            toast.success('Logo prepared for saving');
+                          } catch (err) {
+                            toast.error('Failed to process image');
+                          }
+                        }}
+                      />
+                    </label>
+                    <p className="text-[10px] text-slate-400 mt-2 font-bold uppercase tracking-wider">PNG or JPG. Max 400x400px recommended.</p>
+                  </div>
                 </div>
               </div>
             </div>

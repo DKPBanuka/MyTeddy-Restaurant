@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, CreditCard, Banknote } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
 import { generatePDFReceipt } from '../utils/pdfReceipt';
+import { useSettings } from '../context/SettingsContext';
 
 
 interface CheckoutModalProps {
@@ -26,6 +27,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     initialMethod = 'CARD',
     onConfirm
 }) => {
+    const { settings } = useSettings();
     const [method, setMethod] = useState<'CARD' | 'CASH' | 'ONLINE'>(initialMethod as any);
     const [cashReceived, setCashReceived] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -91,7 +93,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
     const handlePrint = () => {
         if (createdOrder) {
-            generatePDFReceipt(createdOrder, createdOrder.invoiceNumber || createdOrder.id);
+            generatePDFReceipt(createdOrder, createdOrder.invoiceNumber || createdOrder.id, settings);
         }
     };
 

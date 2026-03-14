@@ -103,100 +103,119 @@ export class OrdersService {
     async createOrder(createOrderDto: CreateOrderDto) {
         const { items, discount = 0, paymentMethod, paymentStatus, amountReceived, change, orderType, tableNo, customerName, customerPhone, deliveryAddress } = createOrderDto;
 
-        return this.prisma.$transaction(async (tx) => {
-            const cashier = await tx.user.findFirst({ where: { role: 'CASHIER' } });
-            if (!cashier) throw new BadRequestException('No cashier found to process order');
-
-            const { tokenNumber, invoiceNumber } = await this.generateDailyOrderNumbers(tx);
-            let calculatedSubTotal = 0;
-
-            // Pre-process items to get snapshot prices
-            const itemsWithPrices = await Promise.all(items.map(async (item) => {
-                let currentItemPrice = 0;
-                if (item.packageId) {
-                    const pkg = await tx.package.findUnique({ where: { id: item.packageId } });
-                    currentItemPrice = Number(pkg?.price || 0);
-                } else if (item.productId) {
-                    if (item.sizeId) {
-                        const size = await tx.productSize.findUnique({ where: { id: item.sizeId } });
-                        currentItemPrice = Number(size?.price || 0);
-                    } else {
-                        const product = await tx.product.findUnique({ where: { id: item.productId } });
-                        currentItemPrice = Number(product?.price || 0);
-                    }
+        try {
+            return await this.prisma.$transaction(async (tx) => {
+                // Find a user to assign the order to. Try CASHIER first, then any user.
+                let user = await tx.user.findFirst({ where: { role: 'CASHIER' } });
+                if (!user) {
+                    user = await tx.user.findFirst();
                 }
                 
-                const subtotal = currentItemPrice * item.quantity;
-                calculatedSubTotal += subtotal;
+                if (!user) {
+                    throw new BadRequestException('No users found in the system. Please create a user first.');
+                }
 
-                return {
-                    ...item,
-                    snapshotPrice: currentItemPrice,
-                    itemSubtotal: subtotal
-                };
-            }));
+                const { tokenNumber, invoiceNumber } = await this.generateDailyOrderNumbers(tx);
+                let calculatedSubTotal = 0;
 
-            const grandTotal = calculatedSubTotal - discount;
-
-            const order = await tx.order.create({
-                data: {
-                    orderNumber: `ORD-${Date.now()}-${tokenNumber}`,
-                    invoiceNumber,
-                    tokenNumber,
-                    subTotal: calculatedSubTotal,
-                    discount,
-                    grandTotal,
-                    totalAmount: grandTotal, // for backward compatibility if used in UI
-                    userId: cashier.id,
-                    paymentMethod: (paymentMethod as any) || null,
-                    paymentStatus: (paymentStatus as any) || 'UNPAID',
-                    amountReceived: amountReceived || null,
-                    change: change || null,
-                    orderType: (orderType as any) || 'TAKEAWAY',
-                    tableNumber: tableNo || null,
-                    customerName: customerName || null,
-                    customerPhone: customerPhone || null,
-                    deliveryAddress: deliveryAddress || null,
-                    orderItems: {
-                        create: itemsWithPrices.map((item) => ({
-                            productId: item.productId || null,
-                            packageId: item.packageId || null,
-                            quantity: item.quantity,
-                            unitPrice: item.snapshotPrice,
-                            priceAtTimeOfSale: item.snapshotPrice,
-                            subtotal: item.itemSubtotal,
-                            notes: item.notes || null,
-                            sizeId: item.sizeId || null,
-                            addonIds: item.addonIds || [],
-                        })),
-                    },
-                },
-                include: { orderItems: { include: { product: true, package: true } } },
-            });
-
-            // Stock deduction logic remains the same
-            for (const item of items) {
-                if (item.packageId) {
-                    const pkg = await tx.package.findUnique({
-                        where: { id: item.packageId },
-                        include: { items: { include: { product: true } } }
-                    });
-                    if (pkg) {
-                        for (const pkgItem of pkg.items) {
-                            const totalQty = pkgItem.quantity * item.quantity;
-                            await this.processStockDeduction(tx, pkgItem.productId, pkgItem.product.type, totalQty);
+                // Process items to get prices and calculate subtotal
+                const itemsWithPrices: any[] = [];
+                for (const item of items) {
+                    let currentItemPrice = 0;
+                    if (item.packageId) {
+                        const pkg = await tx.package.findUnique({ where: { id: item.packageId } });
+                        currentItemPrice = Number(pkg?.price || 0);
+                    } else if (item.productId) {
+                        if (item.sizeId) {
+                            const size = await tx.productSize.findUnique({ where: { id: item.sizeId } });
+                            currentItemPrice = Number(size?.price || 0);
+                        } else {
+                            const product = await tx.product.findUnique({ where: { id: item.productId } });
+                            currentItemPrice = Number(product?.price || 0);
                         }
                     }
-                } else if (item.productId) {
-                    const product = await tx.product.findUnique({ where: { id: item.productId } });
-                    if (product) {
-                        await this.processStockDeduction(tx, item.productId, product.type, item.quantity);
+                    
+                    const subtotal = currentItemPrice * item.quantity;
+                    calculatedSubTotal += subtotal;
+
+                    itemsWithPrices.push({
+                        ...item,
+                        snapshotPrice: currentItemPrice,
+                        itemSubtotal: subtotal
+                    });
+                }
+
+                const grandTotal = Math.max(0, calculatedSubTotal - discount);
+
+                const order = await tx.order.create({
+                    data: {
+                        orderNumber: `ORD-${Date.now()}-${tokenNumber}`,
+                        invoiceNumber,
+                        tokenNumber,
+                        subTotal: calculatedSubTotal,
+                        discount,
+                        grandTotal,
+                        totalAmount: grandTotal,
+                        userId: user.id,
+                        paymentMethod: (paymentMethod as any) || null,
+                        paymentStatus: (paymentStatus as any) || 'UNPAID',
+                        amountReceived: amountReceived || null,
+                        change: change || null,
+                        orderType: (orderType as any) || 'TAKEAWAY',
+                        tableNumber: tableNo || null,
+                        customerName: customerName || null,
+                        customerPhone: customerPhone || null,
+                        deliveryAddress: deliveryAddress || null,
+                        orderItems: {
+                            create: itemsWithPrices.map((item) => ({
+                                productId: item.productId || null,
+                                packageId: item.packageId || null,
+                                quantity: item.quantity,
+                                unitPrice: item.snapshotPrice,
+                                priceAtTimeOfSale: item.snapshotPrice,
+                                subtotal: item.itemSubtotal,
+                                notes: item.notes || null,
+                                sizeId: item.sizeId || null,
+                                addonIds: item.addonIds || [],
+                            })),
+                        },
+                    },
+                    include: { orderItems: { include: { product: true, package: true } } },
+                });
+
+                // Stock deduction
+                for (const item of itemsWithPrices) {
+                    if (item.packageId) {
+                        const pkg = await tx.package.findUnique({
+                            where: { id: item.packageId },
+                            include: { items: { include: { product: true } } }
+                        });
+                        if (pkg) {
+                            for (const pkgItem of pkg.items) {
+                                const totalQty = pkgItem.quantity * item.quantity;
+                                await this.processStockDeduction(tx, pkgItem.productId, pkgItem.product.type, totalQty);
+                            }
+                        }
+                    } else if (item.productId) {
+                        // We already checked this product type during subtotal calculation, but for deduction we need the type again.
+                        const product = await tx.product.findUnique({ where: { id: item.productId } });
+                        if (product) {
+                            await this.processStockDeduction(tx, item.productId, product.type, item.quantity);
+                        }
                     }
                 }
-            }
 
-            return order;
-        });
+                return order;
+            });
+        } catch (error) {
+            console.error('Order Creation Failure:', error);
+            if (error instanceof BadRequestException) throw error;
+            // Catch Prisma specific errors
+            if (error.code === 'P2002') {
+                throw new BadRequestException('A unique constraint violation occurred (invoice number already exists).');
+            }
+            throw new BadRequestException(error.message || 'An internal error occurred while processing your order');
+        }
     }
 
     async getPendingOrders() {
