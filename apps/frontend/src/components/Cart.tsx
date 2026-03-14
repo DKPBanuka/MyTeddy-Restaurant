@@ -1,4 +1,4 @@
-import { ShoppingCart, Trash2, Layers, Archive, History as HistoryIcon } from 'lucide-react';
+import { ShoppingCart, Trash2, Layers, Archive, History as HistoryIcon, Plus } from 'lucide-react';
 import type { OrderItemDto } from '../types';
 import { ProductType } from '../types';
 import { useCart } from '../context/CartContext';
@@ -198,12 +198,13 @@ export function Cart({
                                                         + {item.selectedAddons.map(a => a.name).join(', ')}
                                                     </div>
                                                 )}
-                                                {!item.packageId && (item.product?.category?.name && ['Foods', 'Drinks', 'Bites', 'Appetizers', 'Main Course', 'Desserts', 'Beverages'].includes(item.product.category.name)) && (
+                                                {!item.packageId && (
                                                     <button 
                                                         onClick={() => onEdit(item)}
-                                                        className="text-[10px] font-black text-blue-500 hover:text-blue-700 uppercase tracking-widest mt-1 underline"
+                                                        className="flex items-center gap-1 text-[10px] font-black text-blue-500 hover:text-blue-700 uppercase tracking-widest mt-2 bg-blue-50 px-2 py-1 rounded-md transition-colors"
                                                     >
-                                                        Add-ons / Edit
+                                                        <Plus size={10} strokeWidth={3} />
+                                                        Add-ons / Sizes
                                                     </button>
                                                 )}
                                             </div>

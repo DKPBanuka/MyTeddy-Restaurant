@@ -5,6 +5,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { SidebarLayout } from './components/SidebarLayout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { CartProvider } from './context/CartContext';
+import { SettingsProvider } from './context/SettingsContext';
 
 // Pages
 import { POSDashboard } from './pages/POSDashboard';
@@ -15,6 +16,7 @@ import { ReportsDashboard } from './pages/ReportsDashboard';
 import { StaffDashboard } from './pages/StaffDashboard';
 import { MenuManagement } from './pages/MenuManagement.tsx';
 import { OrdersDashboard } from './pages/OrdersDashboard';
+import { Settings } from './pages/Settings';
 
 function App() {
   const { isAuthenticated } = useAuth();
@@ -29,44 +31,46 @@ function App() {
   }
 
   return (
-    <CartProvider>
-      <BrowserRouter>
-        <Toaster position="top-right" richColors />
-        <Routes>
-          <Route element={<SidebarLayout />}>
-            <Route element={<ProtectedRoute requiredPermission="POS" />}>
-              <Route path="/" element={<POSDashboard />} />
-              {/* assuming CART is part of POS for now, or just /cart */}
+    <SettingsProvider>
+      <CartProvider>
+        <BrowserRouter>
+          <Toaster position="top-right" richColors />
+          <Routes>
+            <Route element={<SidebarLayout />}>
+              <Route element={<ProtectedRoute requiredPermission="POS" />}>
+                <Route path="/" element={<POSDashboard />} />
+              </Route>
+
+              <Route element={<ProtectedRoute requiredPermission="EVENTS" />}>
+                <Route path="/events" element={<EventsDashboard />} />
+              </Route>
+
+              <Route element={<ProtectedRoute requiredPermission="INVENTORY" />}>
+                <Route path="/inventory" element={<InventoryDashboard />} />
+              </Route>
+
+              <Route element={<ProtectedRoute requiredPermission="REPORTS" />}>
+                <Route path="/reports" element={<ReportsDashboard />} />
+                <Route path="/orders" element={<OrdersDashboard />} />
+              </Route>
+
+              <Route element={<ProtectedRoute requiredPermission="STAFF" />}>
+                <Route path="/staff" element={<StaffDashboard />} />
+              </Route>
+
+              <Route path="/menu-management" element={<MenuManagement />} />
+              <Route path="/settings" element={<Settings />} />
+
+              <Route element={<ProtectedRoute requiredPermission="KDS" />}>
+                <Route path="/kds" element={<KDSDashboard />} />
+              </Route>
+
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
-
-            <Route element={<ProtectedRoute requiredPermission="EVENTS" />}>
-              <Route path="/events" element={<EventsDashboard />} />
-            </Route>
-
-            <Route element={<ProtectedRoute requiredPermission="INVENTORY" />}>
-              <Route path="/inventory" element={<InventoryDashboard />} />
-            </Route>
-
-            <Route element={<ProtectedRoute requiredPermission="REPORTS" />}>
-              <Route path="/reports" element={<ReportsDashboard />} />
-              <Route path="/orders" element={<OrdersDashboard />} />
-            </Route>
-
-            <Route element={<ProtectedRoute requiredPermission="STAFF" />}>
-              <Route path="/staff" element={<StaffDashboard />} />
-            </Route>
-
-            <Route path="/menu-management" element={<MenuManagement />} />
-
-            <Route element={<ProtectedRoute requiredPermission="KDS" />}>
-              <Route path="/kds" element={<KDSDashboard />} />
-            </Route>
-
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </CartProvider>
+          </Routes>
+        </BrowserRouter>
+      </CartProvider>
+    </SettingsProvider>
   );
 }
 

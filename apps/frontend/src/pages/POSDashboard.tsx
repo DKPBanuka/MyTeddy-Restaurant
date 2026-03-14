@@ -18,10 +18,6 @@ import { useCart } from '../context/CartContext';
 import type { ProductSize, GlobalAddon } from '../types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-const FOOD_CATEGORIES = ['Foods', 'Drinks', 'Bites', 'Appetizers', 'Main Course', 'Desserts', 'Beverages'];
-const isFoodProduct = (product: Product) => {
-    return product.category?.name && FOOD_CATEGORIES.includes(product.category.name);
-};
 
 type OrderType = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
 
@@ -174,7 +170,17 @@ export function POSDashboard() {
         }
 
         const product = item as Product;
-        // Crucial Logic: If the product has ONLY ONE size and no global addons available, it can bypass the modal.
+        
+        // Find add-ons relevant to this product's category
+        const relevantAddons = globalAddons.filter(a => 
+            a.categories?.some((c: any) => c.id === product.categoryId)
+        );
+
+        // Crucial Logic: If the product has multiple sizes OR has category-mapped add-ons, open the modal.
+        if ((product.sizes && product.sizes.length > 1) || relevantAddons.length > 0) {
+            setSelectedProductForModal(product);
+            return;
+        }
 
         // Bypass: use the only size if it exists, or just the product price
         const selectedSize = product.sizes && product.sizes.length === 1 ? product.sizes[0] : undefined;
@@ -697,7 +703,11 @@ export function POSDashboard() {
             {selectedProductForModal && (
                 <ProductSelectionModal
                     product={selectedProductForModal}
-                    globalAddons={isFoodProduct(selectedProductForModal) ? globalAddons : []}
+                    globalAddons={
+                        globalAddons.filter(a => 
+                            a.categories?.some((c: any) => c.id === selectedProductForModal.categoryId)
+                        )
+                    }
                     initialSize={editingItemIndex !== null ? cartItems[editingItemIndex].size : undefined}
                     initialAddons={editingItemIndex !== null ? cartItems[editingItemIndex].selectedAddons : undefined}
                     onClose={() => {

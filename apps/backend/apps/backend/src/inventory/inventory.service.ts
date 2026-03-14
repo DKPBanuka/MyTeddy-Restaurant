@@ -238,15 +238,30 @@ export class InventoryService {
     }
 
     // --- Global Addons CRUD ---
-    async getGlobalAddons() {
-        return this.prisma.globalAddon.findMany();
+    async getGlobalAddons(categoryId?: string) {
+        return this.prisma.globalAddon.findMany({
+            where: categoryId ? {
+                categories: {
+                    some: { id: categoryId }
+                }
+            } : {},
+            include: {
+                categories: true
+            }
+        });
     }
 
     async createGlobalAddon(data: any) {
         return this.prisma.globalAddon.create({
             data: {
                 name: data.name,
-                price: data.price
+                price: data.price,
+                categories: data.categoryIds ? {
+                    connect: data.categoryIds.map((id: string) => ({ id }))
+                } : undefined
+            },
+            include: {
+                categories: true
             }
         });
     }
@@ -256,7 +271,13 @@ export class InventoryService {
             where: { id },
             data: {
                 name: data.name,
-                price: data.price
+                price: data.price,
+                categories: data.categoryIds ? {
+                    set: data.categoryIds.map((id: string) => ({ id }))
+                } : undefined
+            },
+            include: {
+                categories: true
             }
         });
     }

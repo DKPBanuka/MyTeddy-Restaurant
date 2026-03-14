@@ -82,12 +82,12 @@ export function ProductSelectionModal({
                     )}
 
                     {/* Global Add-ons Section */}
-                    {globalAddons.length > 0 && (
-                        <div className="space-y-4">
-                            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                                <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-[10px]">2</span>
-                                Extra Add-ons
-                            </h3>
+                    <div className="space-y-4">
+                        <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-[10px]">2</span>
+                            Extra Add-ons
+                        </h3>
+                        {globalAddons.length > 0 ? (
                             <div className="grid grid-cols-1 gap-2">
                                 {globalAddons.map((a) => {
                                     const isSelected = !!selectedAddons.find(item => item.id === a.id);
@@ -110,8 +110,12 @@ export function ProductSelectionModal({
                                     );
                                 })}
                             </div>
-                        </div>
-                    )}
+                        ) : (
+                            <div className="p-6 border-2 border-dashed border-slate-100 rounded-2xl text-center">
+                                <p className="text-xs font-bold text-slate-400 italic">No add-ons available for this item.</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <div className="px-8 py-6 bg-slate-50 border-t border-slate-100 flex flex-col gap-4">

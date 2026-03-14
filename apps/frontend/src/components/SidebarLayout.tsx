@@ -87,10 +87,10 @@ export function SidebarLayout() {
 
                 {/* Bottom Settings / Logout */}
                 <div className="flex flex-col w-full mt-auto">
-                    <button className={`flex items-center ${isExpanded ? 'gap-4 px-6' : 'justify-center px-0'} py-3.5 text-sm font-semibold text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all text-left w-full`} title="Settings">
+                    <NavLink to="/settings" className={navLinkClass} title="Settings">
                         <Settings size={24} className="shrink-0" />
                         {isExpanded && <span className="whitespace-nowrap">Settings</span>}
-                    </button>
+                    </NavLink>
                     <button
                         onClick={logout}
                         className={`flex items-center ${isExpanded ? 'gap-4 px-6' : 'justify-center px-0'} py-3.5 text-sm font-semibold text-red-400 hover:text-red-500 hover:bg-red-500/10 transition-all text-left border-t border-slate-800 mt-2 w-full`}

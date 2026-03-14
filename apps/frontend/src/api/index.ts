@@ -136,8 +136,8 @@ export const api = {
         const res = await apiClient.patch(`/orders/${id}/refund`, { reason });
         return res.data;
     },
-    updateOrderStatus: async (id: string, orderStatus: string) => {
-        const res = await apiClient.patch(`/orders/${id}/status`, { orderStatus });
+    updateOrderStatus: async (id: string, status: string) => {
+        const res = await apiClient.patch(`/orders/${id}/status`, { status });
         return res.data;
     },
     undoOrderStatus: async (id: string) => {
@@ -269,15 +269,15 @@ export const api = {
     },
 
     // --- Global Addons ---
-    getGlobalAddons: async (): Promise<any[]> => {
-        const res = await apiClient.get(`/inventory/global-addons`);
+    getGlobalAddons: async (categoryId?: string): Promise<any[]> => {
+        const res = await apiClient.get(`/inventory/global-addons`, { params: { categoryId } });
         return res.data;
     },
-    createGlobalAddon: async (data: { name: string, price: number }) => {
+    createGlobalAddon: async (data: { name: string, price: number, categoryIds?: string[] }) => {
         const res = await apiClient.post(`/inventory/global-addons`, data);
         return res.data;
     },
-    updateGlobalAddon: async (id: string, data: { name: string, price: number }) => {
+    updateGlobalAddon: async (id: string, data: { name: string, price: number, categoryIds?: string[] }) => {
         const res = await apiClient.patch(`/inventory/global-addons/${id}`, data);
         return res.data;
     },

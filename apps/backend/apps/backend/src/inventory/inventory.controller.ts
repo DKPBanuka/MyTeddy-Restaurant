@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 
 @Controller('inventory')
@@ -91,8 +91,8 @@ export class InventoryController {
 
     // --- Global Addons ---
     @Get('global-addons')
-    async getGlobalAddons() {
-        return this.inventoryService.getGlobalAddons();
+    async getGlobalAddons(@Query('categoryId') categoryId?: string) {
+        return this.inventoryService.getGlobalAddons(categoryId);
     }
 
     @Post('global-addons')

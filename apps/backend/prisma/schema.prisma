@@ -204,7 +204,8 @@ model RetailStock {
 model Order {
   id              String        @id @default(uuid())
   orderNumber     String        @unique
-  invoiceNumber   String?       @unique
+  invoiceNumber   String        @unique
+  tokenNumber     Int           @default(0)
   status          OrderStatus   @default(PENDING)
   paymentStatus   PaymentStatus @default(UNPAID)
   orderType       OrderType     @default(DINE_IN)
@@ -266,5 +267,24 @@ model PartyBooking {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
-  customer        User?              @relation(fields: [customerId], references: [id])
+  userId          String?
+  user            User?              @relation(fields: [userId], references: [id])
 }
+
+model RestaurantSettings {
+  id              String   @id @default(uuid())
+  restaurantName  String
+  address         String
+  phone           String
+  logoUrl         String?
+  currencySymbol  String   @default("Rs.")
+  taxRate         Float    @default(0)
+  serviceCharge   Float    @default(0)
+  packagingCharge Float    @default(0)
+  receiptFooter   String?
+  qrCodeUrl       String?
+  wifiPassword    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+

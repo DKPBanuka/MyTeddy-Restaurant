@@ -26,6 +26,7 @@ export type Role = typeof Role[keyof typeof Role];
 export interface Category {
     id: string;
     name: string;
+    addons?: GlobalAddon[];
     createdAt?: string;
     updatedAt?: string;
 }
@@ -41,6 +42,7 @@ export interface GlobalAddon {
     id: string;
     name: string;
     price: string;
+    categories?: Category[];
 }
 
 export interface PackageItem {

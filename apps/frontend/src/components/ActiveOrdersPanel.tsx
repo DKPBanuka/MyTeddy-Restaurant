@@ -110,7 +110,9 @@ function OrderCard({ order, onClick }: { order: any, onClick: () => void }) {
             <div className="p-4 border-b border-slate-100 flex justify-between items-start cursor-pointer" onClick={onClick}>
                 <div>
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-slate-900 font-black text-lg">#{order.invoiceNumber || order.orderNumber?.slice(-6).toUpperCase()}</span>
+                        <span className="text-slate-900 font-black text-lg">
+                            {order.tokenNumber ? `#${order.tokenNumber}` : order.invoiceNumber || order.orderNumber?.slice(-6).toUpperCase()}
+                        </span>
                         <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 rounded-lg text-[10px] font-black text-slate-500">
                             {getStatusIcon()}
                             {order.status}

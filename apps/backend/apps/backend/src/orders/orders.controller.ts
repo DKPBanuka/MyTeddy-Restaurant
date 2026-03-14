@@ -68,8 +68,8 @@ export class OrdersController {
     }
 
     @Patch(':id/status')
-    async updateStatus(@Param('id') id: string, @Body() body: { orderStatus: string }) {
-        return this.ordersService.updateOrderStatus(id, body.orderStatus);
+    async updateStatus(@Param('id') id: string, @Body() body: { status: string }) {
+        return this.ordersService.updateOrderStatus(id, body.status);
     }
 
     @Patch(':id/undo')

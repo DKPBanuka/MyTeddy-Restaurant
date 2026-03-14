@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, CreditCard, Banknote } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
+import { generatePDFReceipt } from '../utils/pdfReceipt';
+
 
 interface CheckoutModalProps {
     isOpen: boolean;
@@ -89,7 +91,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
     const handlePrint = () => {
         if (createdOrder) {
-            const { generatePDFReceipt } = require('../utils/pdfReceipt');
             generatePDFReceipt(createdOrder, createdOrder.invoiceNumber || createdOrder.id);
         }
     };

@@ -71,6 +71,35 @@ export class OrdersService {
         });
     }
 
+    private async generateDailyOrderNumbers(tx: any) {
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        
+        // Find the latest order of the day to get the next token number
+        const lastOrderToday = await tx.order.findFirst({
+            where: {
+                createdAt: {
+                    gte: startOfDay
+                }
+            },
+            orderBy: {
+                tokenNumber: 'desc'
+            }
+        });
+
+        const nextToken = (lastOrderToday?.tokenNumber || 0) + 1;
+        
+        // Format: INV-YYMMDD-XXXX
+        const year = now.getFullYear().toString().slice(-2);
+        const month = (now.getMonth() + 1).toString().padStart(2, '0');
+        const day = now.getDate().toString().padStart(2, '0');
+        const sequence = nextToken.toString().padStart(4, '0');
+        
+        const invoiceNumber = `INV-${year}${month}${day}-${sequence}`;
+        
+        return { tokenNumber: nextToken, invoiceNumber };
+    }
+
     async createOrder(createOrderDto: CreateOrderDto) {
         const { items, discount = 0, paymentMethod, paymentStatus, amountReceived, change, orderType, tableNo, customerName, customerPhone, deliveryAddress } = createOrderDto;
 
@@ -78,7 +107,7 @@ export class OrdersService {
             const cashier = await tx.user.findFirst({ where: { role: 'CASHIER' } });
             if (!cashier) throw new BadRequestException('No cashier found to process order');
 
-            const invoiceNumber = this.generateInvoiceNumber();
+            const { tokenNumber, invoiceNumber } = await this.generateDailyOrderNumbers(tx);
             let calculatedSubTotal = 0;
 
             // Pre-process items to get snapshot prices
@@ -111,8 +140,9 @@ export class OrdersService {
 
             const order = await tx.order.create({
                 data: {
-                    orderNumber: `ORD-${Date.now()}`,
+                    orderNumber: `ORD-${Date.now()}-${tokenNumber}`,
                     invoiceNumber,
+                    tokenNumber,
                     subTotal: calculatedSubTotal,
                     discount,
                     grandTotal,

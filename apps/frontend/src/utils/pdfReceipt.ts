@@ -1,7 +1,6 @@
 import pdfMake from 'pdfmake/build/pdfmake';
 import * as pdfFonts from 'pdfmake/build/vfs_fonts';
 import type { TDocumentDefinitions, CustomTableLayout } from 'pdfmake/interfaces';
-import type { CreateOrderDto } from '../types';
 
 // Inject the default Roboto Virtual File System dynamically to handle different bundler resolutions
 const vfs = (pdfFonts as any).pdfMake ? (pdfFonts as any).pdfMake.vfs : (pdfFonts as any).vfs ? (pdfFonts as any).vfs : pdfFonts;
@@ -83,7 +82,15 @@ export const generatePDFReceipt = (orderData: any, orderId: string) => {
             // Header
             { text: 'MY TEDDY RESTAURANT', style: 'header', alignment: 'center' },
             { text: '123, Galle Road, Colombo', alignment: 'center', fontSize: 8 },
-            { text: 'Tel: +94 11 234 5678', alignment: 'center', fontSize: 8, margin: [0, 0, 0, 10] },
+            { text: 'Tel: +94 11 234 5678', alignment: 'center', fontSize: 8, margin: [0, 0, 0, 5] },
+
+            // Token Number (Very Large & Bold)
+            { 
+                text: `TOKEN: ${orderData.tokenNumber || '---'}`, 
+                style: 'tokenHeader', 
+                alignment: 'center',
+                margin: [0, 5, 0, 10]
+            },
 
             { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 202, y2: 0, lineWidth: 1 }] },
             
@@ -91,7 +98,7 @@ export const generatePDFReceipt = (orderData: any, orderId: string) => {
             {
                 margin: [0, 8, 0, 8],
                 stack: [
-                    { text: `INVOICE: ${orderData.invoiceNumber || orderId}`, bold: true },
+                    { text: `INVOICE: ${orderData.invoiceNumber || '---'}`, bold: true },
                     { text: `Date: ${new Date().toLocaleString()}`, fontSize: 8 },
                     { text: `Type: ${orderData.orderType || 'TAKEAWAY'}`, fontSize: 8 }
                 ]
@@ -156,6 +163,11 @@ export const generatePDFReceipt = (orderData: any, orderId: string) => {
                 fontSize: 12,
                 bold: true,
                 margin: [0, 0, 0, 2]
+            },
+            tokenHeader: {
+                fontSize: 24,
+                bold: true,
+                color: '#000000'
             },
             tableHeader: {
                 bold: true,

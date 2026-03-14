@@ -32,6 +32,7 @@ interface KitchenOrder {
     tableNumber?: string;
     customerName?: string;
     tokenId?: string;
+    tokenNumber?: number;
     orderItems: KitchenOrderItem[];
     invoiceNumber?: string;
 }
@@ -72,10 +73,16 @@ export function KDSDashboard() {
         onSuccess: (_, variables) => {
             setLastActionOrderId(variables.id);
             toast.success(`Order moved to ${variables.status}`);
+            
+            // CRUCIAL: Invalidate multiple query keys to ensure all views are in sync
             queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] });
+            queryClient.invalidateQueries({ queryKey: ['active-orders'] });
+            queryClient.invalidateQueries({ queryKey: ['orders'] });
         },
-        onError: () => {
-            toast.error('Failed to update order status');
+        onError: (error: any) => {
+            console.error('KDS Status Update Error:', error);
+            const msg = error.response?.data?.message || 'Failed to update order status';
+            toast.error(msg);
         }
     });
 
@@ -85,9 +92,13 @@ export function KDSDashboard() {
             toast.success('Action undone successfully');
             setLastActionOrderId(null);
             queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] });
+            queryClient.invalidateQueries({ queryKey: ['active-orders'] });
+            queryClient.invalidateQueries({ queryKey: ['orders'] });
         },
-        onError: () => {
-            toast.error('Failed to undo last action');
+        onError: (error: any) => {
+            console.error('KDS Undo Error:', error);
+            const msg = error.response?.data?.message || 'Failed to undo last action';
+            toast.error(msg);
         }
     });
 
@@ -229,7 +240,7 @@ function KDSOrderCard({ order, onUpdateStatus, isUpdating }: { order: KitchenOrd
             <div className={`p-4 border-b border-white/5 ${urgency === 'ERROR' ? 'bg-red-500/10' : ''}`}>
                 <div className="flex justify-between items-start mb-1">
                     <h3 className="text-2xl font-black text-white leading-none tracking-tight">
-                        {order.tokenId ? `#${order.tokenId}` : order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Order'}
+                        {order.tokenNumber ? `#${order.tokenNumber}` : order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Order'}
                     </h3>
                     <div className="flex flex-col items-end">
                         <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-black uppercase ${urgency === 'ERROR' ? 'bg-red-500 text-white' : 'bg-slate-700 text-slate-300'}`}>

@@ -182,7 +182,7 @@ export function MenuManagement() {
             )}
 
             {activeTab === 'GLOBAL_ADDONS' && (
-                <GlobalAddonsManager onRefresh={invalidateAll} />
+                <GlobalAddonsManager categories={categories} onRefresh={invalidateAll} />
             )}
 
             {activeTab === 'PACKAGES' && (
@@ -505,10 +505,11 @@ function ProductModal({ categories, initialData, onClose, onSuccess }: { categor
     );
 }
 
-function GlobalAddonsManager({ onRefresh }: { onRefresh: () => void }) {
+function GlobalAddonsManager({ categories, onRefresh }: { categories: Category[], onRefresh: () => void }) {
     const [addons, setAddons] = useState<any[]>([]);
     const [name, setName] = useState('');
     const [price, setPrice] = useState(0);
+    const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
     const [editingId, setEditingId] = useState<string | null>(null);
 
     useEffect(() => {
@@ -524,14 +525,15 @@ function GlobalAddonsManager({ onRefresh }: { onRefresh: () => void }) {
         if (!name) return;
         try {
             if (editingId) {
-                await api.updateGlobalAddon(editingId, { name, price });
+                await api.updateGlobalAddon(editingId, { name, price, categoryIds: selectedCategoryIds });
                 toast.success('Add-on updated');
             } else {
-                await api.createGlobalAddon({ name, price });
+                await api.createGlobalAddon({ name, price, categoryIds: selectedCategoryIds });
                 toast.success('Add-on created');
             }
             setName('');
             setPrice(0);
+            setSelectedCategoryIds([]);
             setEditingId(null);
             fetchAddons();
             onRefresh();
@@ -566,10 +568,47 @@ function GlobalAddonsManager({ onRefresh }: { onRefresh: () => void }) {
                         onChange={e => setPrice(Number(e.target.value))}
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold outline-none"
                     />
+
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">Apply to Categories</label>
+                        <div className="flex flex-wrap gap-2">
+                            {categories.map(cat => (
+                                <button
+                                    key={cat.id}
+                                    onClick={() => {
+                                        setSelectedCategoryIds(prev => 
+                                            prev.includes(cat.id) 
+                                                ? prev.filter(id => id !== cat.id) 
+                                                : [...prev, cat.id]
+                                        );
+                                    }}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                                        selectedCategoryIds.includes(cat.id)
+                                            ? 'bg-blue-600 border-blue-600 text-white'
+                                            : 'bg-white border-slate-200 text-slate-500 hover:border-blue-400'
+                                    }`}
+                                >
+                                    {cat.name}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                     <button onClick={handleSubmit} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold">
                         {editingId ? 'Update' : 'Create'}
                     </button>
-                    {editingId && <button onClick={() => { setEditingId(null); setName(''); setPrice(0); }} className="w-full text-slate-500 font-bold">Cancel</button>}
+                    {editingId && (
+                        <button 
+                            onClick={() => { 
+                                setEditingId(null); 
+                                setName(''); 
+                                setPrice(0); 
+                                setSelectedCategoryIds([]); 
+                            }} 
+                            className="w-full text-slate-500 font-bold"
+                        >
+                            Cancel
+                        </button>
+                    )}
                 </div>
             </div>
             <div className="md:col-span-2 grid sm:grid-cols-2 gap-4">
@@ -579,8 +618,18 @@ function GlobalAddonsManager({ onRefresh }: { onRefresh: () => void }) {
                             <div className="font-bold">{a.name}</div>
                             <div className="text-sm text-slate-500 font-bold">Rs. {Number(a.price).toFixed(2)}</div>
                         </div>
-                        <div className="flex gap-2 opacity-0 group-hover:opacity-100">
-                            <button onClick={() => { setEditingId(a.id); setName(a.name); setPrice(Number(a.price)); }} className="p-2 text-slate-400 hover:text-blue-600"><Edit2 size={16} /></button>
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={() => { 
+                                    setEditingId(a.id); 
+                                    setName(a.name); 
+                                    setPrice(Number(a.price)); 
+                                    setSelectedCategoryIds(a.categories?.map((c: any) => c.id) || []);
+                                }} 
+                                className="p-2 text-slate-400 hover:text-blue-600"
+                            >
+                                <Edit2 size={16} />
+                            </button>
                             <button onClick={() => handleDelete(a.id)} className="p-2 text-slate-400 hover:text-red-600"><Trash2 size={16} /></button>
                         </div>
                     </div>
