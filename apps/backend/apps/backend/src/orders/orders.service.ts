@@ -104,8 +104,9 @@ export class OrdersService {
         const { items, discount = 0, paymentMethod, paymentStatus, amountReceived, change, orderType, tableNo, customerName, customerPhone, deliveryAddress } = createOrderDto;
 
         try {
+            // Increase timeout to 15s for complex orders with stock deduction
             return await this.prisma.$transaction(async (tx) => {
-                // Find a user to assign the order to. Try CASHIER first, then any user.
+                // 1. User Lookup
                 let user = await tx.user.findFirst({ where: { role: 'CASHIER' } });
                 if (!user) {
                     user = await tx.user.findFirst();
@@ -115,38 +116,49 @@ export class OrdersService {
                     throw new BadRequestException('No users found in the system. Please create a user first.');
                 }
 
+                // 2. Generate Invoice and Token Numbers
                 const { tokenNumber, invoiceNumber } = await this.generateDailyOrderNumbers(tx);
+                
+                // 3. Pre-process items to calculate totals and gather basic info
                 let calculatedSubTotal = 0;
+                const itemsToProcess: any[] = [];
 
-                // Process items to get prices and calculate subtotal
-                const itemsWithPrices: any[] = [];
                 for (const item of items) {
                     let currentItemPrice = 0;
+                    let productType: ProductType | null = null;
+
                     if (item.packageId) {
                         const pkg = await tx.package.findUnique({ where: { id: item.packageId } });
-                        currentItemPrice = Number(pkg?.price || 0);
+                        if (!pkg) throw new BadRequestException(`Package ${item.packageId} not found`);
+                        currentItemPrice = Number(pkg.price || 0);
                     } else if (item.productId) {
+                        const product = await tx.product.findUnique({ where: { id: item.productId } });
+                        if (!product) throw new BadRequestException(`Product ${item.productId} not found`);
+                        productType = product.type;
+
                         if (item.sizeId) {
                             const size = await tx.productSize.findUnique({ where: { id: item.sizeId } });
-                            currentItemPrice = Number(size?.price || 0);
+                            if (!size) throw new BadRequestException(`Size ${item.sizeId} not found`);
+                            currentItemPrice = Number(size.price || 0);
                         } else {
-                            const product = await tx.product.findUnique({ where: { id: item.productId } });
-                            currentItemPrice = Number(product?.price || 0);
+                            currentItemPrice = Number(product.price || 0);
                         }
                     }
                     
                     const subtotal = currentItemPrice * item.quantity;
                     calculatedSubTotal += subtotal;
 
-                    itemsWithPrices.push({
+                    itemsToProcess.push({
                         ...item,
-                        snapshotPrice: currentItemPrice,
-                        itemSubtotal: subtotal
+                        unitPrice: currentItemPrice,
+                        subtotal: subtotal,
+                        productType
                     });
                 }
 
                 const grandTotal = Math.max(0, calculatedSubTotal - discount);
 
+                // 4. Create Order Header First
                 const order = await tx.order.create({
                     data: {
                         orderNumber: `ORD-${Date.now()}-${tokenNumber}`,
@@ -166,51 +178,52 @@ export class OrdersService {
                         customerName: customerName || null,
                         customerPhone: customerPhone || null,
                         deliveryAddress: deliveryAddress || null,
-                        orderItems: {
-                            create: itemsWithPrices.map((item) => ({
-                                productId: item.productId || null,
-                                packageId: item.packageId || null,
-                                quantity: item.quantity,
-                                unitPrice: item.snapshotPrice,
-                                priceAtTimeOfSale: item.snapshotPrice,
-                                subtotal: item.itemSubtotal,
-                                notes: item.notes || null,
-                                sizeId: item.sizeId || null,
-                                addonIds: item.addonIds || [],
-                            })),
-                        },
-                    },
-                    include: { orderItems: { include: { product: true, package: true } } },
+                    }
                 });
 
-                // Stock deduction
-                for (const item of itemsWithPrices) {
-                    if (item.packageId) {
+                // 5. Create Order Items and Deduct Stock Sequentially
+                const createdItems: any[] = [];
+                for (const itemData of itemsToProcess) {
+                    const orderItem = await tx.orderItem.create({
+                        data: {
+                            orderId: order.id,
+                            productId: itemData.productId || null,
+                            packageId: itemData.packageId || null,
+                            quantity: itemData.quantity,
+                            unitPrice: itemData.unitPrice,
+                            priceAtTimeOfSale: itemData.unitPrice,
+                            subtotal: itemData.subtotal,
+                            notes: itemData.notes || null,
+                            sizeId: itemData.sizeId || null,
+                            addonIds: itemData.addonIds || [],
+                        },
+                        include: { product: true, package: true }
+                    });
+                    
+                    createdItems.push(orderItem);
+
+                    // 6. Deduct Stock
+                    if (itemData.packageId) {
                         const pkg = await tx.package.findUnique({
-                            where: { id: item.packageId },
+                            where: { id: itemData.packageId },
                             include: { items: { include: { product: true } } }
                         });
                         if (pkg) {
                             for (const pkgItem of pkg.items) {
-                                const totalQty = pkgItem.quantity * item.quantity;
+                                const totalQty = pkgItem.quantity * itemData.quantity;
                                 await this.processStockDeduction(tx, pkgItem.productId, pkgItem.product.type, totalQty);
                             }
                         }
-                    } else if (item.productId) {
-                        // We already checked this product type during subtotal calculation, but for deduction we need the type again.
-                        const product = await tx.product.findUnique({ where: { id: item.productId } });
-                        if (product) {
-                            await this.processStockDeduction(tx, item.productId, product.type, item.quantity);
-                        }
+                    } else if (itemData.productId) {
+                        await this.processStockDeduction(tx, itemData.productId, itemData.productType, itemData.quantity);
                     }
                 }
 
-                return order;
-            });
+                return { ...order, orderItems: createdItems };
+            }, { timeout: 15000 });
         } catch (error) {
             console.error('Order Creation Failure:', error);
             if (error instanceof BadRequestException) throw error;
-            // Catch Prisma specific errors
             if (error.code === 'P2002') {
                 throw new BadRequestException('A unique constraint violation occurred (invoice number already exists).');
             }
@@ -340,8 +353,9 @@ export class OrdersService {
         if (!order) throw new NotFoundException(`Order ${id} not found`);
 
         return this.prisma.$transaction(async (tx) => {
-            // Fetch prices for snapshotting
-            const itemsWithPrices = await Promise.all(body.items.map(async (item) => {
+            // Fetch prices for snapshotting - process sequentially to ensure transaction integrity
+            const itemsWithPrices: any[] = [];
+            for (const item of body.items) {
                 let currentItemPrice = 0;
                 if (item.packageId) {
                     const pkg = await tx.package.findUnique({ where: { id: item.packageId } });
@@ -355,8 +369,8 @@ export class OrdersService {
                         currentItemPrice = Number(product?.price || 0);
                     }
                 }
-                return { ...item, price: currentItemPrice };
-            }));
+                itemsWithPrices.push({ ...item, price: currentItemPrice });
+            }
 
             // Delete existing items and re-create
             await tx.orderItem.deleteMany({ where: { orderId: id } });
@@ -384,7 +398,7 @@ export class OrdersService {
                 },
                 include: { orderItems: { include: { product: true, package: true } } },
             });
-        });
+        }, { timeout: 10000 });
     }
 
     private async processStockDeduction(tx: any, productId: string, productType: ProductType, quantity: number) {
