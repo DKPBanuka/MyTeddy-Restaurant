@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api } from '../api';
-import type { Product, OrderItemDto } from '../types';
+import type { Product, OrderItemDto, ProductSize, GlobalAddon } from '../types';
 import { ProductType } from '../types';
 import { ProductCard } from '../components/ProductCard';
 import { Cart } from '../components/Cart';
@@ -10,26 +10,25 @@ import { Store, PackageSearch, Coffee, Search, ShoppingBag, X } from 'lucide-rea
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { CheckoutModal } from '../components/CheckoutModal';
-import { ActiveOrdersPanel } from '../components/ActiveOrdersPanel';
-import { NotificationBell } from '../components/NotificationBell';
 import { ProductSelectionModal } from '../components/ProductSelectionModal';
 import { HeldOrdersModal } from '../components/HeldOrdersModal';
 import { useCart } from '../context/CartContext';
-import type { ProductSize, GlobalAddon } from '../types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSettings } from '../context/SettingsContext';
 
 
 type OrderType = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
 
 export function POSDashboard() {
     const { user } = useAuth();
+    const { settings } = useSettings();
     const location = useLocation();
 
-    const [activeFilter, setActiveFilter] = useState<string>('ALL'); // Store categoryId or 'ALL'
+    const [activeFilter, setActiveFilter] = useState<string>('ALL');
     const [searchQuery, setSearchQuery] = useState('');
-    const { 
-        items: cartItems, setItems: setCartItems, 
-        orderType, setOrderType, 
+    const {
+        items: cartItems, setItems: setCartItems,
+        orderType, setOrderType,
         orderMetadata, setOrderMetadata,
         clearCart: handleClearCart
     } = useCart();
@@ -37,15 +36,14 @@ export function POSDashboard() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
     const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
-    const [isActiveOrdersPanelOpen, setIsActiveOrdersPanelOpen] = useState(false);
     const [isHeldOrdersModalOpen, setIsHeldOrdersModalOpen] = useState(false);
     const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
     const [generatedToken, setGeneratedToken] = useState<string | null>(null);
     const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
     const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+    const [lastOrder, setLastOrder] = useState<any>(null);
     const queryClient = useQueryClient();
 
-    // React Query Hooks
     const { data: products = [], isLoading: productsLoading } = useQuery({
         queryKey: ['products'],
         queryFn: () => api.getProducts(),
@@ -66,18 +64,7 @@ export function POSDashboard() {
         queryFn: () => api.getPackages(),
     });
 
-    const { data: activeOrders = [] } = useQuery({
-        queryKey: ['active-orders'],
-        queryFn: async () => {
-            const data = await api.getKitchenOrders();
-            return data.filter((o: any) => ['PENDING', 'PREPARING', 'READY'].includes(o.status));
-        },
-        refetchInterval: 5000,
-    });
-
     const isLoading = productsLoading;
-    const activeOrdersCount = activeOrders.length;
-
 
     const handleRecallOrder = (order: any) => {
         setActiveOrderId(order.id);
@@ -102,7 +89,6 @@ export function POSDashboard() {
             selectedAddons: item.selectedAddons,
             notes: item.notes || ''
         })) || []);
-        setIsActiveOrdersPanelOpen(false);
     };
 
     useEffect(() => {
@@ -116,14 +102,14 @@ export function POSDashboard() {
         if (state?.orderId) {
             const fetchAndOpenOrder = async () => {
                 try {
-                    const data = await api.getPendingOrders();
-                    const orderToOpen = data.find((o: any) => o.id === state.orderId);
+                    const data = await api.getOrders({ status: 'READY' });
+                    const orderToOpen = data.orders.find((o: any) => o.id === state.orderId);
                     if (orderToOpen) {
                         handleRecallOrder(orderToOpen);
                     }
                 } catch (error) {
-                    console.error('Failed to load order from Floor Plan:', error);
-                    toast.error('Failed to load order from Floor Plan.');
+                    console.error('Failed to load order:', error);
+                    toast.error('Failed to load order.');
                 }
             }
             fetchAndOpenOrder();
@@ -170,25 +156,21 @@ export function POSDashboard() {
         }
 
         const product = item as Product;
-        
-        // Find add-ons relevant to this product's category
-        const relevantAddons = globalAddons.filter(a => 
+        const relevantAddons = globalAddons.filter(a =>
             a.categories?.some((c: any) => c.id === product.categoryId)
         );
 
-        // Crucial Logic: If the product has multiple sizes OR has category-mapped add-ons, open the modal.
         if ((product.sizes && product.sizes.length > 1) || relevantAddons.length > 0) {
             setSelectedProductForModal(product);
             return;
         }
 
-        // Bypass: use the only size if it exists, or just the product price
         const selectedSize = product.sizes && product.sizes.length === 1 ? product.sizes[0] : undefined;
 
         setCartItems((prev) => {
-            const existing = prev.find((item) => 
-                item.productId === product.id && 
-                item.sizeId === selectedSize?.id && 
+            const existing = prev.find((item) =>
+                item.productId === product.id &&
+                item.sizeId === selectedSize?.id &&
                 (!item.addonIds || item.addonIds.length === 0)
             );
             if (existing) {
@@ -198,10 +180,10 @@ export function POSDashboard() {
                         : item
                 );
             }
-            return [...prev, { 
-                productId: product.id, 
-                quantity: 1, 
-                type: product.type, 
+            return [...prev, {
+                productId: product.id,
+                quantity: 1,
+                type: product.type,
                 product,
                 sizeId: selectedSize?.id,
                 size: selectedSize,
@@ -219,7 +201,6 @@ export function POSDashboard() {
 
         setCartItems((prev) => {
             if (editingItemIndex !== null) {
-                // Replace existing item
                 const newItems = [...prev];
                 newItems[editingItemIndex] = {
                     ...newItems[editingItemIndex],
@@ -231,9 +212,8 @@ export function POSDashboard() {
                 return newItems;
             }
 
-            // Regular Add logic (Check for identical item to merge)
-            const existingIndex = prev.findIndex((item) => 
-                item.productId === product.id && 
+            const existingIndex = prev.findIndex((item) =>
+                item.productId === product.id &&
                 item.sizeId === size?.id &&
                 JSON.stringify(item.addonIds?.sort() || []) === JSON.stringify(sortedAddonIds)
             );
@@ -247,10 +227,10 @@ export function POSDashboard() {
                 return newItems;
             }
 
-            return [...prev, { 
-                productId: product.id, 
-                quantity: 1, 
-                type: product.type, 
+            return [...prev, {
+                productId: product.id,
+                quantity: 1,
+                type: product.type,
                 product,
                 sizeId: size?.id,
                 size: size,
@@ -271,13 +251,11 @@ export function POSDashboard() {
         setSelectedProductForModal(item.product as Product);
     };
 
-
-
     const handleUpdateProductQty = (productId: string, delta: number) => {
         setCartItems((prev) => {
             const index = prev.findIndex(item => item.productId === productId);
             if (index === -1) return prev;
-            
+
             const newItems = [...prev];
             newItems[index] = {
                 ...newItems[index],
@@ -299,82 +277,22 @@ export function POSDashboard() {
         return sum + (basePrice + addonsPrice) * item.quantity;
     }, 0);
 
+    const taxRate = settings?.taxRate || 0;
+    const cartGrandTotal = cartTotalPrice + (cartTotalPrice * taxRate / 100);
+
     const handleOpenCheckout = () => {
         if (cartItems.length === 0) return;
         setIsCheckoutModalOpen(true);
     };
 
-    const handleSendToKDS = async () => {
-        if (cartItems.length === 0) return;
-
-        try {
-            setIsSubmitting(true);
-            const totalAmount = cartItems.reduce((sum, item) => {
-                const basePrice = item.size ? Number(item.size.price) : Number(item.product?.price || item.package?.price || 0);
-                const addonsPrice = item.selectedAddons?.reduce((s, a) => s + Number(a.price), 0) || 0;
-                return sum + (basePrice + addonsPrice) * item.quantity;
-            }, 0);
-            
-            const payloadItems = cartItems.map((item) => ({
-                productId: item.productId,
-                quantity: item.quantity,
-                type: item.type,
-                sizeId: item.sizeId,
-                addonIds: item.addonIds,
-                notes: item.notes
-            }));
-
-            if (activeOrderId) {
-                // Update existing order
-                await api.updateOrderItems(activeOrderId, {
-                    items: payloadItems,
-                    totalAmount
-                });
-                toast.success('Order items updated successfully!');
-            } else {
-                // Create new UNPAID order
-                const createdOrder = await api.createOrder({
-                    items: payloadItems,
-                    totalAmount,
-                    paymentStatus: 'UNPAID',
-                    orderType,
-                    tableNo: orderMetadata.tableNo || undefined,
-                    customerName: orderMetadata.customerName || undefined,
-                    customerPhone: orderMetadata.customerPhone || undefined,
-                    deliveryAddress: orderMetadata.deliveryAddress || undefined,
-                });
-                setActiveOrderId(createdOrder.id);
-                setGeneratedToken(createdOrder.tokenId || null);
-                if (createdOrder.tokenId) {
-                    toast.success(`Order sent! Token: ${createdOrder.tokenId}`);
-                } else {
-                    toast.success('Order sent to KDS!');
-                }
-            }
-
-            // IMMEDAITELY clear the cart so cashier can serve the next customer
-            handleClearCart();
-            setActiveOrderId(null);
-            setGeneratedToken(null);
-            setIsMobileCartOpen(false);
-        } catch (error) {
-            if (axios.isAxiosError(error) && error.response) {
-                toast.error(`KDS Update Failed: ${error.response.data.message || 'Validation error'}`);
-            } else {
-                toast.error('An unexpected error occurred sending to KDS.');
-            }
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handleConfirmCheckout = async (paymentDetails: { 
-        method: string; 
-        amountReceived?: number; 
+    const handleConfirmCheckout = async (paymentDetails: {
+        method: string;
+        amountReceived?: number;
         change?: number;
         subTotal?: number;
         discount?: number;
         grandTotal?: number;
+        discountPercentage?: number;
     }) => {
         try {
             setIsSubmitting(true);
@@ -387,7 +305,7 @@ export function POSDashboard() {
 
             const payloadItems: any[] = cartItems.map((item) => ({
                 productId: item.productId,
-                packageId: item.packageId || undefined, // FIXED: Type mismatch
+                packageId: item.packageId || undefined,
                 quantity: item.quantity,
                 type: item.type,
                 sizeId: item.sizeId,
@@ -398,9 +316,8 @@ export function POSDashboard() {
             let createdOrder: any = null;
 
             if (activeOrderId) {
-                // Determine whether to update items first (in case they changed after sending)
-                await api.updateOrderItems(activeOrderId, { 
-                    items: payloadItems, 
+                await api.updateOrderItems(activeOrderId, {
+                    items: payloadItems,
                     totalAmount: paymentDetails.grandTotal || calculatedTotal,
                     subTotal: paymentDetails.subTotal || calculatedTotal,
                     discount: paymentDetails.discount || 0,
@@ -423,14 +340,18 @@ export function POSDashboard() {
                 });
             }
 
-            toast.success('Payment processed successfully!');
+            const orderToSave = {
+                ...createdOrder,
+                discountPercentage: paymentDetails.discountPercentage
+            };
+            setLastOrder(orderToSave);
 
+            toast.success('Payment processed successfully!');
             handleClearCart();
             setActiveOrderId(null);
             setIsMobileCartOpen(false);
             queryClient.invalidateQueries({ queryKey: ['products'] });
-
-            return createdOrder;
+            return orderToSave;
 
         } catch (error) {
             if (axios.isAxiosError(error) && error.response) {
@@ -447,12 +368,9 @@ export function POSDashboard() {
 
     return (
         <div className="flex h-full w-full relative">
-            {/* CENTER COLUMN: Main Content Area */}
             <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50 w-full pb-20 md:pb-0 relative">
 
-                {/* Top Header: Search & Profile */}
                 <header className="px-4 md:px-8 pt-4 md:pt-8 pb-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 md:gap-8 z-10 shrink-0">
-                    {/* Mobile Top Row: Profile */}
                     <div className="flex w-full md:hidden justify-between items-center mb-2">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold overflow-hidden border border-slate-200 shadow-sm">
@@ -463,18 +381,6 @@ export function POSDashboard() {
                                 <div className="text-[10px] font-bold text-blue-600 tracking-wider uppercase">{user?.role}</div>
                             </div>
                         </div>
-                        <button
-                            onClick={() => setIsActiveOrdersPanelOpen(true)}
-                            className="relative bg-slate-800 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors shadow-sm"
-                        >
-                            Active Orders
-                            {activeOrdersCount > 0 && (
-                                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-slate-50 shadow-sm animate-pulse">
-                                    {activeOrdersCount}
-                                </span>
-                            )}
-                        </button>
-                        <NotificationBell onRecall={handleRecallOrder} />
                     </div>
 
                     <div className="relative w-full max-w-xl">
@@ -489,18 +395,17 @@ export function POSDashboard() {
                     </div>
 
                     <div className="hidden md:flex items-center gap-6">
-                        <button
-                            onClick={() => setIsActiveOrdersPanelOpen(true)}
-                            className="relative bg-slate-800 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-slate-700 transition shadow-sm"
-                        >
-                            Active Orders
-                            {activeOrdersCount > 0 && (
-                                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full border-2 border-slate-50 shadow-sm animate-pulse">
-                                    {activeOrdersCount}
-                                </span>
-                            )}
-                        </button>
-                        <NotificationBell onRecall={handleRecallOrder} />
+                        {lastOrder && (
+                            <button
+                                onClick={() => {
+                                    import('../utils/htmlReceipt').then(m => m.generateHTMLReceipt(lastOrder, settings));
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-all shadow-sm group"
+                            >
+                                <ShoppingBag size={18} className="group-hover:scale-110 transition-transform" />
+                                Reprint Last Bill
+                            </button>
+                        )}
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold overflow-hidden border border-slate-200 shadow-sm">
                                 {user?.name?.charAt(0).toUpperCase()}
@@ -513,9 +418,7 @@ export function POSDashboard() {
                     </div>
                 </header>
 
-                {/* Categories Section */}
                 <div className="px-4 md:px-8 pb-4 shrink-0 mt-2">
-                    {/* Row 1: Order Type Pills */}
                     <div className="flex gap-3 md:gap-4 mb-4 md:mb-6 overflow-x-auto pb-2 scrollbar-hide snap-x">
                         <PillCategory
                             active={orderType === 'DINE_IN'}
@@ -540,13 +443,11 @@ export function POSDashboard() {
                         />
                     </div>
 
-                    {/* Header for Menu */}
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between xl:justify-start gap-4 mb-2 md:mb-4">
                         <h2 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight block xl:mr-auto">
                             {activeFilter === 'ALL' ? 'All Menu' : categories.find(c => c.id === activeFilter)?.name || 'Filtered Menu'}
                         </h2>
 
-                        {/* Row 2: Product Filter Links (Categories) */}
                         <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex w-full sm:w-auto overflow-x-auto scrollbar-hide">
                             <button
                                 onClick={() => setActiveFilter('ALL')}
@@ -574,7 +475,6 @@ export function POSDashboard() {
                     </div>
                 </div>
 
-                {/* Product Grid Area */}
                 <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-32 md:pb-8 pt-2 scroll-smooth">
                     {isLoading ? (
                         <div className="flex items-center justify-center h-full pb-20">
@@ -591,22 +491,10 @@ export function POSDashboard() {
                                     onUpdateQty={(delta) => handleUpdateProductQty(item.id, delta)}
                                 />
                             ))}
-                            {filteredItems.length === 0 && (
-                                <div className="col-span-full h-48 md:h-64 flex flex-col items-center justify-center text-slate-400 space-y-4">
-                                    <div className="bg-white border shadow-sm p-4 rounded-full">
-                                        <Search size={32} className="md:w-10 md:h-10 text-slate-300" />
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-base md:text-lg font-bold text-slate-600">No products found</p>
-                                        <p className="text-xs md:text-sm font-medium mt-1">Try adjusting your filters or search query.</p>
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     )}
                 </div>
 
-                {/* Floating Bottom Cart Summary for Mobile/Tablet (<1024px) */}
                 {cartItems.length > 0 && (
                     <div className="lg:hidden fixed bottom-[72px] md:bottom-6 left-0 right-0 px-4 md:px-8 z-40">
                         <button
@@ -633,29 +521,20 @@ export function POSDashboard() {
                 )}
             </main>
 
-            {/* RIGHT COLUMN: Sidebar Cart (Desktop >= 1024px) */}
             <aside className="hidden lg:flex w-[380px] bg-white h-full shadow-[-4px_0_24px_rgba(0,0,0,0.02)] z-20 flex-shrink-0 flex-col border-l border-slate-100 relative">
                 <Cart
                     onCheckout={handleOpenCheckout}
-                    onSendToKDS={handleSendToKDS}
                     isSubmitting={isSubmitting}
-                    hasActiveOrder={!!activeOrderId}
                     generatedToken={generatedToken}
+                    discount={0}
                     onViewHeldOrders={() => setIsHeldOrdersModalOpen(true)}
-                    onUpdateItemNote={(productId, note) => {
-                        setCartItems(prev => prev.map(item => item.productId === productId ? { ...item, notes: note } : item));
-                    }}
                     onEdit={handleEditCartItem}
                 />
             </aside>
 
-            {/* Slide-Up Cart Drawer (Mobile/Tablet < 1024px) */}
             {isMobileCartOpen && (
                 <div className="lg:hidden fixed inset-0 z-[100] flex flex-col justify-end bg-slate-900/40 backdrop-blur-sm">
-                    {/* Dark overlay click to close */}
                     <div className="absolute inset-0" onClick={() => setIsMobileCartOpen(false)}></div>
-
-                    {/* Drawer Content */}
                     <div className="relative bg-white w-full h-[85vh] md:h-[90vh] rounded-t-3xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-full duration-300">
                         <div className="absolute top-4 right-4 z-10 text-slate-400 p-2">
                             <button onClick={() => setIsMobileCartOpen(false)} className="bg-slate-100 p-2 rounded-full hover:bg-slate-200 hover:text-slate-800 transition-colors">
@@ -664,48 +543,34 @@ export function POSDashboard() {
                         </div>
                         <Cart
                             onCheckout={handleOpenCheckout}
-                            onSendToKDS={handleSendToKDS}
                             isSubmitting={isSubmitting}
-                            hasActiveOrder={!!activeOrderId}
                             generatedToken={generatedToken}
+                            discount={0}
                             onViewHeldOrders={() => setIsHeldOrdersModalOpen(true)}
-                            onUpdateItemNote={(productId, note) => {
-                                setCartItems(prev => prev.map(item => item.productId === productId ? { ...item, notes: note } : item));
-                            }}
                             onEdit={handleEditCartItem}
                         />
                     </div>
                 </div>
             )}
 
-            {/* Held Orders Modal */}
-            <HeldOrdersModal 
-                isOpen={isHeldOrdersModalOpen} 
-                onClose={() => setIsHeldOrdersModalOpen(false)} 
+            <HeldOrdersModal
+                isOpen={isHeldOrdersModalOpen}
+                onClose={() => setIsHeldOrdersModalOpen(false)}
             />
 
-            {/* Payment Modal */}
             <CheckoutModal
                 isOpen={isCheckoutModalOpen}
                 onClose={() => setIsCheckoutModalOpen(false)}
-                totalAmount={cartTotalPrice + (cartTotalPrice * 0.04)}
+                totalAmount={cartGrandTotal}
                 onConfirm={handleConfirmCheckout}
             />
 
-            {/* Active Orders Panel */}
-            <ActiveOrdersPanel
-                isOpen={isActiveOrdersPanelOpen}
-                onClose={() => setIsActiveOrdersPanelOpen(false)}
-                onSelectOrder={handleRecallOrder}
-            />
-
-            {/* Product Selection Modal */}
             {selectedProductForModal && (
                 <ProductSelectionModal
                     product={selectedProductForModal}
                     globalAddons={
-                        globalAddons.filter(a => 
-                            a.categories?.some((c: any) => c.id === selectedProductForModal.categoryId)
+                        globalAddons.filter(a =>
+                            a.categories?.some((c: any) => c.id === (selectedProductForModal as Product).categoryId)
                         )
                     }
                     initialSize={editingItemIndex !== null ? cartItems[editingItemIndex].size : undefined}
@@ -721,7 +586,6 @@ export function POSDashboard() {
     );
 }
 
-// Helper Pill Category Component
 function PillCategory({ active, onClick, icon, title, subtitle }: { active: boolean, onClick: () => void, icon: React.ReactNode, title: string, subtitle: string }) {
     return (
         <button

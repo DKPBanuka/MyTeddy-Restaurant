@@ -92,9 +92,8 @@ export function OrderDetailsModal({ order, onClose, onRefunded }: OrderDetailsMo
                             </h3>
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2">
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
-                                        isRefunded ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'
-                                    }`}>
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${isRefunded ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'
+                                        }`}>
                                         {order.paymentStatus}
                                     </span>
                                     {order.paymentMethod && (

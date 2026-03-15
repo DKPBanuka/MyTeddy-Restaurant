@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Store, LayoutDashboard, Calendar, TrendingUp, Users, Settings, LogOut, Layers, ChevronLeft, Menu, ChefHat } from 'lucide-react';
+import { Store, LayoutDashboard, Calendar, TrendingUp, Users, Settings, LogOut, Layers, ChevronLeft, Menu } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export function SidebarLayout() {
@@ -45,12 +45,6 @@ export function SidebarLayout() {
                         <NavLink to="/" end className={navLinkClass} title="Menu">
                             <LayoutDashboard size={24} className="shrink-0" />
                             {isExpanded && <span className="whitespace-nowrap">Menu</span>}
-                        </NavLink>
-                    )}
-                    {hasPermission('KDS') && (
-                        <NavLink to="/kds" className={navLinkClass} title="Kitchen Display">
-                            <ChefHat size={24} className="shrink-0" />
-                            {isExpanded && <span className="whitespace-nowrap">Kitchen (KDS)</span>}
                         </NavLink>
                     )}
                     {hasPermission('REPORTS') && (

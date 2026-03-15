@@ -47,15 +47,6 @@ export class OrdersController {
         return this.ordersService.createOrder(createOrderDto);
     }
 
-    @Get('pending')
-    async getPendingOrders() {
-        return this.ordersService.getPendingOrders();
-    }
-
-    @Get('kitchen')
-    async getKitchenOrders() {
-        return this.ordersService.getKitchenOrders();
-    }
 
     @Get('tables/status')
     async getTableStatus() {
@@ -67,15 +58,6 @@ export class OrdersController {
         return this.ordersService.payOrder(id, body);
     }
 
-    @Patch(':id/status')
-    async updateStatus(@Param('id') id: string, @Body() body: { status: string }) {
-        return this.ordersService.updateOrderStatus(id, body.status);
-    }
-
-    @Patch(':id/undo')
-    async undoStatus(@Param('id') id: string) {
-        return this.ordersService.undoOrderStatus(id);
-    }
 
     @Patch(':id/items')
     async updateItems(@Param('id') id: string, @Body() body: { items: any[]; totalAmount: number }) {

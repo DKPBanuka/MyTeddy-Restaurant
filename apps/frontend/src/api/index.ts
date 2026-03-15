@@ -116,14 +116,7 @@ export const api = {
         const res = await apiClient.patch(`/orders/${id}/pay`, paymentDetails);
         return res.data;
     },
-    getKitchenOrders: async () => {
-        const res = await apiClient.get(`/orders/kitchen`);
-        return res.data;
-    },
-    getPendingOrders: async () => {
-        const res = await apiClient.get(`/orders/pending`);
-        return res.data;
-    },
+
     getTableStatus: async () => {
         const res = await apiClient.get(`/orders/tables/status`);
         return res.data;
@@ -134,14 +127,6 @@ export const api = {
     },
     refundOrder: async (id: string, reason: string) => {
         const res = await apiClient.patch(`/orders/${id}/refund`, { reason });
-        return res.data;
-    },
-    updateOrderStatus: async (id: string, status: string) => {
-        const res = await apiClient.patch(`/orders/${id}/status`, { status });
-        return res.data;
-    },
-    undoOrderStatus: async (id: string) => {
-        const res = await apiClient.patch(`/orders/${id}/undo`);
         return res.data;
     },
 

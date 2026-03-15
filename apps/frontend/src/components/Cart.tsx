@@ -1,29 +1,30 @@
 import { ShoppingCart, Trash2, Layers, Archive, History as HistoryIcon, Plus } from 'lucide-react';
+import { formatCurrency } from '../utils/format';
 import type { OrderItemDto } from '../types';
 import { ProductType } from '../types';
 import { useCart } from '../context/CartContext';
+import { useSettings } from '../context/SettingsContext';
 
 interface CartProps {
     onCheckout: () => void;
-    onSendToKDS: () => void;
     isSubmitting: boolean;
-    hasActiveOrder?: boolean;
     generatedToken: string | null;
-    onUpdateItemNote: (productId: string, note: string) => void;
+    discount?: number;
+    discountPercentage?: number;
     onViewHeldOrders: () => void;
     onEdit: (item: OrderItemDto) => void;
 }
 
 export function Cart({
     onCheckout,
-    onSendToKDS,
     isSubmitting,
-    hasActiveOrder,
     generatedToken,
-    onUpdateItemNote,
+    discount = 0,
+    discountPercentage,
     onViewHeldOrders,
     onEdit
 }: CartProps) {
+    const { settings } = useSettings();
     const { 
         items, orderType, orderMetadata, setOrderMetadata, 
         removeItem, updateQty, clearCart, holdOrder, heldOrders 
@@ -34,8 +35,10 @@ export function Cart({
         const addonsPrice = item.selectedAddons?.reduce((s, a) => s + Number(a.price), 0) || 0;
         return sum + (basePrice + addonsPrice) * item.quantity;
     }, 0);
-    const tax = subTotal * 0.04;
-    const totalAmount = subTotal + tax;
+
+    const taxRate = settings?.taxRate || 0;
+    const tax = subTotal * (taxRate / 100);
+    const totalAmount = Math.max(0, subTotal + tax - discount);
 
     const handleHoldClick = () => {
         const ref = window.prompt("Enter a reference name for this order (e.g., 'Guy in red shirt')", `Order ${heldOrders.length + 1}`);
@@ -194,8 +197,14 @@ export function Cart({
                                                     </div>
                                                 )}
                                                 {item.selectedAddons && item.selectedAddons.length > 0 && (
-                                                    <div className="text-[10px] font-bold text-emerald-600 mt-0.5">
-                                                        + {item.selectedAddons.map(a => a.name).join(', ')}
+                                                    <div className="text-[10px] font-bold text-emerald-600 mt-0.5 ml-1">
+                                                        {Object.values(item.selectedAddons.reduce((acc: any, addon: any) => {
+                                                            if (!acc[addon.id]) acc[addon.id] = { name: addon.name, count: 0 };
+                                                            acc[addon.id].count++;
+                                                            return acc;
+                                                        }, {})).map((a: any) => (
+                                                            <div key={a.name}>+ {a.count > 1 ? `${a.count}x ` : ''}{a.name}</div>
+                                                        ))}
                                                     </div>
                                                 )}
                                                 {!item.packageId && (
@@ -209,7 +218,7 @@ export function Cart({
                                                 )}
                                             </div>
                                             <span className="text-sm font-black text-slate-800 tracking-tight shrink-0 ml-2">
-                                                Rs. {(((item.size ? Number(item.size.price) : Number(item.product?.price || item.package?.price || 0)) + (item.selectedAddons?.reduce((s, a) => s + Number(a.price), 0) || 0)) * item.quantity).toFixed(1)}
+                                                {formatCurrency(((item.size ? Number(item.size.price) : Number(item.product?.price || item.package?.price || 0)) + (item.selectedAddons?.reduce((s: number, a: any) => s + Number(a.price), 0) || 0)) * item.quantity, settings?.currencySymbol || 'Rs.')}
                                             </span>
                                         </div>
 
@@ -227,16 +236,6 @@ export function Cart({
                                             </div>
                                         </div>
 
-                                        {/* Notes Input (FOOD ONLY) */}
-                                        {item.product?.type === ProductType.FOOD && (
-                                            <input
-                                                type="text"
-                                                placeholder="Special instructions..."
-                                                value={item.notes || ''}
-                                                onChange={(e) => onUpdateItemNote(item.productId!, e.target.value)}
-                                                className="mt-2 w-full text-xs bg-red-50/50 border border-red-100 text-red-700 placeholder:text-red-300 rounded px-2 py-1.5 focus:outline-none focus:border-red-300 focus:bg-red-50 transition-colors"
-                                            />
-                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -259,47 +258,40 @@ export function Cart({
                     </div>
 
                     <div className="space-y-3 mb-4">
-                        <div className="flex justify-between items-center text-sm">
-                            <span className="text-slate-500 font-medium">Sub Total</span>
-                            <span className="font-bold text-slate-800">Rs. {subTotal.toFixed(1)}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-sm">
-                            <span className="text-slate-500 font-medium">Tax</span>
-                            <span className="font-bold text-slate-800">Rs. {tax.toFixed(1)}</span>
-                        </div>
+                        {taxRate > 0 ? (
+                            <>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-slate-500 font-medium">Sub Total</span>
+                                    <span className="font-bold text-slate-800">{formatCurrency(subTotal, settings?.currencySymbol || 'Rs.')}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-slate-500 font-medium">Tax ({taxRate}%)</span>
+                                    <span className="font-bold text-slate-800">{formatCurrency(tax, settings?.currencySymbol || 'Rs.')}</span>
+                                </div>
+                            </>
+                        ) : null}
+                        {discount > 0 && (
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-emerald-600 font-medium">Discount{discountPercentage ? ` (${discountPercentage}%)` : ''}</span>
+                                <span className="font-bold text-emerald-600">-{formatCurrency(discount, settings?.currencySymbol || 'Rs.')}</span>
+                            </div>
+                        )}
                     </div>
 
-                    <div className="h-px w-full border-t border-dashed border-slate-200 my-4"></div>
+                    {taxRate > 0 && <div className="h-px w-full border-t border-dashed border-slate-200 my-4"></div>}
 
                     <div className="flex justify-between items-center mb-6">
-                        <span className="text-slate-500 font-medium">Total Payment</span>
-                        <span className="text-lg font-black text-slate-800">Rs. {totalAmount.toFixed(1)}</span>
+                        <span className="text-slate-500 font-medium">{taxRate > 0 ? 'Grand Total' : 'TOTAL'}</span>
+                        <span className="text-lg font-black text-slate-800">{formatCurrency(totalAmount, settings?.currencySymbol || 'Rs.')}</span>
                     </div>
 
                     {/* Payment Toggles */}
                     {/* Action Buttons */}
-                    <div className="flex gap-3 mt-6">
-                        <button
-                            onClick={onSendToKDS}
-                            disabled={items.length === 0 || isSubmitting}
-                            className={`flex-1 py-4 rounded-2xl font-black text-sm tracking-wide transition-all duration-200 shadow-md ${items.length === 0 || isSubmitting
-                                ? 'bg-orange-300 text-white/80 cursor-not-allowed shadow-none'
-                                : 'bg-orange-500 text-white hover:bg-orange-600 hover:shadow-lg active:scale-[0.98]'
-                                }`}
-                        >
-                            {isSubmitting ? (
-                                <div className="flex items-center justify-center gap-2">
-                                    <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                                </div>
-                            ) : (
-                                hasActiveOrder ? 'Update Order' : 'Send to KDS'
-                            )}
-                        </button>
-
+                    <div className="mt-6">
                         <button
                             onClick={onCheckout}
                             disabled={items.length === 0 || isSubmitting}
-                            className={`flex-1 py-4 rounded-2xl font-black text-sm tracking-wide transition-all duration-200 shadow-md ${items.length === 0 || isSubmitting
+                            className={`w-full py-4 rounded-2xl font-black text-sm tracking-wide transition-all duration-200 shadow-md ${items.length === 0 || isSubmitting
                                 ? 'bg-emerald-300 text-white/80 cursor-not-allowed shadow-none'
                                 : 'bg-emerald-500 text-white hover:bg-emerald-600 hover:shadow-lg active:scale-[0.98]'
                                 }`}
@@ -309,7 +301,7 @@ export function Cart({
                                     <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                                 </div>
                             ) : (
-                                'Pay'
+                                'Complete & Pay'
                             )}
                         </button>
                     </div>

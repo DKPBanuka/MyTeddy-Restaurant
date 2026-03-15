@@ -10,7 +10,6 @@ import { SettingsProvider } from './context/SettingsContext';
 // Pages
 import { POSDashboard } from './pages/POSDashboard';
 import { EventsDashboard } from './pages/EventsDashboard';
-import { KDSDashboard } from './pages/KDSDashboard';
 import { InventoryDashboard } from './pages/InventoryDashboard';
 import { ReportsDashboard } from './pages/ReportsDashboard';
 import { StaffDashboard } from './pages/StaffDashboard';
@@ -60,10 +59,6 @@ function App() {
 
               <Route path="/menu-management" element={<MenuManagement />} />
               <Route path="/settings" element={<Settings />} />
-
-              <Route element={<ProtectedRoute requiredPermission="KDS" />}>
-                <Route path="/kds" element={<KDSDashboard />} />
-              </Route>
 
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

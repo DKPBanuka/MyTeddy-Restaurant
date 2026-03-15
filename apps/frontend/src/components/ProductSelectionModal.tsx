@@ -22,21 +22,47 @@ export function ProductSelectionModal({
     const [selectedSize, setSelectedSize] = useState<ProductSize | undefined>(
         initialSize || (product.sizes && product.sizes.length > 0 ? product.sizes[0] : undefined)
     );
-    const [selectedAddons, setSelectedAddons] = useState<GlobalAddon[]>(initialAddons || []);
+    
+    // Track addon quantities: { [addonId]: quantity }
+    const [addonCounts, setAddonCounts] = useState<Record<string, number>>(() => {
+        const counts: Record<string, number> = {};
+        initialAddons?.forEach(a => {
+            counts[a.id] = (counts[a.id] || 0) + 1;
+        });
+        return counts;
+    });
 
-    const toggleAddon = (addon: GlobalAddon) => {
-        if (selectedAddons.find(a => a.id === addon.id)) {
-            setSelectedAddons(selectedAddons.filter(a => a.id !== addon.id));
-        } else {
-            setSelectedAddons([...selectedAddons, addon]);
-        }
+    const updateAddonCount = (addonId: string, delta: number) => {
+        setAddonCounts(prev => {
+            const newCount = Math.max(0, (prev[addonId] || 0) + delta);
+            return { ...prev, [addonId]: newCount };
+        });
     };
 
     const hasSizes = product.sizes && product.sizes.length > 0;
     const canConfirm = !hasSizes || selectedSize;
 
-    const totalPrice = (selectedSize ? Number(selectedSize.price) : Number(product.price)) + 
-                       selectedAddons.reduce((sum, a) => sum + Number(a.price), 0);
+    // Calculate total addon price considering quantities
+    const totalAddonsPrice = globalAddons.reduce((sum, a) => {
+        const count = addonCounts[a.id] || 0;
+        return sum + (Number(a.price) * count);
+    }, 0);
+
+    const totalPrice = (selectedSize ? Number(selectedSize.price) : Number(product.price)) + totalAddonsPrice;
+
+    const handleConfirm = () => {
+        // Flatten addonCounts back into a GlobalAddon array (repeating items based on count)
+        const flattenedAddons: GlobalAddon[] = [];
+        Object.entries(addonCounts).forEach(([id, count]) => {
+            const addon = globalAddons.find(a => a.id === id);
+            if (addon && count > 0) {
+                for (let i = 0; i < count; i++) {
+                    flattenedAddons.push(addon);
+                }
+            }
+        });
+        onConfirm(selectedSize, flattenedAddons);
+    };
 
     return (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
@@ -69,7 +95,7 @@ export function ProductSelectionModal({
                                             : 'border-slate-100 bg-slate-50 hover:border-slate-300'}`}
                                     >
                                         <div className="font-bold text-slate-800 text-sm">{s.name}</div>
-                                        <div className="text-blue-600 font-black text-xs mt-1">Rs. {Number(s.price).toFixed(2)}</div>
+                                        <div className="text-blue-600 font-black text-xs mt-1">Rs. {Number(s.price).toFixed(0)}</div>
                                         {selectedSize?.id === s.id && (
                                             <div className="absolute top-2 right-2 text-blue-600">
                                                 <Check size={16} strokeWidth={3} />
@@ -90,23 +116,38 @@ export function ProductSelectionModal({
                         {globalAddons.length > 0 ? (
                             <div className="grid grid-cols-1 gap-2">
                                 {globalAddons.map((a) => {
-                                    const isSelected = !!selectedAddons.find(item => item.id === a.id);
+                                    const count = addonCounts[a.id] || 0;
+                                    const isSelected = count > 0;
                                     return (
-                                        <button
+                                        <div
                                             key={a.id}
-                                            onClick={() => toggleAddon(a)}
                                             className={`p-4 rounded-2xl border-2 flex items-center justify-between transition-all ${isSelected 
                                                 ? 'border-emerald-500 bg-emerald-50/50' 
-                                                : 'border-slate-100 bg-slate-50 hover:border-slate-300'}`}
+                                                : 'border-slate-100 bg-slate-50'}`}
                                         >
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-colors ${isSelected ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white border-slate-200'}`}>
-                                                    {isSelected && <Check size={12} strokeWidth={4} />}
-                                                </div>
+                                            <div className="flex flex-col">
                                                 <div className="font-bold text-slate-700 text-sm">{a.name}</div>
+                                                <div className="text-slate-500 font-bold text-xs">Rs. {Number(a.price).toFixed(0)}</div>
                                             </div>
-                                            <div className="text-slate-500 font-bold text-xs">+ Rs. {Number(a.price).toFixed(2)}</div>
-                                        </button>
+
+                                            <div className="flex items-center gap-3 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+                                                <button 
+                                                    onClick={() => updateAddonCount(a.id, -1)}
+                                                    className="w-8 h-8 rounded-lg bg-slate-50 text-slate-600 flex items-center justify-center hover:bg-slate-100 active:scale-95 transition-all font-black"
+                                                >
+                                                    -
+                                                </button>
+                                                <span className="w-6 text-center text-sm font-black text-slate-800">
+                                                    {count}
+                                                </span>
+                                                <button 
+                                                    onClick={() => updateAddonCount(a.id, 1)}
+                                                    className="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center hover:bg-emerald-600 active:scale-95 transition-all font-black"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
+                                        </div>
                                     );
                                 })}
                             </div>
@@ -121,15 +162,15 @@ export function ProductSelectionModal({
                 <div className="px-8 py-6 bg-slate-50 border-t border-slate-100 flex flex-col gap-4">
                     <div className="flex items-center justify-between px-2">
                         <span className="text-sm font-bold text-slate-500">Total Price:</span>
-                        <span className="text-2xl font-black text-slate-800">Rs. {totalPrice.toFixed(2)}</span>
+                        <span className="text-2xl font-black text-slate-800">Rs. {totalPrice.toFixed(0)}</span>
                     </div>
                     <button 
-                        onClick={() => onConfirm(selectedSize, selectedAddons)}
+                        onClick={handleConfirm}
                         disabled={!canConfirm}
                         className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black flex items-center justify-center gap-3 hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50"
                     >
                         <ShoppingBag size={20} strokeWidth={2.5} />
-                        Add to Order &rarr;
+                        Update Order &rarr;
                     </button>
                 </div>
             </div>

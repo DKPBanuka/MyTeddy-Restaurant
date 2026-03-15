@@ -144,13 +144,25 @@ export class OrdersService {
                             currentItemPrice = Number(product.price || 0);
                         }
                     }
+
+                    // Add Addon Prices (Handling duplicate IDs for multiple quantities)
+                    let addonsTotal = 0;
+                    if (item.addonIds && item.addonIds.length > 0) {
+                        const addons = await tx.globalAddon.findMany({
+                            where: { id: { in: item.addonIds } }
+                        });
+                        const addonPriceMap = new Map(addons.map(a => [a.id, Number(a.price)]));
+                        addonsTotal = item.addonIds.reduce((sum, id) => sum + (addonPriceMap.get(id) || 0), 0);
+                    }
                     
-                    const subtotal = currentItemPrice * item.quantity;
+                    const unitPriceWithAddons = currentItemPrice + addonsTotal;
+                    const subtotal = unitPriceWithAddons * item.quantity;
                     calculatedSubTotal += subtotal;
 
                     itemsToProcess.push({
                         ...item,
                         unitPrice: currentItemPrice,
+                        unitPriceWithAddons: unitPriceWithAddons,
                         subtotal: subtotal,
                         productType
                     });
@@ -191,7 +203,7 @@ export class OrdersService {
                             packageId: itemData.packageId || null,
                             quantity: itemData.quantity,
                             unitPrice: itemData.unitPrice,
-                            priceAtTimeOfSale: itemData.unitPrice,
+                            priceAtTimeOfSale: itemData.unitPriceWithAddons,
                             subtotal: itemData.subtotal,
                             notes: itemData.notes || null,
                             sizeId: itemData.sizeId || null,
@@ -231,40 +243,13 @@ export class OrdersService {
         }
     }
 
-    async getPendingOrders() {
-        return this.prisma.order.findMany({
-            where: {
-                status: { in: ['READY'] },
-                paymentStatus: 'UNPAID',
-            },
-            include: { orderItems: { include: { product: true } } },
-            orderBy: { createdAt: 'asc' },
-        });
-    }
-
-    async getKitchenOrders() {
-        return this.prisma.order.findMany({
-            where: {
-                status: { in: ['PENDING', 'PREPARING', 'READY'] },
-            },
-            include: { 
-                orderItems: { 
-                    include: { 
-                        product: true,
-                        package: true
-                    } 
-                } 
-            },
-            orderBy: { createdAt: 'asc' },
-        });
-    }
 
     async getTableStatus() {
         // Fetch all tables with active (PENDING/PREPARING/READY) orders
         const activeOrders = await this.prisma.order.findMany({
             where: {
                 orderType: 'DINE_IN',
-                status: { in: ['PENDING', 'PREPARING', 'READY'] },
+                paymentStatus: 'UNPAID',
                 tableNumber: { not: null },
             },
             select: { id: true, tableNumber: true, status: true },
@@ -307,46 +292,6 @@ export class OrdersService {
         });
     }
 
-    async updateOrderStatus(id: string, status: string) {
-        const order = await this.prisma.order.findUnique({ where: { id } });
-        if (!order) throw new NotFoundException(`Order ${id} not found`);
-
-        return this.prisma.order.update({
-            where: { id },
-            data: { status: status as any },
-            include: { orderItems: { include: { product: true } } },
-        });
-    }
-
-    async undoOrderStatus(id: string) {
-        const order = await this.prisma.order.findUnique({ where: { id } });
-        if (!order) throw new NotFoundException(`Order ${id} not found`);
-
-        let prevStatus: string;
-        switch (order.status) {
-            case 'COMPLETED':
-                prevStatus = 'READY';
-                break;
-            case 'READY':
-                prevStatus = 'PREPARING';
-                break;
-            case 'PREPARING':
-                prevStatus = 'PENDING';
-                break;
-            default:
-                throw new BadRequestException(`Cannot undo status for order in ${order.status} state`);
-        }
-
-        return this.prisma.order.update({
-            where: { id },
-            data: { 
-                status: prevStatus as any,
-                // If undoing COMPLETED, we should also revert paymentStatus if it was linked
-                ...(order.status === 'COMPLETED' ? { paymentStatus: 'UNPAID' } : {})
-            },
-            include: { orderItems: { include: { product: true } } },
-        });
-    }
 
     async updateOrderItems(id: string, body: { items: any[]; totalAmount: number; subTotal?: number; discount?: number; grandTotal?: number }) {
         const order = await this.prisma.order.findUnique({ where: { id } });

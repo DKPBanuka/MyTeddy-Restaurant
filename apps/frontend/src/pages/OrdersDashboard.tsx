@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
-import { 
-    Search, Calendar, FileText, Download, 
+import {
+    Search, Calendar, FileText, Download,
     Printer, RotateCcw, ChevronRight, X, User,
     DollarSign, CreditCard, Banknote, AlertCircle
 } from 'lucide-react';
@@ -22,10 +22,10 @@ export function OrdersDashboard() {
 
     const { data: ordersData, isLoading } = useQuery({
         queryKey: ['orders', selectedDate, searchQuery],
-        queryFn: () => api.getOrders({ 
-            startDate: `${selectedDate}T00:00:00Z`, 
+        queryFn: () => api.getOrders({
+            startDate: `${selectedDate}T00:00:00Z`,
             endDate: `${selectedDate}T23:59:59Z`,
-            search: searchQuery 
+            search: searchQuery
         }),
     });
 
@@ -122,14 +122,14 @@ export function OrdersDashboard() {
                     <div className="flex items-center gap-3">
                         <div className="relative">
                             <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                            <input 
+                            <input
                                 type="date"
                                 value={selectedDate}
                                 onChange={(e) => setSelectedDate(e.target.value)}
                                 className="pl-12 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none font-black text-xs text-slate-700 transition-all uppercase tracking-wider"
                             />
                         </div>
-                        <button 
+                        <button
                             onClick={handleExportCSV}
                             className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
                         >
@@ -186,7 +186,7 @@ export function OrdersDashboard() {
             <div className="flex-1 overflow-hidden p-8 flex flex-col gap-6">
                 <div className="relative w-full max-w-2xl shrink-0">
                     <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                    <input 
+                    <input
                         type="text"
                         placeholder="Search Invoice #, Phone or Customer..."
                         value={searchQuery}
@@ -234,8 +234,8 @@ export function OrdersDashboard() {
                                         </td>
                                     </tr>
                                 ) : orders.map((order: any) => (
-                                    <tr 
-                                        key={order.id} 
+                                    <tr
+                                        key={order.id}
                                         className="hover:bg-slate-50/80 transition-all cursor-pointer group"
                                         onClick={() => {
                                             setSelectedOrder(order);
@@ -269,11 +269,10 @@ export function OrdersDashboard() {
                                             </div>
                                         </td>
                                         <td className="px-8 py-6">
-                                            <div className={`inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] ${
-                                                order.paymentStatus === 'PAID' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                                                order.paymentStatus === 'REFUNDED' ? 'bg-red-50 text-red-600 border border-red-100' :
-                                                'bg-amber-50 text-amber-600 border border-amber-100'
-                                            }`}>
+                                            <div className={`inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] ${order.paymentStatus === 'PAID' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                                    order.paymentStatus === 'REFUNDED' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                                        'bg-amber-50 text-amber-600 border border-amber-100'
+                                                }`}>
                                                 {order.paymentStatus}
                                             </div>
                                         </td>
@@ -310,7 +309,7 @@ export function OrdersDashboard() {
                                     </p>
                                 </div>
                             </div>
-                            <button 
+                            <button
                                 onClick={() => setIsDetailsModalOpen(false)}
                                 className="p-3 bg-white border border-slate-200 rounded-full text-slate-400 hover:text-slate-800 hover:border-slate-800 transition-all"
                             >
@@ -336,9 +335,8 @@ export function OrdersDashboard() {
                                 </div>
                                 <div className="space-y-4 text-right">
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Payment Status</p>
-                                    <div className={`inline-flex items-center px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                                        selectedOrder.paymentStatus === 'PAID' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'
-                                    }`}>
+                                    <div className={`inline-flex items-center px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${selectedOrder.paymentStatus === 'PAID' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'
+                                        }`}>
                                         {selectedOrder.paymentStatus}
                                     </div>
                                     <div className="text-sm font-black text-slate-800 flex items-center justify-end gap-2 mt-2">
@@ -404,16 +402,16 @@ export function OrdersDashboard() {
 
                         {/* Modal Actions */}
                         <div className="px-10 py-8 bg-slate-50/80 border-t border-slate-100 flex items-center gap-4">
-                            <button 
+                            <button
                                 onClick={handleReprint}
                                 className="flex-1 flex items-center justify-center gap-3 px-8 py-5 bg-white border border-slate-200 rounded-2xl font-black text-[10px] uppercase tracking-widest text-slate-700 hover:bg-slate-100 transition-all shadow-sm"
                             >
                                 <Printer size={20} />
                                 Reprint Receipt
                             </button>
-                            
+
                             {selectedOrder.paymentStatus !== 'REFUNDED' && (
-                                <button 
+                                <button
                                     onClick={() => handleVoidOrder(selectedOrder.id)}
                                     disabled={isLoadingRefund}
                                     className="flex-1 flex items-center justify-center gap-3 px-8 py-5 bg-red-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-red-700 transition-all shadow-xl shadow-red-200 disabled:opacity-50"

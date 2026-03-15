@@ -35,22 +35,38 @@ export const generatePDFReceipt = (orderData: any, orderId: string, settings?: a
     const items = orderData.orderItems || orderData.items || [];
     items.forEach((item: any) => {
         const name = item.product?.name || item.package?.name || 'Item';
-        const price = item.priceAtTimeOfSale || item.unitPrice || 0;
-        const lineTotal = price * item.quantity;
+        const basePrice = item.priceAtTimeOfSale || item.unitPrice || 0;
+        
+        // Calculate Addon Total for this line item
+        let lineAddonsTotal = 0;
+        const addonDetails: { name: string, price: number }[] = [];
+        
+        // Depending on data structure (frontend cart vs backend order)
+        if (item.selectedAddons) {
+            item.selectedAddons.forEach((a: any) => {
+                lineAddonsTotal += Number(a.price);
+                addonDetails.push({ name: a.name, price: Number(a.price) });
+            });
+        }
+        
+        const priceWithAddons = Number(basePrice) + lineAddonsTotal;
+        const lineTotal = priceWithAddons * item.quantity;
 
         tableBody.push([
             { text: name, style: 'tableCell' },
             { text: item.quantity.toString(), style: 'tableCell', alignment: 'center' as const },
-            { text: Number(price).toFixed(0), style: 'tableCell', alignment: 'right' as const },
+            { text: Number(priceWithAddons).toFixed(0), style: 'tableCell', alignment: 'right' as const },
             { text: Number(lineTotal).toFixed(0), style: 'tableCell', alignment: 'right' as const }
         ]);
         
-        // Show addons if any
-        if (item.addonIds && item.addonIds.length > 0) {
-            tableBody.push([
-                { text: ` + Addons (${item.addonIds.length})`, style: 'addonCell', colSpan: 4 },
-                {}, {}, {}
-            ]);
+        // Show individual addons if any
+        if (addonDetails.length > 0) {
+            addonDetails.forEach(addon => {
+                tableBody.push([
+                    { text: ` + ${addon.name} (Rs. ${addon.price.toFixed(0)})`, style: 'addonCell', colSpan: 4 },
+                    {}, {}, {}
+                ]);
+            });
         }
     });
 
@@ -67,7 +83,9 @@ export const generatePDFReceipt = (orderData: any, orderId: string, settings?: a
 
     const subTotal = orderData.subTotal || orderData.totalAmount || 0;
     const discount = orderData.discount || 0;
-    const grandTotal = orderData.grandTotal || orderData.totalAmount || 0;
+    const taxRate = settings?.taxRate || 0;
+    const taxAmount = Number(subTotal) * (taxRate / 100);
+    const grandTotal = orderData.grandTotal || Number(subTotal) + taxAmount - Number(discount);
 
     // Construct the Document Definition
     const documentDefinition: TDocumentDefinitions = {
@@ -90,14 +108,6 @@ export const generatePDFReceipt = (orderData: any, orderId: string, settings?: a
             { text: settings?.address || '123, Galle Road, Colombo', alignment: 'center' as const, fontSize: 8 },
             { text: `Tel: ${settings?.phone || '+94 11 234 5678'}`, alignment: 'center' as const, fontSize: 8, margin: [0, 0, 0, 5] as [number, number, number, number] },
 
-            // Token Number (Very Large & Bold)
-            { 
-                text: `TOKEN: ${orderData.tokenNumber || '---'}`, 
-                style: 'tokenHeader', 
-                alignment: 'center' as const,
-                margin: [0, 5, 0, 10] as [number, number, number, number]
-            },
-
             { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 202, y2: 0, lineWidth: 1 }] },
             
             // Order Info
@@ -105,8 +115,7 @@ export const generatePDFReceipt = (orderData: any, orderId: string, settings?: a
                 margin: [0, 8, 0, 8],
                 stack: [
                     { text: `INVOICE: ${orderData.invoiceNumber || '---'}`, bold: true },
-                    { text: `Date: ${new Date().toLocaleString()}`, fontSize: 8 },
-                    { text: `Type: ${orderData.orderType || 'TAKEAWAY'}`, fontSize: 8 }
+                    { text: `Date: ${new Date().toLocaleString()}`, fontSize: 8 }
                 ]
             },
 
@@ -132,19 +141,25 @@ export const generatePDFReceipt = (orderData: any, orderId: string, settings?: a
                     {
                         columns: [
                             { text: 'Sub Total:', alignment: 'right' as const },
-                            { text: `Rs. ${Number(subTotal).toFixed(2)}`, alignment: 'right' as const, width: 60 }
+                            { text: `Rs. ${Number(subTotal).toFixed(0)}`, alignment: 'right' as const, width: 60 }
                         ]
                     },
-                    {
+                    ...(discount > 0 ? [{
                         columns: [
                             { text: 'Discount:', alignment: 'right' as const },
-                            { text: `-Rs. ${Number(discount).toFixed(2)}`, alignment: 'right' as const, width: 60 }
+                            { text: `-Rs. ${Number(discount).toFixed(0)}`, alignment: 'right' as const, width: 60 }
                         ]
-                    },
+                    }] : []),
+                    ...(taxRate > 0 ? [{
+                        columns: [
+                            { text: `Tax (${taxRate}%):`, alignment: 'right' as const },
+                            { text: `Rs. ${Number(taxAmount).toFixed(0)}`, alignment: 'right' as const, width: 60 }
+                        ]
+                    }] : []),
                     {
                         columns: [
                             { text: 'GRAND TOTAL:', style: 'totalLabel', alignment: 'right' as const },
-                            { text: `Rs. ${Number(grandTotal).toFixed(2)}`, style: 'totalLabel', alignment: 'right' as const, width: 60 }
+                            { text: `Rs. ${Number(grandTotal).toFixed(0)}`, style: 'totalLabel', alignment: 'right' as const, width: 60 }
                         ],
                         margin: [0, 4, 0, 0] as [number, number, number, number]
                     }
@@ -160,8 +175,7 @@ export const generatePDFReceipt = (orderData: any, orderId: string, settings?: a
             },
 
             // Footer
-            { text: settings?.receiptFooter || 'THANK YOU! COME AGAIN', style: 'footer', alignment: 'center' as const },
-            { text: 'Software by MyTeddy POS', fontSize: 7, alignment: 'center' as const, color: '#888888', margin: [0, 5, 0, 0] as [number, number, number, number] }
+            { text: settings?.receiptFooter || 'THANK YOU! COME AGAIN', style: 'footer', alignment: 'center' as const }
         ],
 
         styles: {
@@ -169,11 +183,6 @@ export const generatePDFReceipt = (orderData: any, orderId: string, settings?: a
                 fontSize: 12,
                 bold: true,
                 margin: [0, 0, 0, 2]
-            },
-            tokenHeader: {
-                fontSize: 24,
-                bold: true,
-                color: '#000000'
             },
             tableHeader: {
                 bold: true,
@@ -199,7 +208,6 @@ export const generatePDFReceipt = (orderData: any, orderId: string, settings?: a
         }
     };
 
-    // Build and Download the PDF (In a real browser this triggers download, 
-    // for thermal printers we usually use print() on an iframe or similar)
-    pdfMake.createPdf(documentDefinition).download(`Invoice_${orderData.invoiceNumber || orderId}.pdf`);
+    // Build and Print the PDF
+    pdfMake.createPdf(documentDefinition).print();
 };
