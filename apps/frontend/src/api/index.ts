@@ -67,7 +67,7 @@ export interface PartyBookingDto {
     addonsTotal?: number;
     totalAmount?: number;
     advancePaid?: number;
-    bookingType: 'PARTIAL' | 'EXCLUSIVE';
+    bookingType: 'PARTIAL' | 'FULL' | 'EXCLUSIVE';
     status?: string;
     createdAt?: string;
 }

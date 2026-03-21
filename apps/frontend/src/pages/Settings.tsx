@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 
 export const Settings: React.FC = () => {
   const { settings, isLoading, updateSettings } = useSettings();
-  const [activeTab, setActiveTab] = useState<'profile' | 'billing' | 'receipt'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'billing' | 'receipt' | 'party'>('profile');
   const [isSaving, setIsSaving] = useState(false);
 
   const [formData, setFormData] = React.useState<Partial<RestaurantSettings>>(settings || {});
@@ -80,6 +80,12 @@ export const Settings: React.FC = () => {
           className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${activeTab === 'receipt' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
         >
           Receipt Customization
+        </button>
+        <button
+          onClick={() => setActiveTab('party')}
+          className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${activeTab === 'party' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Party Bookings
         </button>
       </div>
 
@@ -321,7 +327,45 @@ export const Settings: React.FC = () => {
             </div>
           </div>
         )}
+
+        {activeTab === 'party' && (
+          <div className="grid grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-tight">Party Exclusive Hall Charge</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-400">Rs.</span>
+                  <input
+                    type="number"
+                    name="partyExclusiveCharge"
+                    step="0.01"
+                    value={formData.partyExclusiveCharge || 5000}
+                    onChange={handleChange}
+                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-600 outline-none transition-all font-medium"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-tight">Required Advance (%)</label>
+                 <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-400">%</span>
+                  <input
+                    type="number"
+                    name="partyAdvancePercentage"
+                    step="0.01"
+                    value={formData.partyAdvancePercentage || 30}
+                    onChange={handleChange}
+                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-600 outline-none transition-all font-medium"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
+

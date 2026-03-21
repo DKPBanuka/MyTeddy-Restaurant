@@ -17,6 +17,8 @@ export interface RestaurantSettings {
   receiptFooter?: string;
   qrCodeUrl?: string;
   wifiPassword?: string;
+  partyExclusiveCharge: number;
+  partyAdvancePercentage: number;
 }
 
 interface SettingsContextType {

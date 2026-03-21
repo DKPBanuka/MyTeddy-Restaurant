@@ -10,4 +10,6 @@ export class UpdateSettingsDto {
   receiptFooter?: string;
   qrCodeUrl?: string;
   wifiPassword?: string;
+  partyExclusiveCharge?: number;
+  partyAdvancePercentage?: number;
 }

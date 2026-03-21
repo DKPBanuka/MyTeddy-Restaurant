@@ -3,7 +3,7 @@ import { api } from '../api';
 import type { Category, Product } from '../types';
 import { ProductType } from '../types';
 import { toast } from 'sonner';
-import { Plus, Trash2, Edit2, Save, X, Layers, ShoppingBag, Search, Upload, Loader2, Calendar as CalendarIcon } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, Layers, ShoppingBag, Search, Upload, Loader2, Calendar as CalendarIcon, Package as PackageIcon } from 'lucide-react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -186,7 +186,7 @@ export function MenuManagement() {
             )}
 
             {activeTab === 'PACKAGES' && (
-                <PackagesManager onRefresh={invalidateAll} />
+                <PackagesManager products={products} onRefresh={invalidateAll} />
             )}
         </div>
     );
@@ -706,7 +706,7 @@ function GlobalAddonsManager({ categories, onRefresh }: { categories: Category[]
     );
 }
 
-function PackagesManager({ onRefresh }: { onRefresh: () => void }) {
+function PackagesManager({ products, onRefresh }: { products: Product[], onRefresh: () => void }) {
     const [packages, setPackages] = useState<any[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingPackage, setEditingPackage] = useState<any | null>(null);
@@ -737,22 +737,62 @@ function PackagesManager({ onRefresh }: { onRefresh: () => void }) {
                 <Plus size={18} /> Add Package
             </button>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {packages.map(pkg => (
-                    <div key={pkg.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-all group">
-                        {pkg.imageUrl && <img src={pkg.imageUrl} className="w-full h-40 object-cover" />}
-                        <div className="p-5">
-                            <div className="flex justify-between items-start mb-2">
-                                <h3 className="font-bold text-slate-800">{pkg.name}</h3>
-                                <span className="text-blue-600 font-black">Rs. {Number(pkg.price).toFixed(2)}</span>
+                {packages.map(pkg => {
+                    // Calculate "Laabaya" (Savings)
+                    const individualTotal = pkg.items?.reduce((sum: number, pkgItem: any) => {
+                        const product = products.find(p => p.id === pkgItem.productId);
+                        const size = product?.sizes?.find((s: any) => s.id === pkgItem.sizeId);
+                        const price = size ? parseFloat(size.price) : parseFloat(product?.price || '0');
+                        return sum + (price * pkgItem.quantity);
+                    }, 0) || 0;
+                    const laabaya = individualTotal - parseFloat(pkg.price || '0');
+
+                    return (
+                        <div key={pkg.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-all group flex flex-col">
+                            <div className="relative h-40 overflow-hidden">
+                                {pkg.imageUrl ? (
+                                    <img src={pkg.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                ) : (
+                                    <div className="w-full h-full bg-slate-50 flex items-center justify-center text-slate-200">
+                                        <PackageIcon size={48} />
+                                    </div>
+                                )}
+                                {laabaya > 0 && (
+                                    <div className="absolute bottom-3 left-3 bg-green-500 text-white px-2 py-1 rounded-lg font-black text-[8px] uppercase tracking-widest shadow-lg shadow-green-500/20">
+                                        Save Rs. {laabaya.toLocaleString()}
+                                    </div>
+                                )}
                             </div>
-                            <p className="text-sm text-slate-500 mb-4 line-clamp-2">{pkg.description}</p>
-                            <div className="flex justify-end gap-2">
-                                <button onClick={() => { setEditingPackage(pkg); setIsModalOpen(true); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 size={16} /></button>
-                                <button onClick={() => handleDelete(pkg.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
+                            <div className="p-5 flex-1 flex flex-col">
+                                <div className="flex justify-between items-start mb-2">
+                                    <h3 className="font-bold text-slate-800">{pkg.name}</h3>
+                                    <span className="text-blue-600 font-black">Rs. {Number(pkg.price).toFixed(2)}</span>
+                                </div>
+                                
+                                <div className="mt-2 space-y-1 mb-4">
+                                    <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest mb-1.5">Includes:</p>
+                                    <div className="bg-slate-50/80 rounded-xl p-2.5 border border-slate-100/50">
+                                        {pkg.items?.map((pkgI: any, idx: number) => {
+                                            const product = products.find(p => p.id === pkgI.productId);
+                                            return (
+                                                <div key={idx} className="text-[9px] font-bold text-slate-600 flex justify-between gap-2 mb-1 last:mb-0">
+                                                    <span className="truncate">{product?.name || 'Unknown Item'}</span>
+                                                    <span className="text-slate-400 shrink-0">x{pkgI.quantity}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <p className="text-sm text-slate-500 mb-4 line-clamp-2 italic">{pkg.description || 'Premium selection.'}</p>
+                                <div className="flex justify-end gap-2 mt-auto">
+                                    <button onClick={() => { setEditingPackage(pkg); setIsModalOpen(true); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 size={16} /></button>
+                                    <button onClick={() => handleDelete(pkg.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
             {isModalOpen && (
                 <PackageModal 

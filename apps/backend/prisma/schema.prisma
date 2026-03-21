@@ -284,6 +284,8 @@ model RestaurantSettings {
   receiptFooter   String?
   qrCodeUrl       String?
   wifiPassword    String?
+  partyExclusiveCharge Float @default(5000)
+  partyAdvancePercentage Float @default(30)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

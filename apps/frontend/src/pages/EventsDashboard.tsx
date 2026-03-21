@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, Search, Calendar as CalendarIcon, Users, Clock, Loader2, Eye } from 'lucide-react';
+import { Plus, Search, Calendar as CalendarIcon, Users, Clock, Eye } from 'lucide-react';
 import { api } from '../api';
 import type { PartyBookingDto } from '../api';
 import { BookingDetailDrawer } from '../components/BookingDetailDrawer';
@@ -49,16 +49,6 @@ export function EventsDashboard() {
     }, [fetchBookings]);
 
     // --- Helper Functions ---
-    const timeToHours = (timeStr: string) => {
-        // Handle ISO string from backend
-        if (timeStr.includes('T')) {
-            const date = new Date(timeStr);
-            return date.getHours() + date.getMinutes() / 60;
-        }
-        // Handle HH:mm string
-        const [h, m] = timeStr.split(':').map(Number);
-        return h + m / 60;
-    };
 
     const formatTime = (isoStr: string) => {
         return new Date(isoStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
@@ -70,27 +60,6 @@ export function EventsDashboard() {
         return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
     };
 
-    const checkOverlap = (slotStartTime: number, durationHrs: number) => {
-        const slotEndTime = slotStartTime + durationHrs;
-        return bookings.some(b => {
-            const bDate = new Date(b.eventDate).toDateString();
-            if (bDate !== selectedDate.toDateString()) return false;
-
-            const bStart = timeToHours(b.startTime);
-            let bEnd = timeToHours(b.endTime);
-            if (bEnd === 0 || bEnd < bStart) bEnd = 24;
-
-            return (slotStartTime < bEnd && slotEndTime > bStart);
-        });
-    };
-
-    const handleSlotClick = (slot: number) => {
-        if (checkOverlap(slot, duration)) {
-            toast.error(`Cannot select this time slot. It overlaps with an existing booking.`);
-            return;
-        }
-        setSelectedSlot(slot);
-    };
 
     // --- Computed Data ---
     const filteredList = useMemo(() => {
@@ -189,9 +158,9 @@ export function EventsDashboard() {
             <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
 
                 {/* Left: Calendar & Stats */}
-                <div className="w-full lg:w-[380px] bg-white border-r border-slate-200 shrink-0 flex flex-col overflow-y-auto custom-scrollbar">
-                    <div className="p-6 space-y-8">
-                        <div className="bg-slate-50 border border-slate-100 rounded-[2rem] p-4 shadow-sm">
+                <div className="w-full lg:w-[400px] bg-white border-r border-slate-200 shrink-0 flex flex-col overflow-y-auto custom-scrollbar">
+                    <div className="p-6 space-y-6">
+                        <div className="bg-slate-50 border border-slate-100 rounded-[2.5rem] p-4 shadow-sm">
                             <div className="custom-calendar-container">
                                 <Calendar
                                     onChange={(val) => setSelectedDate(val as Date)}
@@ -203,137 +172,143 @@ export function EventsDashboard() {
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-50">
-                                <p className="text-blue-600 font-black text-xs uppercase tracking-wider mb-1">Total</p>
-                                <p className="text-2xl font-black text-slate-800">{isLoading ? '...' : totalThisMonth}</p>
+                            <div className="bg-blue-50/50 rounded-3xl p-5 border border-blue-50">
+                                <p className="text-blue-600 font-black text-[10px] uppercase tracking-widest mb-1">Total</p>
+                                <p className="text-3xl font-black text-slate-800">{isLoading ? '...' : totalThisMonth}</p>
                             </div>
-                            <div className="bg-amber-50/50 rounded-2xl p-4 border border-amber-50">
-                                <p className="text-amber-600 font-black text-xs uppercase tracking-wider mb-1">Exclusive</p>
-                                <p className="text-2xl font-black text-slate-800">{isLoading ? '...' : exclusiveThisMonth}</p>
+                            <div className="bg-amber-50/50 rounded-3xl p-5 border border-amber-50">
+                                <p className="text-amber-600 font-black text-[10px] uppercase tracking-widest mb-1">Exclusive</p>
+                                <p className="text-3xl font-black text-slate-800">{isLoading ? '...' : exclusiveThisMonth}</p>
                             </div>
                         </div>
 
+                        {/* Search Result Indicator */}
                         {(searchQuery || filter !== 'ALL') && (
                             <div className="bg-blue-600 rounded-2xl p-4 text-white flex items-center justify-between">
                                 <span className="text-xs font-black">{filteredList.length} matches found</span>
                                 <button onClick={() => { setSearchQuery(''); setFilter('ALL'); }} className="text-[10px] font-black underline uppercase">Clear</button>
                             </div>
                         )}
+
+                        <div className="bg-slate-900 rounded-[2rem] p-6 text-white overflow-hidden relative group">
+                            <div className="relative z-10">
+                                <h3 className="font-black text-lg mb-1">Quick Action</h3>
+                                <p className="text-slate-400 text-xs font-bold mb-4">Launch the interactive timeline to manage slots</p>
+                                <button
+                                    onClick={() => {
+                                        setIsSelectingForNewParty(false);
+                                        setIsScheduleModalOpen(true);
+                                    }}
+                                    className="w-full bg-white text-slate-900 py-3 rounded-xl font-black text-sm hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <Clock size={16} />
+                                    Open Timeline
+                                </button>
+                            </div>
+                            <Clock className="absolute -right-4 -bottom-4 text-white/5 group-hover:text-white/10 transition-colors" size={120} />
+                        </div>
                     </div>
                 </div>
 
-                {/* Right: Interactive Timeline (30-min grid) */}
-                <div className="flex-1 bg-slate-50 overflow-y-auto p-4 md:p-8 custom-scrollbar relative">
-                    <div className="max-w-4xl mx-auto space-y-6">
+                {/* Right: Dashboard View */}
+                <div className="flex-1 bg-slate-50 overflow-y-auto custom-scrollbar focus:outline-none">
+                    <div className="p-8 space-y-8 max-w-[1200px] mx-auto">
 
-                        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                            <div>
-                                <h2 className="text-3xl font-black text-slate-800 tracking-tight">
-                                    {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                        {/* Horizontal Scroll for Selected Date Parties */}
+                        <section>
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+                                    <Clock className="text-blue-600" size={20} />
+                                    Daily Schedule — {selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                 </h2>
-                                <p className="text-slate-500 font-bold mt-1">
-                                    {isLoading ? 'Refreshing schedule...' : `${selectedDateBookings.length} events today`}
-                                </p>
+                                <span className="text-xs font-black text-slate-400 uppercase tracking-widest bg-white px-3 py-1 rounded-full border border-slate-200">
+                                    {selectedDateBookings.length} Events
+                                </span>
                             </div>
-                            <div className="flex bg-white p-1 rounded-2xl border border-slate-200 shadow-sm shrink-0">
-                                {[2, 3, 4, 5].map(hrs => (
-                                    <button
-                                        key={hrs}
-                                        onClick={() => { setDuration(hrs); setSelectedSlot(null); }}
-                                        className={`px-4 py-2 text-xs font-black rounded-xl transition-all ${duration === hrs ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}
-                                    >
-                                        {hrs}h Duration
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
 
-                        {/* Interactive Grid */}
-                        <div className="bg-white border border-slate-200 rounded-[2.5rem] overflow-hidden shadow-xl shadow-slate-200/50 flex flex-col relative">
-                            <div className="w-full relative" style={{ height: `${(24 - 8) * 80}px` }}>
-
-                                {isLoading && (
-                                    <div className="absolute inset-0 bg-white/60 z-30 backdrop-blur-[1px] flex items-center justify-center">
-                                        <Loader2 className="animate-spin text-blue-500" size={32} />
-                                    </div>
-                                )}
-
-                                {Array.from({ length: 32 }, (_, i) => 8 + i * 0.5).map(slotTime => (
-                                    <div
-                                        key={slotTime}
-                                        className={`absolute w-full flex border-b ${slotTime % 1 === 0 ? 'border-slate-100' : 'border-slate-50'}`}
-                                        style={{ top: `${(slotTime - 8) * 80}px`, height: '40px' }}
-                                    >
-                                        <div className="w-20 shrink-0 border-r border-slate-100 flex justify-center pt-2">
-                                            {slotTime % 1 === 0 && (
-                                                <span className="text-[10px] font-black text-slate-300 relative top-[-14px] bg-white px-2">{slotTime}:00</span>
-                                            )}
-                                        </div>
-                                        <div
-                                            className={`flex-1 relative cursor-pointer transition-colors ${checkOverlap(slotTime, duration) ? 'bg-red-50/30 cursor-not-allowed' : 'hover:bg-blue-50/50'}`}
-                                            onClick={() => handleSlotClick(slotTime)}
-                                        ></div>
-                                    </div>
-                                ))}
-
-                                {/* Events */}
-                                {selectedDateBookings.map((b, idx) => {
-                                    const startHr = timeToHours(b.startTime);
-                                    let endHr = timeToHours(b.endTime);
-                                    if (endHr === 0 || endHr < startHr) endHr = 24;
-
-                                    const top = (startHr - 8) * 80;
-                                    const height = (endHr - startHr) * 80;
-
-                                    return (
+                            <div className="flex gap-4 overflow-x-auto pb-4 custom-horizontal-scroll">
+                                {selectedDateBookings.length > 0 ? (
+                                    selectedDateBookings.map((b, idx) => (
                                         <div
                                             key={idx}
                                             onClick={() => { setViewedBooking(b); setIsDetailDrawerOpen(true); }}
-                                            className={`absolute left-24 right-4 rounded-3xl p-5 border shadow-sm transition-all cursor-pointer hover:scale-[1.01] hover:shadow-xl active:scale-95 z-10 ${b.bookingType === 'EXCLUSIVE' ? 'bg-amber-500 text-amber-950 border-amber-600 shadow-amber-200/50' : 'bg-white border-slate-100 shadow-slate-200/50'}`}
-                                            style={{ top: `${top + 6}px`, height: `${height - 12}px` }}
+                                            className={`min-w-[280px] p-5 rounded-3xl border shadow-sm cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl group relative overflow-hidden ${b.bookingType === 'EXCLUSIVE' ? 'bg-amber-500 border-amber-600' : 'bg-white border-slate-200'}`}
                                         >
-                                            <div className="flex flex-col h-full justify-center">
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <h4 className="font-black text-sm md:text-lg tracking-tight uppercase">{b.customerName}</h4>
-                                                    {b.bookingType === 'EXCLUSIVE' && <span className="text-[10px] font-black bg-white/40 px-2 py-0.5 rounded-lg border border-white/20">EXCLUSIVE</span>}
+                                            <div className="relative z-10">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className={`p-2 rounded-xl ${b.bookingType === 'EXCLUSIVE' ? 'bg-amber-600' : 'bg-blue-50'}`}>
+                                                        <Users size={18} className={b.bookingType === 'EXCLUSIVE' ? 'text-white' : 'text-blue-600'} />
+                                                    </div>
+                                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg border ${b.bookingType === 'EXCLUSIVE' ? 'bg-white/20 border-white/30 text-white' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
+                                                        {b.bookingType}
+                                                    </span>
                                                 </div>
-                                                <div className={`flex items-center gap-3 text-xs font-bold ${b.bookingType === 'EXCLUSIVE' ? 'text-amber-900/80' : 'text-slate-400'}`}>
-                                                    <span className="flex items-center gap-1"><Clock size={12} /> {formatTime(b.startTime)} - {formatTime(b.endTime)}</span>
-                                                    <span className="flex items-center gap-1"><Users size={12} /> {b.guestCount} PAX</span>
+                                                <h4 className={`font-black text-lg mb-1 truncate ${b.bookingType === 'EXCLUSIVE' ? 'text-white' : 'text-slate-800'}`}>
+                                                    {b.customerName}
+                                                </h4>
+                                                <div className={`flex items-center gap-3 text-xs font-bold ${b.bookingType === 'EXCLUSIVE' ? 'text-amber-100' : 'text-slate-400'}`}>
+                                                    <span className="flex items-center gap-1"><Clock size={12} /> {formatTime(b.startTime)}</span>
+                                                    <span>•</span>
+                                                    <span>{b.guestCount} PAX</span>
                                                 </div>
                                             </div>
+                                            {b.bookingType === 'EXCLUSIVE' && <Users className="absolute -right-4 -bottom-4 text-white/10" size={80} />}
                                         </div>
-                                    );
-                                })}
-
-                                {/* Active Selection */}
-                                {selectedSlot !== null && (
-                                    <div
-                                        className="absolute left-24 right-4 bg-blue-600 text-white rounded-[2rem] p-6 shadow-2xl shadow-blue-400/40 z-20 flex flex-col md:flex-row items-center justify-between border-4 border-blue-400 animate-in fade-in zoom-in duration-200"
-                                        style={{ top: `${(selectedSlot - 8) * 80 + 4}px`, height: `${duration * 80 - 8}px` }}
-                                    >
-                                        <div>
-                                            <p className="font-black text-lg">Book {duration}h Session</p>
-                                            <p className="text-blue-100 text-sm font-bold">{formatDecimalTime(selectedSlot)} — {formatDecimalTime(selectedSlot + duration)}</p>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => setIsModalOpen(true)}
-                                                className="bg-white text-blue-600 px-6 py-2.5 rounded-2xl font-black text-sm hover:shadow-lg transition-all active:scale-90"
-                                            >
-                                                Next
-                                            </button>
-                                            <button
-                                                onClick={() => setSelectedSlot(null)}
-                                                className="w-10 h-10 rounded-2xl bg-blue-700 text-white flex items-center justify-center hover:bg-blue-800 font-bold"
-                                            >
-                                                ✕
-                                            </button>
-                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="w-full py-12 flex flex-col items-center justify-center bg-white rounded-3xl border border-dashed border-slate-300">
+                                        <CalendarIcon className="text-slate-200 mb-2" size={40} />
+                                        <p className="text-slate-400 font-bold text-sm italic">No parties scheduled for this date</p>
                                     </div>
                                 )}
                             </div>
-                        </div>
+                        </section>
+
+                        {/* Recent & Upcoming Events Vertical List */}
+                        <section className="space-y-4">
+                            <h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+                                <Plus className="text-blue-600" size={20} />
+                                Upcoming Bookings
+                            </h2>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {filteredList.length > 0 ? (
+                                    filteredList.map((b, idx) => (
+                                        <div
+                                            key={idx}
+                                            onClick={() => { setViewedBooking(b); setIsDetailDrawerOpen(true); }}
+                                            className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between group hover:border-blue-200 hover:shadow-md transition-all cursor-pointer"
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-14 h-14 bg-slate-50 rounded-2xl flex flex-col items-center justify-center border border-slate-100 group-hover:bg-blue-50 transition-colors">
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase">
+                                                        {new Date(b.eventDate).toLocaleDateString('en-US', { month: 'short' })}
+                                                    </span>
+                                                    <span className="text-lg font-black text-slate-800">
+                                                        {new Date(b.eventDate).toLocaleDateString('en-US', { day: 'numeric' })}
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-black text-slate-800 group-hover:text-blue-700 transition-colors">{b.customerName}</h4>
+                                                    <p className="text-xs font-bold text-slate-400 flex items-center gap-1">
+                                                        <Clock size={12} /> {formatTime(b.startTime)} — {b.guestCount} Pax
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className={`px-3 py-1 rounded-xl text-[10px] font-black border ${b.status === 'CONFIRMED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                                                {b.status}
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="col-span-full py-20 flex flex-col items-center justify-center bg-slate-100 rounded-[3rem] border border-slate-200/50">
+                                        <Search className="text-slate-300 mb-4" size={48} />
+                                        <p className="text-slate-500 font-black text-lg">No bookings matches your search</p>
+                                        <button onClick={() => { setSearchQuery(''); setFilter('ALL'); }} className="mt-4 text-blue-600 font-black text-sm hover:underline">Clear all filters</button>
+                                    </div>
+                                )}
+                            </div>
+                        </section>
                     </div>
                 </div>
             </div>
@@ -396,6 +371,9 @@ export function EventsDashboard() {
                 .custom-scrollbar::-webkit-scrollbar { width: 5px; }
                 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
                 .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+                .custom-horizontal-scroll::-webkit-scrollbar { height: 4px; }
+                .custom-horizontal-scroll::-webkit-scrollbar-track { background: transparent; }
+                .custom-horizontal-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
             `}</style>
         </main>
     );
