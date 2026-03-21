@@ -36,4 +36,14 @@ export class PartyBookingsController {
     async addExtras(@Param('id') id: string, @Body() body: { addonsAmount: number }) {
         return this.partyBookingsService.addExtras(id, body.addonsAmount);
     }
+
+    @Patch(':id/items')
+    async updateItems(@Param('id') id: string, @Body() body: { items: any[], menuTotal: number }) {
+        return this.partyBookingsService.updateItems(id, body.items, body.menuTotal);
+    }
+
+    @Patch(':id')
+    async updateBooking(@Param('id') id: string, @Body() updateData: any) {
+        return this.partyBookingsService.updateBooking(id, updateData);
+    }
 }

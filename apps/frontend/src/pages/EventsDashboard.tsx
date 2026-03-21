@@ -36,6 +36,14 @@ export function EventsDashboard() {
             const month = date.getMonth() + 1;
             const bData = await api.getPartyBookings({ month, year });
             setBookings(bData);
+            
+            // If the drawer is currently open, we must swap its reference to the fresh one to trigger a UI render
+            setViewedBooking(prev => {
+                if (!prev) return null;
+                const freshBooking = bData.find((b: any) => b.id === prev.id);
+                return freshBooking || prev;
+            });
+            
         } catch (err: any) {
             console.error('Failed to fetch data:', err);
             toast.error('Could not load booking data.');
@@ -63,7 +71,7 @@ export function EventsDashboard() {
 
     // --- Computed Data ---
     const filteredList = useMemo(() => {
-        return bookings.filter(b => {
+        const results = bookings.filter(b => {
             const matchesSearch = b.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 b.customerPhone.includes(searchQuery);
             if (!matchesSearch) return false;
@@ -79,6 +87,18 @@ export function EventsDashboard() {
                 return bDate >= now && bDate <= weekEnd;
             }
             return true;
+        });
+
+        results.sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
+
+        const today = new Date();
+        today.setHours(0,0,0,0);
+
+        return results.sort((a,b) => {
+            const aIsPast = new Date(a.eventDate).getTime() < today.getTime() ? 1 : 0;
+            const bIsPast = new Date(b.eventDate).getTime() < today.getTime() ? 1 : 0;
+            if (aIsPast !== bIsPast) return aIsPast - bIsPast;
+            return 0;
         });
     }, [bookings, searchQuery, filter]);
 
@@ -100,10 +120,10 @@ export function EventsDashboard() {
     };
 
     return (
-        <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50 font-sans">
+        <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50/50 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px] font-sans relative">
 
             {/* Header */}
-            <header className="px-8 py-6 border-b border-slate-200 bg-white z-10 shrink-0 shadow-sm">
+            <header className="px-8 py-6 border-b border-white/50 bg-white/70 backdrop-blur-2xl z-20 shrink-0 shadow-[0_4px_30px_rgb(0,0,0,0.03)]">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-center gap-8">
                         <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
@@ -158,9 +178,9 @@ export function EventsDashboard() {
             <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
 
                 {/* Left: Calendar & Stats */}
-                <div className="w-full lg:w-[400px] bg-white border-r border-slate-200 shrink-0 flex flex-col overflow-y-auto custom-scrollbar">
+                <div className="w-full lg:w-[400px] bg-white/60 backdrop-blur-3xl border-r border-white/60 shrink-0 flex flex-col overflow-y-auto custom-scrollbar shadow-[4px_0_24px_rgb(0,0,0,0.02)] z-10">
                     <div className="p-6 space-y-6">
-                        <div className="bg-slate-50 border border-slate-100 rounded-[2.5rem] p-4 shadow-sm">
+                        <div className="bg-white/80 border border-white rounded-[2.5rem] p-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all">
                             <div className="custom-calendar-container">
                                 <Calendar
                                     onChange={(val) => setSelectedDate(val as Date)}
@@ -211,8 +231,8 @@ export function EventsDashboard() {
                 </div>
 
                 {/* Right: Dashboard View */}
-                <div className="flex-1 bg-slate-50 overflow-y-auto custom-scrollbar focus:outline-none">
-                    <div className="p-8 space-y-8 max-w-[1200px] mx-auto">
+                <div className="flex-1 bg-transparent overflow-y-auto custom-scrollbar focus:outline-none scroll-smooth relative z-0">
+                    <div className="p-8 space-y-8 max-w-[1200px] mx-auto pb-32">
 
                         {/* Horizontal Scroll for Selected Date Parties */}
                         <section>
@@ -232,7 +252,7 @@ export function EventsDashboard() {
                                         <div
                                             key={idx}
                                             onClick={() => { setViewedBooking(b); setIsDetailDrawerOpen(true); }}
-                                            className={`min-w-[280px] p-5 rounded-3xl border shadow-sm cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl group relative overflow-hidden ${b.bookingType === 'EXCLUSIVE' ? 'bg-amber-500 border-amber-600' : 'bg-white border-slate-200'}`}
+                                            className={`min-w-[280px] p-5 rounded-3xl border shadow-[0_8px_30px_rgb(0,0,0,0.05)] cursor-pointer transition-all hover:scale-[1.02] hover:shadow-[0_8px_30px_rgb(0,0,0,0.1)] group relative overflow-hidden ${b.bookingType === 'EXCLUSIVE' ? 'bg-gradient-to-br from-amber-500 to-amber-600 border-amber-400' : 'bg-white/90 backdrop-blur-md border-white'}`}
                                         >
                                             <div className="relative z-10">
                                                 <div className="flex justify-between items-start mb-4">
@@ -267,39 +287,49 @@ export function EventsDashboard() {
                         {/* Recent & Upcoming Events Vertical List */}
                         <section className="space-y-4">
                             <h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-                                <Plus className="text-blue-600" size={20} />
-                                Upcoming Bookings
+                                <CalendarIcon className="text-blue-600" size={20} />
+                                Monthly Bookings Outlook
                             </h2>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto custom-scrollbar pr-3 pb-8">
                                 {filteredList.length > 0 ? (
-                                    filteredList.map((b, idx) => (
+                                    filteredList.map((b, idx) => {
+                                        const eventDate = new Date(b.eventDate);
+                                        eventDate.setHours(0,0,0,0);
+                                        const today = new Date();
+                                        today.setHours(0,0,0,0);
+                                        const isPast = eventDate.getTime() < today.getTime();
+                                        return (
                                         <div
                                             key={idx}
                                             onClick={() => { setViewedBooking(b); setIsDetailDrawerOpen(true); }}
-                                            className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between group hover:border-blue-200 hover:shadow-md transition-all cursor-pointer"
+                                            className={`bg-white/90 backdrop-blur-sm p-5 rounded-3xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex items-center justify-between group hover:border-blue-200 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all cursor-pointer ${isPast ? 'opacity-50 grayscale hover:grayscale-0 focus:grayscale-0' : ''}`}
                                         >
                                             <div className="flex items-center gap-4">
-                                                <div className="w-14 h-14 bg-slate-50 rounded-2xl flex flex-col items-center justify-center border border-slate-100 group-hover:bg-blue-50 transition-colors">
-                                                    <span className="text-[10px] font-black text-slate-400 uppercase">
+                                                <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center border transition-all ${isPast ? 'bg-slate-100 border-slate-200' : 'bg-blue-50/50 border-blue-100 group-hover:bg-blue-100'}`}>
+                                                    <span className={`text-[10px] font-black uppercase tracking-widest ${isPast ? 'text-slate-400' : 'text-blue-500'}`}>
                                                         {new Date(b.eventDate).toLocaleDateString('en-US', { month: 'short' })}
                                                     </span>
-                                                    <span className="text-lg font-black text-slate-800">
+                                                    <span className={`text-lg font-black ${isPast ? 'text-slate-500' : 'text-blue-800'}`}>
                                                         {new Date(b.eventDate).toLocaleDateString('en-US', { day: 'numeric' })}
                                                     </span>
                                                 </div>
                                                 <div>
-                                                    <h4 className="font-black text-slate-800 group-hover:text-blue-700 transition-colors">{b.customerName}</h4>
-                                                    <p className="text-xs font-bold text-slate-400 flex items-center gap-1">
+                                                    <h4 className={`font-black transition-colors ${isPast ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-800 group-hover:text-blue-700'}`}>{b.customerName}</h4>
+                                                    <p className="text-xs font-bold text-slate-400 flex items-center gap-1 mt-0.5">
                                                         <Clock size={12} /> {formatTime(b.startTime)} — {b.guestCount} Pax
                                                     </p>
                                                 </div>
                                             </div>
-                                            <div className={`px-3 py-1 rounded-xl text-[10px] font-black border ${b.status === 'CONFIRMED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
-                                                {b.status}
+                                            <div className="flex flex-col items-end gap-1.5">
+                                                <div className={`px-3 py-1 rounded-xl text-[9px] font-black border uppercase tracking-widest ${b.status === 'CONFIRMED' ? (isPast ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-emerald-50 text-emerald-600 border-emerald-100') : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                                                    {b.status}
+                                                </div>
+                                                {isPast && <span className="text-[8px] font-black text-red-500 bg-red-50 px-2 py-0.5 rounded-md border border-red-100 flex items-center gap-1 uppercase tracking-widest">Past Event</span>}
                                             </div>
                                         </div>
-                                    ))
+                                        );
+                                    })
                                 ) : (
                                     <div className="col-span-full py-20 flex flex-col items-center justify-center bg-slate-100 rounded-[3rem] border border-slate-200/50">
                                         <Search className="text-slate-300 mb-4" size={48} />
@@ -320,13 +350,8 @@ export function EventsDashboard() {
                 initialDate={selectedDate}
                 initialStartTime={selectedSlot ? formatDecimalTime(selectedSlot) : "18:00"}
                 initialDuration={duration}
-                onSuccess={() => fetchBookings()}
-                onOpenTimeline={(dateStr) => {
-                    setSelectedDate(new Date(dateStr));
-                    setIsModalOpen(false);
-                    setIsSelectingForNewParty(true);
-                    setIsScheduleModalOpen(true);
-                }}
+                initialData={isSelectingForNewParty ? null : (viewedBooking || null)}
+                onSuccess={() => { fetchBookings(); setViewedBooking(null); }}
             />
 
             <PartiesListModal
@@ -353,9 +378,13 @@ export function EventsDashboard() {
 
             <BookingDetailDrawer
                 isOpen={isDetailDrawerOpen}
-                onClose={() => setIsDetailDrawerOpen(false)}
+                onClose={() => { setIsDetailDrawerOpen(false); setViewedBooking(null); }}
                 booking={viewedBooking}
                 onSuccess={() => fetchBookings()}
+                onEdit={() => {
+                    setIsDetailDrawerOpen(false);
+                    setIsModalOpen(true);
+                }}
             />
 
             <style>{`

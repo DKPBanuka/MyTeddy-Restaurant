@@ -64,6 +64,7 @@ export class PartyBookingsService {
                 addonsTotal,
                 totalAmount,
                 advancePaid,
+                items: data.items || [],
                 bookingType: bookingType as any,
                 status: (advancePaid > 0 ? 'CONFIRMED' : 'PENDING') as any,
             },
@@ -165,6 +166,98 @@ export class PartyBookingsService {
                 addonsTotal: newAddonsTotal,
                 totalAmount: newTotalAmount,
             },
+        });
+    }
+
+    async updateItems(id: string, items: any[], menuTotal: number) {
+        const booking = await this.prisma.partyBooking.findUnique({ where: { id } });
+        if (!booking) throw new NotFoundException('Booking not found');
+
+        const newTotalAmount = Number(booking.hallCharge) + Number(menuTotal) + Number(booking.addonsTotal);
+
+        return this.prisma.partyBooking.update({
+            where: { id },
+            data: {
+                items,
+                menuTotal,
+                totalAmount: newTotalAmount,
+            },
+        });
+    }
+
+    async updateBooking(id: string, data: any) {
+        const booking = await this.prisma.partyBooking.findUnique({ where: { id } });
+        if (!booking) throw new NotFoundException('Booking not found');
+
+        // Prepare timestamps if dates exist
+        let reqStart = booking.startTime;
+        let reqEnd = booking.endTime;
+        let finalEventDate = booking.eventDate;
+
+        if (data.eventDate && data.startTime && data.endTime) {
+            const dateObj = new Date(data.eventDate);
+            dateObj.setHours(0, 0, 0, 0);
+            finalEventDate = new Date(data.eventDate);
+            reqStart = new Date(data.startTime);
+            reqEnd = new Date(data.endTime);
+
+            // Conflict check
+            const existingBookings = await this.prisma.partyBooking.findMany({
+                where: {
+                    eventDate: {
+                        gte: dateObj,
+                        lt: new Date(dateObj.getTime() + 24 * 60 * 60 * 1000),
+                    },
+                    status: { in: ['PENDING', 'CONFIRMED'] },
+                    id: { not: id },
+                },
+            });
+
+            const hasClash = existingBookings.some((existing: any) => {
+                const existingStart = new Date(existing.startTime);
+                const existingEnd = new Date(existing.endTime);
+                const overlaps = reqStart.getTime() < existingEnd.getTime() && reqEnd.getTime() > existingStart.getTime();
+                if (overlaps) {
+                    if (data.bookingType === 'EXCLUSIVE' || existing.bookingType === 'EXCLUSIVE') {
+                        return true;
+                    }
+                }
+                return false;
+            });
+
+            if (hasClash) {
+                throw new ConflictException('The selected time slot conflicts with an exclusive booking.');
+            }
+        }
+
+        const bookingType = data.bookingType || booking.bookingType;
+        const guestCount = data.guestCount !== undefined ? Number(data.guestCount) : booking.guestCount;
+        const hallCharge = bookingType === 'EXCLUSIVE' ? 5000 : 0;
+        const menuTotal = data.menuTotal !== undefined ? Number(data.menuTotal) : booking.menuTotal;
+        const addonsTotal = data.addonsTotal !== undefined ? Number(data.addonsTotal) : booking.addonsTotal;
+        const totalAmount = hallCharge + menuTotal + addonsTotal;
+        const advancePaid = data.advancePaid !== undefined ? Number(data.advancePaid) : booking.advancePaid;
+        const items = data.items !== undefined ? data.items : booking.items;
+        const customerPhone = data.customerPhone || booking.customerPhone;
+
+        const updateData: any = {
+            customerPhone,
+            eventDate: finalEventDate,
+            startTime: reqStart,
+            endTime: reqEnd,
+            guestCount,
+            hallCharge,
+            menuTotal,
+            addonsTotal,
+            totalAmount,
+            advancePaid,
+            items,
+            bookingType: bookingType as any,
+        };
+
+        return this.prisma.partyBooking.update({
+            where: { id },
+            data: updateData,
         });
     }
 }

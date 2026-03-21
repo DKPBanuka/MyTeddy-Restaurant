@@ -6,7 +6,7 @@ import type { Product, Package, GlobalAddon, OrderItemDto, ProductSize, Category
 interface MenuSelectionPopupProps {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: (items: OrderItemDto[]) => void;
+    onConfirm: (items: OrderItemDto[], total: number) => void;
     initialItems?: OrderItemDto[];
 }
 
@@ -374,7 +374,7 @@ export function MenuSelectionPopup({
                             </button>
                             <button 
                                 onClick={() => {
-                                    onConfirm(selectedItems);
+                                    onConfirm(selectedItems, cartTotal);
                                     onClose();
                                 }}
                                 disabled={selectedItems.length === 0}

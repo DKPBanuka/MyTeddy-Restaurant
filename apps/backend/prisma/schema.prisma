@@ -264,6 +264,7 @@ model PartyBooking {
   advancePaid     Decimal            @default(0) @db.Decimal(10, 2)
   status          PartyBookingStatus @default(PENDING)
   bookingType     BookingType        @default(PARTIAL)
+  items           Json?              @default("[]")
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 

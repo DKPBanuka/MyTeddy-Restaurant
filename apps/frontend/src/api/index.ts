@@ -68,6 +68,7 @@ export interface PartyBookingDto {
     totalAmount?: number;
     advancePaid?: number;
     bookingType: 'PARTIAL' | 'FULL' | 'EXCLUSIVE';
+    items?: any[];
     status?: string;
     createdAt?: string;
 }
@@ -213,6 +214,10 @@ export const api = {
         const res = await apiClient.post(`/party-bookings`, data);
         return res.data;
     },
+    updatePartyBooking: async (id: string, data: Partial<PartyBookingDto>): Promise<PartyBookingDto> => {
+        const res = await apiClient.patch(`/party-bookings/${id}`, data);
+        return res.data;
+    },
     updatePartyBookingAdvance: async (id: string, amount: number): Promise<PartyBookingDto> => {
         const res = await apiClient.patch(`/party-bookings/${id}/advance`, { amount });
         return res.data;
@@ -223,6 +228,10 @@ export const api = {
     },
     addPartyBookingExtras: async (id: string, addonsAmount: number): Promise<PartyBookingDto> => {
         const res = await apiClient.patch(`/party-bookings/${id}/extras`, { addonsAmount });
+        return res.data;
+    },
+    updatePartyBookingItems: async (id: string, items: any[], menuTotal: number): Promise<PartyBookingDto> => {
+        const res = await apiClient.patch(`/party-bookings/${id}/items`, { items, menuTotal });
         return res.data;
     },
 

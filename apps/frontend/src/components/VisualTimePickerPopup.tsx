@@ -138,7 +138,7 @@ export function VisualTimePickerPopup({
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-                                <Clock className="text-blue-600" size={20} />
+                                <Clock className="text-violet-600" size={20} />
                                 Schedule Portal
                             </h2>
                             <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mt-1">Select Date & Time Visually</p>
@@ -157,7 +157,7 @@ export function VisualTimePickerPopup({
                                 min={todayStr}
                                 value={localDate}
                                 onChange={(e) => handleDateChange(e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl outline-none font-bold text-slate-700 transition-all text-sm"
+                                className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-violet-500 rounded-2xl outline-none font-bold text-slate-700 transition-all text-sm"
                             />
                         </div>
 
@@ -171,7 +171,7 @@ export function VisualTimePickerPopup({
                                         onClick={() => {
                                             setLocalDuration(h);
                                         }}
-                                        className={`flex-1 rounded-xl text-xs font-black transition-all ${localDuration === h ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
+                                        className={`flex-1 rounded-xl text-xs font-black transition-all ${localDuration === h ? 'bg-white text-violet-600 shadow-sm' : 'text-slate-400'}`}
                                     >
                                         {h}h
                                     </button>
@@ -184,7 +184,7 @@ export function VisualTimePickerPopup({
                 <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative">
                     {isLoading && (
                         <div className="absolute inset-0 bg-white/60 z-30 backdrop-blur-[2px] flex items-center justify-center">
-                            <Loader2 className="animate-spin text-blue-500" size={32} />
+                            <Loader2 className="animate-spin text-violet-500" size={32} />
                         </div>
                     )}
 
@@ -209,7 +209,7 @@ export function VisualTimePickerPopup({
                                         )}
                                     </div>
                                     <div
-                                        className={`flex-1 relative transition-colors ${isOverlapping ? 'bg-red-50/30 cursor-not-allowed' : 'cursor-pointer hover:bg-blue-50/50'}`}
+                                        className={`flex-1 relative transition-colors ${isOverlapping ? 'bg-red-50/30 cursor-not-allowed' : 'cursor-pointer hover:bg-violet-50/50'}`}
                                         onClick={() => {
                                             if (!isOverlapping) {
                                                 setActiveTime(hoursToTime(slotTime));
@@ -243,11 +243,11 @@ export function VisualTimePickerPopup({
                         {/* Selection Indicator with Drag Handle */}
                         {activeTime && (
                             <div 
-                                className={`absolute left-20 right-4 border-2 rounded-xl shadow-lg z-20 transition-colors ${isCurrentOverlap ? 'bg-red-600/20 border-red-500 animate-pulse' : 'bg-blue-600 border-blue-400'}`}
+                                className={`absolute left-20 right-4 border-2 rounded-xl shadow-lg z-20 transition-colors ${isCurrentOverlap ? 'bg-red-600/20 border-red-500 animate-pulse' : 'bg-violet-600 border-violet-400'}`}
                                 style={{ top: `${(timeToHours(activeTime) - 8) * 40 + 2}px`, height: `${localDuration * 40 - 4}px` }}
                             >
                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                    <span className={`text-[10px] font-black px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 ${isCurrentOverlap ? 'bg-red-600 text-white' : 'bg-white text-blue-600'}`}>
+                                    <span className={`text-[10px] font-black px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 ${isCurrentOverlap ? 'bg-red-600 text-white' : 'bg-white text-violet-600'}`}>
                                         <Clock size={12} />
                                         {activeTime} • {localDuration}h {isCurrentOverlap ? '(Conflict!)' : ''}
                                     </span>
@@ -269,7 +269,7 @@ export function VisualTimePickerPopup({
                         {/* Hover Preview */}
                         {hoverSlot !== null && !activeTime && (
                             <div 
-                                className="absolute left-20 right-4 bg-blue-600/10 border-2 border-dashed border-blue-400 rounded-xl pointer-events-none z-20"
+                                className="absolute left-20 right-4 bg-violet-600/10 border-2 border-dashed border-violet-400 rounded-xl pointer-events-none z-20"
                                 style={{ top: `${(hoverSlot - 8) * 40 + 2}px`, height: `${localDuration * 40 - 4}px` }}
                             />
                         )}
@@ -296,7 +296,7 @@ export function VisualTimePickerPopup({
                                     onClose();
                                 }
                             }}
-                            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-8 py-3 rounded-2xl font-black text-sm transition-all shadow-lg active:scale-95 flex items-center gap-2"
+                            className="bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white px-8 py-3 rounded-2xl font-black text-sm transition-all shadow-lg active:scale-95 flex items-center gap-2"
                         >
                             <CalendarIcon size={16} />
                             Confirm Selection

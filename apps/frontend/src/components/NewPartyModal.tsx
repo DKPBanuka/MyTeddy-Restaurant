@@ -3,7 +3,7 @@ import { X, Calendar as CalendarIcon, Users, ShoppingBag, CheckCircle2, Loader2,
 import { VisualTimePickerPopup } from './VisualTimePickerPopup';
 import { MenuSelectionPopup } from './MenuSelectionPopup';
 import { useSettings } from '../context/SettingsContext';
-import { api } from '../api';
+import { api, type PartyBookingDto } from '../api';
 import type { OrderItemDto } from '../types';
 import { toast } from 'sonner';
 
@@ -13,6 +13,7 @@ interface NewPartyModalProps {
     initialDate?: Date;
     initialStartTime?: string;
     initialDuration?: number;
+    initialData?: PartyBookingDto | null;
     onSuccess: () => void;
 }
 
@@ -20,6 +21,7 @@ export function NewPartyModal({
     isOpen,
     onClose,
     initialDuration = 3,
+    initialData,
     onSuccess,
 }: NewPartyModalProps) {
     const { settings } = useSettings();
@@ -34,7 +36,7 @@ export function NewPartyModal({
     const [eventDate, setEventDate] = useState<string | null>(null);
     const [startTime, setStartTime] = useState<string | null>(null);
     const [durationHrs, setDurationHrs] = useState<number>(initialDuration);
-    const [bookingType, setBookingType] = useState<'PARTIAL' | 'EXCLUSIVE'>('PARTIAL');
+    const [bookingType, setBookingType] = useState<PartyBookingDto['bookingType']>('PARTIAL');
     const [manualAdvance, setManualAdvance] = useState<number | null>(null);
     const [selectedMenuItems, setSelectedMenuItems] = useState<OrderItemDto[]>([]);
     const [isTimePickerOpen, setIsTimePickerOpen] = useState(false);
@@ -44,11 +46,45 @@ export function NewPartyModal({
 
     useEffect(() => {
         if (isOpen) {
-            setEventDate(null);
-            setStartTime(null);
-            setDurationHrs(initialDuration);
+            if (initialData) {
+                setName(initialData.customerName || '');
+                setPhone(initialData.customerPhone || '');
+                setPax(initialData.guestCount || 20);
+                
+                const ed = new Date(initialData.eventDate);
+                setEventDate(ed.toISOString().split('T')[0]);
+                
+                const st = new Date(initialData.startTime);
+                setStartTime(`${String(st.getHours()).padStart(2, '0')}:${String(st.getMinutes()).padStart(2, '0')}`);
+                
+                const et = new Date(initialData.endTime);
+                let dur = (et.getTime() - st.getTime()) / (1000 * 60 * 60);
+                if (dur <= 0) dur = 3;
+                setDurationHrs(dur);
+                
+                setBookingType(initialData.bookingType || 'PARTIAL');
+                setManualAdvance(initialData.advancePaid ?? null);
+                
+                let parsedItems = [];
+                if (initialData.items) {
+                    try {
+                        parsedItems = typeof initialData.items === 'string' ? JSON.parse(initialData.items) : initialData.items;
+                    } catch (e) { parsedItems = []; }
+                }
+                setSelectedMenuItems(parsedItems);
+            } else {
+                setEventDate(null);
+                setStartTime(null);
+                setDurationHrs(initialDuration);
+                setName('');
+                setPhone('');
+                setPax(20);
+                setBookingType('PARTIAL');
+                setManualAdvance(null);
+                setSelectedMenuItems([]);
+            }
         }
-    }, [isOpen, initialDuration]);
+    }, [isOpen, initialData, initialDuration]);
 
 
 
@@ -95,7 +131,7 @@ export function NewPartyModal({
             const endDateTime = new Date(startDateTime);
             endDateTime.setHours(startDateTime.getHours() + durationHrs);
 
-            await api.createPartyBooking({
+            const payload = {
                 customerName: name,
                 customerPhone: phone,
                 eventDate: dateObj.toISOString(),
@@ -105,10 +141,17 @@ export function NewPartyModal({
                 menuTotal,
                 addonsTotal: 0,
                 advancePaid: finalAdvance,
+                items: selectedMenuItems,
                 bookingType,
-            });
+            };
 
-            toast.success(`Booking for ${name} confirmed! ✅`);
+            if (initialData && initialData.id) {
+                await api.updatePartyBooking(initialData.id, payload);
+                toast.success(`Booking for ${name} updated successfully! ✅`);
+            } else {
+                await api.createPartyBooking(payload);
+                toast.success(`Booking for ${name} confirmed! ✅`);
+            }
             onSuccess();
             onClose();
             // Reset
@@ -132,8 +175,8 @@ export function NewPartyModal({
                 <div className="flex-1 p-6 md:p-12 border-r border-slate-100 overflow-y-auto bg-slate-50/50">
                     <div className="flex items-center justify-between mb-10">
                         <div>
-                            <h2 className="text-4xl font-black text-slate-900 tracking-tight">New Party</h2>
-                            <p className="text-slate-500 font-bold mt-1">Design your perfect celebration</p>
+                            <h2 className="text-4xl font-black text-slate-900 tracking-tight">{initialData ? 'Edit Celebration' : 'New Party'}</h2>
+                            <p className="text-slate-500 font-bold mt-1">{initialData ? 'Update event parameters' : 'Design your perfect celebration'}</p>
                         </div>
                         <button onClick={onClose} className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-slate-400 hover:text-slate-600 transition-all hover:scale-105 active:scale-95 md:hidden">
                             <X size={24} />
@@ -152,7 +195,8 @@ export function NewPartyModal({
                                         value={name}
                                         onChange={(e) => setName(e.target.value)}
                                         required
-                                        className="w-full pl-12 pr-4 py-4.5 bg-white border-2 border-slate-100 focus:border-blue-500 rounded-2xl outline-none transition-all font-bold text-slate-700 shadow-sm focus:shadow-blue-500/10"
+                                        disabled={!!initialData}
+                                        className={`w-full pl-12 pr-4 py-4.5 bg-white border-2 border-slate-100 focus:border-blue-500 rounded-2xl outline-none transition-all font-bold text-slate-700 shadow-sm focus:shadow-blue-500/10 ${initialData ? 'opacity-60 cursor-not-allowed bg-slate-50' : ''}`}
                                     />
                                 </div>
                             </div>
@@ -179,10 +223,10 @@ export function NewPartyModal({
                             </label>
                             <div 
                                 onClick={() => setIsTimePickerOpen(true)}
-                                className={`group relative overflow-hidden bg-white/40 backdrop-blur-md border-2 border-dashed ${!eventDate ? 'border-red-200 bg-red-50/10' : 'border-slate-200'} hover:border-blue-500 hover:bg-white rounded-[2rem] p-6 cursor-pointer transition-all active:scale-[0.99] shadow-sm hover:shadow-xl hover:shadow-blue-600/5`}
+                                className={`group relative overflow-hidden bg-white/40 backdrop-blur-md border-2 border-dashed ${!eventDate ? 'border-red-200 bg-red-50/10' : 'border-slate-200'} hover:border-violet-500 hover:bg-white rounded-[2rem] p-6 cursor-pointer transition-all active:scale-[0.99] shadow-sm hover:shadow-xl hover:shadow-violet-600/5`}
                             >
                                 <div className="flex items-center gap-6 relative z-10">
-                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 ${!eventDate ? 'bg-red-50 text-red-400' : 'bg-blue-50 text-blue-600'} group-hover:bg-blue-600 group-hover:text-white`}>
+                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 ${!eventDate ? 'bg-red-50 text-red-400' : 'bg-violet-50 text-violet-600'} group-hover:bg-violet-600 group-hover:text-white`}>
                                         <Clock size={28} />
                                     </div>
                                     <div className="flex-1">
@@ -194,13 +238,13 @@ export function NewPartyModal({
                                         ) : (
                                             <>
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <CalendarIcon size={14} className="text-blue-500" />
+                                                    <CalendarIcon size={14} className="text-violet-500" />
                                                     <span className="text-lg font-black text-slate-900 leading-none">
                                                         {new Date(eventDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                                                     </span>
                                                 </div>
                                                 <div className="flex items-center gap-3">
-                                                    <span className="flex items-center gap-1 bg-blue-100/50 text-blue-700 px-3 py-1 rounded-full font-black text-[10px]">
+                                                    <span className="flex items-center gap-1 bg-violet-100/50 text-violet-700 px-3 py-1 rounded-full font-black text-[10px]">
                                                         <Clock size={12} />
                                                         {startTime}
                                                     </span>
@@ -211,11 +255,11 @@ export function NewPartyModal({
                                             </>
                                         )}
                                     </div>
-                                    <div className="text-blue-600 font-black text-[9px] uppercase tracking-[0.2em] bg-white border border-blue-100 px-4 py-2 rounded-xl shadow-sm group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 transition-all">
+                                    <div className="text-violet-600 font-black text-[9px] uppercase tracking-[0.2em] bg-white border border-violet-100 px-4 py-2 rounded-xl shadow-sm group-hover:bg-violet-600 group-hover:text-white group-hover:border-violet-600 transition-all">
                                         {eventDate ? 'Change' : 'Choose'}
                                     </div>
                                 </div>
-                                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
                             </div>
                         </div>
 
@@ -321,7 +365,7 @@ export function NewPartyModal({
                                 className={`w-full border-b-4 py-6 rounded-[2rem] font-black text-xl transition-all flex items-center justify-center gap-4 ${isFormValid ? 'bg-slate-900 border-slate-950 text-white shadow-2xl shadow-slate-900/40 hover:bg-slate-800 active:translate-y-1 active:border-b-0' : 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'}`}
                             >
                                 {isSubmitting ? <Loader2 className="animate-spin" /> : <CheckCircle2 size={28} className={isFormValid ? 'text-blue-500' : 'text-slate-300'} />}
-                                Confirm Celebration
+                                {initialData ? 'Update Celebration' : 'Confirm Celebration'}
                             </button>
                             {!isFormValid && (
                                 <p className="text-center text-[10px] font-black text-red-400 uppercase tracking-widest mt-4 animate-pulse">
