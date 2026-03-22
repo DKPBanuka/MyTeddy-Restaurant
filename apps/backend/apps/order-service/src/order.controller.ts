@@ -11,6 +11,11 @@ export class OrderController {
         return this.orderService.createOrder(createOrderDto);
     }
 
+    @MessagePattern({ cmd: 'get_orders' })
+    async getOrders(@Payload() query: any) {
+        return this.orderService.getOrders(query || {});
+    }
+
     @MessagePattern({ cmd: 'get_kitchen_orders' })
     async getKitchenOrders() {
         return this.orderService.getKitchenOrders();

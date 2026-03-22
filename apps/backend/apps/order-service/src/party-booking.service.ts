@@ -87,16 +87,16 @@ export class PartyBookingService {
             const exactDate = new Date(filters.date);
             exactDate.setHours(0, 0, 0, 0);
             whereClause.eventDate = {
-                gte: exactDate.toISOString(),
-                lt: new Date(exactDate.getTime() + 24 * 60 * 60 * 1000).toISOString()
-            } as any;
+                gte: exactDate,
+                lt: new Date(exactDate.getTime() + 24 * 60 * 60 * 1000)
+            };
         } else if (filters.month && filters.year) {
             const startOfMonth = new Date(filters.year, filters.month - 1, 1);
             const endOfMonth = new Date(filters.year, filters.month, 1);
             whereClause.eventDate = {
-                gte: startOfMonth.toISOString(),
-                lt: endOfMonth.toISOString()
-            } as any;
+                gte: startOfMonth,
+                lt: endOfMonth
+            };
         }
 
         return this.prisma.partyBooking.findMany({

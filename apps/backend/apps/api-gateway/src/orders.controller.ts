@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, Param, Inject, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param, Inject, HttpException, HttpStatus, Query } from '@nestjs/common';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { firstValueFrom, catchError, throwError } from 'rxjs';
 
@@ -20,6 +20,23 @@ export class OrdersGatewayController {
                 status: HttpStatus.BAD_REQUEST,
                 error: error.message || 'Microservice error',
             }, HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @Get()
+    async getOrders(@Query() query: any) {
+        try {
+            const result = await firstValueFrom(
+                this.orderClient.send({ cmd: 'get_orders' }, query || {}).pipe(
+                    catchError(error => throwError(() => new RpcException(error)))
+                )
+            );
+            return result;
+        } catch (error: any) {
+            throw new HttpException({
+                status: HttpStatus.INTERNAL_SERVER_ERROR,
+                error: error.message || 'Microservice error fetching orders',
+            }, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 

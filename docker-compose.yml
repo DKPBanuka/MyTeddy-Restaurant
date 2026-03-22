@@ -28,6 +28,9 @@ services:
       - postgres
     env_file:
       - ./apps/backend/.env
+    environment:
+      - DATABASE_URL=postgresql://myteddy_user:myteddy_password@postgres:5432/pos_db
+      - DIRECT_URL=postgresql://myteddy_user:myteddy_password@postgres:5432/pos_db
 
   auth-service:
     build:
@@ -43,6 +46,9 @@ services:
       - postgres
     env_file:
       - ./apps/backend/.env
+    environment:
+      - DATABASE_URL=postgresql://myteddy_user:myteddy_password@postgres:5432/pos_db
+      - DIRECT_URL=postgresql://myteddy_user:myteddy_password@postgres:5432/pos_db
 
   inventory-service:
     build:
@@ -58,6 +64,9 @@ services:
       - postgres
     env_file:
       - ./apps/backend/.env
+    environment:
+      - DATABASE_URL=postgresql://myteddy_user:myteddy_password@postgres:5432/pos_db
+      - DIRECT_URL=postgresql://myteddy_user:myteddy_password@postgres:5432/pos_db
 
   order-service:
     build:
@@ -73,6 +82,9 @@ services:
       - postgres
     env_file:
       - ./apps/backend/.env
+    environment:
+      - DATABASE_URL=postgresql://myteddy_user:myteddy_password@postgres:5432/pos_db
+      - DIRECT_URL=postgresql://myteddy_user:myteddy_password@postgres:5432/pos_db
 
 volumes:
   postgres_data:

@@ -340,17 +340,55 @@ export function POSDashboard() {
                 });
             }
 
+            console.log('Checkout SUCCESS. createdOrder from API:', createdOrder);
+            console.log('Current cartItems in state:', cartItems);
+
             const orderToSave = {
                 ...createdOrder,
-                discountPercentage: paymentDetails.discountPercentage
-            };
-            setLastOrder(orderToSave);
+                // Hardened enrichment: Map cart metadata to order items for the receipt utility.
+                orderItems: (createdOrder.orderItems || createdOrder.items || []).map((oi: any) => {
+                    const oiProdId = oi.productId?.toString();
+                    const oiPkgId = oi.packageId?.toString();
 
+                    const cartItem = (cartItems as any[]).find(ci => {
+                        const ciProdId = ci.productId?.toString() || ci.id?.toString();
+                        const ciPkgId = ci.packageId?.toString() || ci.id?.toString();
+                        
+                        if (oiProdId && ciProdId === oiProdId) return true;
+                        if (oiPkgId && ciPkgId === oiPkgId) return true;
+                        return false;
+                    });
+
+                    console.log(`Mapping OI (Prod:${oiProdId}, Pkg:${oiPkgId}) -> Found CartItem:`, cartItem?.name || 'NOT FOUND');
+
+                    return {
+                        ...oi,
+                        name: cartItem?.name || cartItem?.product?.name || cartItem?.package?.name || oi.product?.name || oi.package?.name || `Item (${oiProdId || oiPkgId || '?'})`,
+                        unitPrice: Number(oi.unitPrice || oi.priceAtTimeOfSale || (cartItem?.size ? cartItem.size.price : cartItem?.product?.price || cartItem?.package?.price || 0)),
+                        product: cartItem?.product || oi.product,
+                        package: cartItem?.package || oi.package,
+                        size: cartItem?.size || oi.size,
+                        selectedAddons: cartItem?.selectedAddons || oi.selectedAddons || []
+                    };
+                }),
+                subTotal: Number(paymentDetails.subTotal || createdOrder.subTotal || calculatedTotal),
+                discount: Number(paymentDetails.discount || createdOrder.discount || 0),
+                grandTotal: Number(paymentDetails.grandTotal || createdOrder.grandTotal || (calculatedTotal - (paymentDetails.discount || 0))),
+                discountPercentage: paymentDetails.discountPercentage || createdOrder.discountPercentage,
+                invoiceNumber: createdOrder.invoiceNumber || `TMP-${Date.now()}`
+            };
+            
+            console.log('FINAL orderToSave for receipt:', orderToSave);
+            
+            setLastOrder(orderToSave);
             toast.success('Payment processed successfully!');
-            handleClearCart();
             setActiveOrderId(null);
             setIsMobileCartOpen(false);
             queryClient.invalidateQueries({ queryKey: ['products'] });
+            
+            // Clear cart LAST to ensure all state used above was available
+            handleClearCart();
+            
             return orderToSave;
 
         } catch (error) {
@@ -398,7 +436,7 @@ export function POSDashboard() {
                         {lastOrder && (
                             <button
                                 onClick={() => {
-                                    import('../utils/htmlReceipt').then(m => m.generateHTMLReceipt(lastOrder, settings));
+                                    import('../utils/modernPdfReceipt').then(m => m.downloadModernPDFReceipt(lastOrder, settings));
                                 }}
                                 className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-all shadow-sm group"
                             >

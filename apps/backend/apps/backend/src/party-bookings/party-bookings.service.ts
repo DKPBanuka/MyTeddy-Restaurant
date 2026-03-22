@@ -233,10 +233,10 @@ export class PartyBookingsService {
         const bookingType = data.bookingType || booking.bookingType;
         const guestCount = data.guestCount !== undefined ? Number(data.guestCount) : booking.guestCount;
         const hallCharge = bookingType === 'EXCLUSIVE' ? 5000 : 0;
-        const menuTotal = data.menuTotal !== undefined ? Number(data.menuTotal) : booking.menuTotal;
-        const addonsTotal = data.addonsTotal !== undefined ? Number(data.addonsTotal) : booking.addonsTotal;
+        const menuTotal = data.menuTotal !== undefined ? Number(data.menuTotal) : Number(booking.menuTotal);
+        const addonsTotal = data.addonsTotal !== undefined ? Number(data.addonsTotal) : Number(booking.addonsTotal);
         const totalAmount = hallCharge + menuTotal + addonsTotal;
-        const advancePaid = data.advancePaid !== undefined ? Number(data.advancePaid) : booking.advancePaid;
+        const advancePaid = data.advancePaid !== undefined ? Number(data.advancePaid) : Number(booking.advancePaid);
         const items = data.items !== undefined ? data.items : booking.items;
         const customerPhone = data.customerPhone || booking.customerPhone;
 

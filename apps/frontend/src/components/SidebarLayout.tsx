@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Store, LayoutDashboard, Calendar, TrendingUp, Users, Settings, LogOut, Layers, ChevronLeft, Menu } from 'lucide-react';
+import { LayoutDashboard, Calendar, TrendingUp, Users, Settings, LogOut, Layers, ChevronLeft, Menu, ChefHat } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export function SidebarLayout() {
@@ -18,24 +18,24 @@ export function SidebarLayout() {
             {/* LEFT COLUMN: Collapsible Sidebar (Desktop/Tablet) */}
             <aside className={`hidden md:flex flex-col py-6 border-r border-slate-800 z-20 flex-shrink-0 shadow-xl overflow-y-auto transition-all duration-300 relative bg-slate-900 ${isExpanded ? 'w-64' : 'w-24'}`}>
                 {/* Top Logo & Toggle */}
-                <div className={`px-6 mb-10 flex items-center ${isExpanded ? 'justify-between' : 'justify-center flex-col gap-6'} text-white`}>
-                    <div className="flex items-center gap-3">
-                        <div className="bg-emerald-600 p-2 rounded-xl shrink-0">
-                            <Store size={24} />
+                <div className={`px-6 mb-10 flex items-center ${isExpanded ? 'justify-between h-20' : 'justify-center flex-col gap-6 h-auto'} text-white`}>
+                    <div className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer group">
+                        <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center shadow-lg border border-slate-700 group-hover:border-slate-600 transition-all shrink-0">
+                            <ChefHat className="text-white" size={22} />
                         </div>
                         {isExpanded && (
-                            <div className="whitespace-nowrap overflow-hidden">
-                                <div className="font-bold text-sm tracking-tight leading-tight">POS</div>
-                                <div className="font-medium text-xs text-slate-400">Dashboard</div>
+                            <div className="flex flex-col whitespace-nowrap overflow-hidden">
+                                <span className="font-black text-slate-100 tracking-tight text-lg leading-none">MYTEDDY</span>
+                                <span className="text-[10px] font-bold tracking-widest text-slate-500 uppercase mt-1">POS SYSTEM</span>
                             </div>
                         )}
                     </div>
                     <button
                         onClick={() => setIsExpanded(!isExpanded)}
-                        className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-all shrink-0"
+                        className={`text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-all shrink-0 ${!isExpanded ? 'mt-4' : ''}`}
                         title="Toggle Sidebar"
                     >
-                        {isExpanded ? <ChevronLeft size={24} /> : <Menu size={24} />}
+                        {isExpanded ? <ChevronLeft size={20} /> : <Menu size={24} />}
                     </button>
                 </div>
 

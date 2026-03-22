@@ -51,9 +51,11 @@ export class OrderService {
                 const cashier = await tx.user.findFirst({ where: { role: 'CASHIER' } });
                 if (!cashier) throw new Error('No cashier found to process order');
 
+                const uniqueEntropy = Math.floor(Math.random() * 10000);
                 const order = await tx.order.create({
                     data: {
-                        orderNumber: `ORD-${Date.now()}`,
+                        orderNumber: `ORD-${Date.now()}-${uniqueEntropy}`,
+                        invoiceNumber: `INV-${Date.now()}-${uniqueEntropy}`,
                         totalAmount,
                         paymentMethod: paymentMethod || null,
                         amountReceived: amountReceived || null,
@@ -68,18 +70,30 @@ export class OrderService {
                         tokenId,
                         userId: cashier.id,
                         orderItems: {
-                            create: items.map((item: any) => ({
-                                productId: item.productId,
-                                quantity: item.quantity,
-                                unitPrice: 0,
-                                subtotal: 0,
-                                notes: item.notes || null,
-                                sizeId: item.sizeId || null,
-                                addonIds: item.addonIds || [],
-                            })),
+                            create: items.map((item: any) => {
+                                const basePrice = Number(item.unitPrice || 0);
+                                const quantity = Number(item.quantity || 1);
+                                return {
+                                    productId: item.productId || null,
+                                    packageId: item.packageId || null,
+                                    quantity: quantity,
+                                    unitPrice: basePrice,
+                                    subtotal: basePrice * quantity,
+                                    notes: item.notes || null,
+                                    sizeId: item.sizeId || null,
+                                    addonIds: item.addonIds || [],
+                                };
+                            }),
                         },
                     },
-                    include: { orderItems: true },
+                    include: { 
+                        orderItems: {
+                            include: {
+                                product: true,
+                                package: true
+                            }
+                        } 
+                    },
                 });
 
                 return order;
@@ -103,18 +117,30 @@ export class OrderService {
                     data: {
                         totalAmount: updateData.totalAmount,
                         orderItems: {
-                            create: updateData.items.map((item: any) => ({
-                                productId: item.productId,
-                                quantity: item.quantity,
-                                unitPrice: 0,
-                                subtotal: 0,
-                                notes: item.notes || null,
-                                sizeId: item.sizeId || null,
-                                addonIds: item.addonIds || [],
-                            })),
+                            create: updateData.items.map((item: any) => {
+                                const basePrice = Number(item.unitPrice || 0);
+                                const quantity = Number(item.quantity || 1);
+                                return {
+                                    productId: item.productId || null,
+                                    packageId: item.packageId || null,
+                                    quantity: quantity,
+                                    unitPrice: basePrice,
+                                    subtotal: basePrice * quantity,
+                                    notes: item.notes || null,
+                                    sizeId: item.sizeId || null,
+                                    addonIds: item.addonIds || [],
+                                };
+                            }),
                         },
                     },
-                    include: { orderItems: true },
+                    include: { 
+                        orderItems: {
+                            include: {
+                                product: true,
+                                package: true
+                            }
+                        } 
+                    },
                 });
 
                 return order;
@@ -162,7 +188,7 @@ export class OrderService {
             // Filter out RETAIL items and orders that have no FOOD items left
             const kitchenOrders = orders.map(order => ({
                 ...order,
-                orderItems: order.orderItems.filter(item => item.product.type === 'FOOD')
+                orderItems: order.orderItems.filter(item => item.product && item.product.type === 'FOOD')
             })).filter(order => order.orderItems.length > 0);
 
             return kitchenOrders;
@@ -241,6 +267,70 @@ export class OrderService {
         }
     }
 
+    async getOrders(query: any) {
+        try {
+            const { 
+                page = 1, 
+                limit = 10, 
+                status, 
+                paymentStatus, 
+                search, 
+                startDate, 
+                endDate 
+            } = query;
+
+            const skip = (Number(page) - 1) * Number(limit);
+            const take = Number(limit);
+
+            const where: any = {};
+            if (status) where.status = status;
+            if (paymentStatus) where.paymentStatus = paymentStatus;
+            
+            if (search) {
+                where.OR = [
+                    { invoiceNumber: { contains: search, mode: 'insensitive' } },
+                    { customerName: { contains: search, mode: 'insensitive' } },
+                    { tableNumber: { contains: search, mode: 'insensitive' } },
+                ];
+            }
+
+            if (startDate || endDate) {
+                where.createdAt = {};
+                if (startDate) where.createdAt.gte = new Date(startDate);
+                if (endDate) where.createdAt.lte = new Date(endDate);
+            }
+
+            const [orders, total] = await Promise.all([
+                this.prisma.order.findMany({
+                    where,
+                    include: {
+                        orderItems: {
+                            include: {
+                                product: true,
+                                package: true
+                            }
+                        },
+                        user: { select: { name: true, role: true } }
+                    },
+                    orderBy: { createdAt: 'desc' },
+                    skip,
+                    take,
+                }),
+                this.prisma.order.count({ where }),
+            ]);
+
+            return {
+                orders,
+                total,
+                page: Number(page),
+                limit: Number(limit),
+                totalPages: Math.ceil(total / take),
+            };
+        } catch (error: any) {
+            throw new RpcException({ message: error.message, status: 500 });
+        }
+    }
+
     async getReportsSummary() {
         try {
             const today = new Date();
@@ -282,6 +372,8 @@ export class OrderService {
             const productSales: Record<string, { name: string, quantity: number }> = {};
 
             for (const item of orderItems) {
+                if (!item.product || !item.productId) continue;
+
                 if (item.product.type === 'FOOD') {
                     foodRevenue += Number(item.subtotal);
                 } else if (item.product.type === 'RETAIL') {
@@ -306,7 +398,6 @@ export class OrderService {
                 .slice(0, 5);
 
             // 5. Sales Trend (Last 7 Days)
-            // Group By day using Prisma requires a bit of raw query mapping or application-side grouping
             const recentOrders = await this.prisma.order.findMany({
                 where: {
                     status: 'COMPLETED',
@@ -318,7 +409,7 @@ export class OrderService {
             const salesTrendMap: Record<string, number> = {};
             // Initialize last 7 days with 0
             for (let i = 6; i >= 0; i--) {
-                const date = new Date();
+                const date = new Date(today);
                 date.setDate(today.getDate() - i);
                 const dateStr = date.toISOString().split('T')[0];
                 salesTrendMap[dateStr] = 0;

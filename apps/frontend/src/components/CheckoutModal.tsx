@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { formatCurrency } from '../utils/format';
-import { generateHTMLReceipt } from '../utils/htmlReceipt';
+import { downloadModernPDFReceipt } from '../utils/modernPdfReceipt';
 
 interface CheckoutModalProps {
     isOpen: boolean;
@@ -78,7 +78,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             });
             
             // Auto-trigger print
-            generateHTMLReceipt(order, settings);
+            downloadModernPDFReceipt(order, settings);
             
             // Close immediately
             onClose();
