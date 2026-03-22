@@ -1,248 +1,223 @@
-import pdfMake from 'pdfmake/build/pdfmake';
-import * as pdfFonts from 'pdfmake/build/vfs_fonts';
-import type { TDocumentDefinitions } from 'pdfmake/interfaces';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
-// Inject the default Roboto Virtual File System dynamically
-const vfs = (pdfFonts as any).pdfMake ? (pdfFonts as any).pdfMake.vfs : (pdfFonts as any).vfs ? (pdfFonts as any).vfs : pdfFonts;
-// @ts-expect-error - Expected due to mismatched pdfmake browser types vs ESModule typings.
-pdfMake.vfs = vfs;
+export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?: string) => {
+    // 1. Create a hidden element for rendering the receipt
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    container.style.width = '80mm';
+    container.style.background = 'white';
+    container.style.padding = '0';
+    container.style.margin = '0';
+    document.body.appendChild(container);
 
-/**
- * Generates and prints a high-contrast monochrome PDF receipt for 80mm thermal printers.
- * Pixel-perfect refined version with shaded boxes and 3px dashed lines.
- */
-export const generatePDFReceipt = (orderData: any, settings?: any) => {
-    const items = orderData.orderItems || orderData.items || [];
-    const subTotal = Number(orderData.subTotal || orderData.subtotal || 0);
-    const discount = Number(orderData.discount || 0);
-    const discountPercentage = orderData.discountPercentage || (subTotal > 0 ? Math.round((discount / subTotal) * 100) : 0);
-    const taxAmount = Number(orderData.tax || 0);
-    const grandTotal = Number(orderData.grandTotal || 0);
-    const dateStr = orderData.date || new Date().toLocaleString('en-GB', { 
-        day: '2-digit', month: '2-digit', year: 'numeric', 
-        hour: '2-digit', minute: '2-digit',
-        hour12: true 
-    });
-
-    const dashedLine = {
-        canvas: [{
-            type: 'line' as const,
-            x1: 0, y1: 0,
-            x2: 202, y2: 0,
-            lineWidth: 1,
-            dash: { length: 3, space: 3 }
-        }],
-        margin: [0, 5, 0, 5] as [number, number, number, number]
-    };
-
-    // Table Body Construction
-    const tableBody: any[][] = [];
-
-    // Header Row
-    tableBody.push([
-        { text: 'ITEM', style: 'tableHeader' },
-        { text: 'QTY', style: 'tableHeader', alignment: 'center' as const },
-        { text: 'PRICE', style: 'tableHeader', alignment: 'right' as const },
-        { text: 'TOTAL', style: 'tableHeader', alignment: 'right' as const }
-    ]);
-
-    items.forEach((item: any) => {
+    const items = (orderData.orderItems || orderData.items || []).map((item: any) => {
         const name = item.productName || item.product?.name || item.name || 'Item';
-        const qty = item.quantity || 1;
-        const basePrice = Number(item.priceAtTimeOfSale || item.unitPrice || item.price || 0);
-        const addons = item.selectedAddons || [];
-        const addonsTotal = addons.reduce((s: number, a: any) => s + Number(a.price), 0);
-        const unitPriceWithAddons = basePrice + addonsTotal;
-        const lineTotal = unitPriceWithAddons * qty;
-
-        // Main Item Row
-        tableBody.push([
-            { text: name.toUpperCase(), style: 'tableCell', bold: true },
-            { text: qty.toString(), style: 'tableCell', alignment: 'center' as const },
-            { text: basePrice.toLocaleString(), style: 'tableCell', alignment: 'right' as const },
-            { text: lineTotal.toLocaleString(), style: 'tableCell', alignment: 'right' as const, bold: true }
-        ]);
-
-        // Addon Rows (save space)
-        if (addons.length > 0) {
-            const groupedAddons: Record<string, number> = {};
-            addons.forEach((a: any) => {
-                groupedAddons[a.name] = (groupedAddons[a.name] || 0) + 1;
-            });
-
-            Object.entries(groupedAddons).forEach(([aName, aCount]) => {
-                tableBody.push([
-                    { 
-                        text: `+ ${aCount > 1 ? `${aCount}x ` : ''}${aName.toUpperCase()}`, 
-                        style: 'addonCell', 
-                        colSpan: 4,
-                        margin: [8, 0, 0, 0] as [number, number, number, number]
-                    },
-                    {}, {}, {}
-                ]);
-            });
+        const qty = item.quantity || item.qty || 1;
+        
+        let unitPrice = 0;
+        const potentialPrices = [
+            item.price,
+            item.unitPrice,
+            item.priceAtTimeOfSale,
+            item.product?.price,
+            item.package?.price
+        ];
+        
+        for (const p of potentialPrices) {
+            const val = Number(p);
+            if (!isNaN(val) && val > 0) {
+                unitPrice = val;
+                break;
+            }
         }
+        
+        if (unitPrice === 0) {
+            const totalVal = Number(item.total || item.totalPrice || item.itemTotal || 0);
+            if (totalVal > 0) unitPrice = totalVal / qty;
+        }
+
+        const itemTotal = Number(item.total || item.itemTotal || (unitPrice * qty));
+        return { name, qty, unitPrice, itemTotal };
     });
 
-    const docDefinition: TDocumentDefinitions = {
-        pageSize: { width: 226, height: 'auto' },
-        pageMargins: [10, 10, 10, 10],
-        content: [
-            // Logo
-            ...(settings?.logoUrl ? [{
-                image: settings.logoUrl,
-                width: 50,
-                alignment: 'center' as const,
-                margin: [0, 0, 0, 8] as [number, number, number, number]
-            }] : []),
+    const subTotal = Number(orderData.subTotal || orderData.subtotal || 0);
+    const discountAmt = Number(orderData.discount || 0);
+    const discountPercentage = orderData.discountPercentage || (subTotal > 0 ? Math.round((discountAmt / subTotal) * 100) : 0);
+    const total = Number(orderData.grandTotal || 0);
+    const paymentMethod = orderData.paymentMethod || 'CASH';
 
-            // Brand Header
-            { text: 'MY TEDDY', style: 'brandHeader' },
-            { text: (settings?.restaurantName || 'MYTEDDY RESTAURANT').toUpperCase(), style: 'restaurantName' },
-            { text: settings?.address || '123, Galle Road, Colombo', alignment: 'center' as const, fontSize: 10, margin: [0, 4, 0, 0] as [number, number, number, number] },
-            { text: `Tel: ${settings?.phone || '+94 11 234 5678'}`, alignment: 'center' as const, fontSize: 10, margin: [0, 2, 0, 0] as [number, number, number, number] },
+    const dateStr = orderData.date ? new Date(orderData.date).toLocaleString('en-GB', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+    }) : new Date().toLocaleString('en-GB');
 
-            dashedLine,
+    const formatCurrency = (amount: number) => Number(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
-            // Meta Info - Side By Side
-            {
-                columns: [
-                    {
-                        text: `Invoice: ${orderData.invoiceNumber || 'INV-000'}`,
-                        alignment: 'left' as const,
-                        bold: true,
-                        fontSize: 9
-                    },
-                    {
-                        text: `Date: ${dateStr}`,
-                        alignment: 'right' as const,
-                        fontSize: 9
-                    }
-                ],
-                margin: [0, 5, 0, 5] as [number, number, number, number]
-            },
+    // Conditional Logo Logic - ZERO MARGIN for html2canvas gap fix
+    const logoHtml = logoUrl 
+        ? `<div style="display: flex; justify-content: center; width: 100%; margin: 0; padding: 0;">
+            <img src="${logoUrl}" style="width: 85px; height: 85px; object-fit: contain; display: block; margin: 0 auto;" />
+           </div>`
+        : '';
 
-            dashedLine,
-
-            // Table
-            {
-                table: {
-                    headerRows: 1,
-                    widths: ['*', 'auto', 'auto', 'auto'],
-                    body: tableBody
-                },
-                layout: 'noBorders',
-                margin: [0, 5, 0, 5] as [number, number, number, number]
-            },
-
-            dashedLine,
-
-            // Totals
-            {
-                margin: [0, 10, 0, 10] as [number, number, number, number],
-                stack: [
-                    {
-                        columns: [
-                            { text: 'Subtotal', alignment: 'right' as const, margin: [0, 0, 10, 0] },
-                            { text: subTotal.toLocaleString(), alignment: 'right' as const, width: 60 }
-                        ],
-                        margin: [0, 0, 0, 4] as [number, number, number, number]
-                    },
-                    ...(discount > 0 ? [{
-                        columns: [
-                            { text: `Discount (${discountPercentage}%)`, alignment: 'right' as const, margin: [0, 0, 10, 0] },
-                            { text: `-${discount.toLocaleString()}`, alignment: 'right' as const, width: 60 }
-                        ],
-                        margin: [0, 0, 0, 4] as [number, number, number, number]
-                    }] : []),
-                    ...(taxAmount > 0 ? [{
-                        columns: [
-                            { text: 'Tax', alignment: 'right' as const, margin: [0, 0, 10, 0] },
-                            { text: taxAmount.toLocaleString(), alignment: 'right' as const, width: 60 }
-                        ],
-                        margin: [0, 0, 0, 4] as [number, number, number, number]
-                    }] : []),
-                    
-                    // Grand Total Box
-                    {
-                        table: {
-                            widths: ['*', 'auto'],
-                            body: [[
-                                { text: 'TOTAL', alignment: 'left' as const, fontSize: 12, bold: true, border: [false, false, false, false] as [boolean, boolean, boolean, boolean], margin: [0, 2, 0, 2] as [number, number, number, number] },
-                                { text: grandTotal.toLocaleString(), alignment: 'right' as const, fontSize: 20, bold: true, border: [false, false, false, false] as [boolean, boolean, boolean, boolean] }
-                            ]]
-                        },
-                        layout: 'noBorders',
-                        fillColor: '#EEEEEE',
-                        margin: [0, 8, 0, 8] as [number, number, number, number],
-                        padding: [5, 8, 5, 8] as [number, number, number, number]
-                    }
-                ]
-            },
-
-            // Footer
-            {
-                stack: [
-                    {
-                        table: {
-                            widths: ['*'],
-                            body: [[
-                                { 
-                                    text: `PAID VIA ${orderData.paymentMethod?.toUpperCase() || 'CARD'}`, 
-                                    alignment: 'center' as const, 
-                                    bold: true, 
-                                    fontSize: 14, 
-                                    border: [false, false, false, false] as [boolean, boolean, boolean, boolean],
-                                    margin: [0, 5, 0, 5] as [number, number, number, number]
-                                }
-                            ]]
-                        },
-                        layout: 'noBorders',
-                        fillColor: '#000000',
-                        color: '#FFFFFF',
-                        margin: [0, 10, 0, 10] as [number, number, number, number]
-                    },
-                    { text: 'Thank You!', alignment: 'center' as const, fontSize: 18, bold: true, margin: [0, 0, 0, 5] as [number, number, number, number] },
-                    { text: (settings?.receiptFooter || 'THANK YOU! COME AGAIN').toUpperCase(), style: 'footer', alignment: 'center' as const }
-                ],
-                margin: [0, 10, 0, 0] as [number, number, number, number]
+    const styleTag = `
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Great+Vibes&display=swap');
+            
+            .receipt-pdf {
+                width: 80mm;
+                padding: 6mm;
+                background: white;
+                font-family: 'Inter', sans-serif;
+                color: black;
+                line-height: 1.25; /* Tightened line height */
+                box-sizing: border-box;
             }
-        ],
-        styles: {
-            brandHeader: {
-                fontSize: 8,
-                bold: true,
-                alignment: 'center' as const,
-                characterSpacing: 3,
-                margin: [0, 0, 0, 4] as [number, number, number, number]
-            },
-            restaurantName: {
-                fontSize: 16,
-                bold: true,
-                alignment: 'center' as const,
-                lineHeight: 1
-            },
-            tableHeader: {
-                fontSize: 8,
-                bold: true,
-                margin: [0, 2, 0, 4] as [number, number, number, number]
-            },
-            tableCell: {
-                fontSize: 10,
-                margin: [0, 2, 0, 2] as [number, number, number, number]
-            },
-            addonCell: {
-                fontSize: 8,
-                italics: true,
-                color: '#444444'
-            },
-            footer: {
-                fontSize: 10,
-                bold: true,
-                margin: [0, 2, 0, 0] as [number, number, number, number]
+            .text-center { text-align: center; }
+            .flex { display: flex; }
+            .justify-between { justify-content: space-between; }
+            .font-bold { font-weight: 600; }
+            .font-black { font-weight: 900; }
+            
+            .dashed-line {
+                border-top: 2px dashed #444;
+                margin: 12px 0;
+                width: 100%;
             }
-        }
-    };
+            
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+            }
+            th { text-align: left; padding-bottom: 8px; border-bottom: 1px solid #eee; font-size: 11px; }
+            td { padding: 6px 0; vertical-align: top; font-size: 13px; }
+            
+            .col-item { width: 45%; word-wrap: break-word; }
+            .col-qty { width: 15%; text-align: center; }
+            .col-price { width: 20%; text-align: right; white-space: nowrap; }
+            .col-total { width: 20%; text-align: right; white-space: nowrap; }
+            
+            .bg-gray {
+                background-color: #f3f4f6;
+                padding: 10px;
+                border-radius: 8px;
+                margin: 10px 0;
+            }
+            
+            .signature {
+                font-family: 'Great Vibes', cursive;
+                font-size: 38px;
+                transform: rotate(-3deg);
+                margin: 15px 0 0 0; /* Minimized margin */
+                line-height: 1;
+            }
+        </style>
+    `;
 
-    pdfMake.createPdf(docDefinition).print();
+    container.innerHTML = `
+        ${styleTag}
+        <div class="receipt-pdf" id="receipt-content">
+            <div style="display: flex; flex-direction: column; align-items: center; width: 100%; margin: 0; padding: 0;">
+                ${logoHtml}
+                <div class="text-center" style="width: 100%; margin: 0; padding: 0;">
+                    <h2 class="font-black" style="margin: 0; padding: 0; font-size: 20px; line-height: 1; letter-spacing: 0.5px;">${(settings?.restaurantName || "MYTEDDY RESTAURANT").toUpperCase()}</h2>
+                    <div style="font-size: 13px; margin-top: 4px; color: #333; line-height: 1.2;">${settings?.address || "123, Galle Road, Colombo"}</div>
+                    <div style="font-size: 13px; color: #333; line-height: 1.2;">Tel: ${settings?.phone || "+94 11 234 5678"}</div>
+                </div>
+            </div>
+
+            <div class="dashed-line"></div>
+
+            <div class="flex justify-between" style="font-size: 13px; margin-bottom: 4px;">
+                <span style="color: #666;">Invoice:</span>
+                <span class="font-bold">${orderData.invoiceNumber || "INV-000"}</span>
+            </div>
+            <div class="flex justify-between" style="font-size: 13px;">
+                <span style="color: #666;">Date:</span>
+                <span class="font-bold">${dateStr}</span>
+            </div>
+
+            <div class="dashed-line"></div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th class="col-item">ITEM</th>
+                        <th class="col-qty">QTY</th>
+                        <th class="col-price">PRICE</th>
+                        <th class="col-total">TOTAL</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${items.map((item: any) => `
+                        <tr>
+                            <td class="col-item font-bold">${item.name}</td>
+                            <td class="col-qty font-bold">${item.qty}</td>
+                            <td class="col-price">${formatCurrency(item.unitPrice)}</td>
+                            <td class="col-total font-black">${formatCurrency(item.itemTotal)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+
+            <div class="dashed-line"></div>
+
+            <div class="flex justify-between font-bold" style="font-size: 14px; padding: 0 5px;">
+                <span>Subtotal</span>
+                <span>Rs. ${formatCurrency(subTotal)}</span>
+            </div>
+
+            ${discountAmt > 0 ? `
+            <div class="flex justify-between font-bold bg-gray" style="font-size: 14px;">
+                <span>Discount (${discountPercentage}%)</span>
+                <span>-Rs. ${formatCurrency(discountAmt)}</span>
+            </div>
+            ` : ''}
+
+            <div class="flex justify-between bg-gray" style="padding: 15px 10px; margin-top: 15px;">
+                <span class="font-black" style="font-size: 20px; text-transform: uppercase;">Total</span>
+                <span class="font-black" style="font-size: 22px;">Rs. ${formatCurrency(total)}</span>
+            </div>
+
+            <div class="text-center" style="margin-top: 30px; padding-bottom: 20px; width: 100%;">
+                <div class="font-black" style="font-size: 16px; margin-bottom: 5px;">PAID VIA ${paymentMethod.replace('PAID VIA ', '').toUpperCase()}</div>
+                <div class="signature">Thank You!</div>
+            </div>
+        </div>
+    `;
+
+    try {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const element = document.getElementById('receipt-content');
+        if (!element) throw new Error("Receipt content not found");
+
+        const canvas = await html2canvas(element, {
+            scale: 4, // ULTRA HIGH RESOLUTION
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            logging: false
+        });
+
+        const imgData = canvas.toDataURL('image/png', 1.0);
+        const pdfWidth = 80;
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+        const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: [pdfWidth, pdfHeight]
+        });
+
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pdf.save(`Receipt-${orderData.invoiceNumber || 'INV'}.pdf`);
+    } catch (error) {
+        console.error("PDF Generation failed:", error);
+    } finally {
+        document.body.removeChild(container);
+    }
 };

@@ -2,18 +2,17 @@ import React from 'react';
 import { CheckCircle2, Printer, XCircle, ArrowRight } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import ModernReceiptUI from './ModernReceiptUI';
+import { generatePDFReceipt } from '../utils/pdfReceipt';
 
 interface CheckoutSuccessModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onPrint: () => void;
   orderData: any;
 }
 
 export const CheckoutSuccessModal: React.FC<CheckoutSuccessModalProps> = ({
   isOpen,
   onClose,
-  onPrint,
   orderData
 }) => {
   const { settings } = useSettings();
@@ -47,14 +46,13 @@ export const CheckoutSuccessModal: React.FC<CheckoutSuccessModalProps> = ({
             />
           </div>
 
-          {/* Action Buttons */}
           <div className="flex flex-col gap-3">
             <button
-              onClick={onPrint}
+              onClick={() => generatePDFReceipt(orderData, settings, settings?.logoUrl)}
               className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-xl shadow-slate-200"
             >
               <Printer size={20} />
-              PRINT RECEIPT
+              DOWNLOAD PDF RECEIPT
             </button>
             <button
               onClick={onClose}

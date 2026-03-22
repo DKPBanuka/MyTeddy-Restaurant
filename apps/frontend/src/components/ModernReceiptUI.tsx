@@ -92,27 +92,11 @@ export default function ModernReceiptUI({
         
         {/* Logo Area */}
         <div className="flex flex-col items-center mb-[1.5em]">
-          <div className="mb-[0.5em] flex items-center justify-center" style={{ width: '5em', height: '5em' }}>
-            {logoUrl ? (
+          {logoUrl && (
+            <div className="mb-[0.2em] flex items-center justify-center" style={{ width: '7.5em', height: '7.5em' }}>
               <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
-            ) : (
-              <svg viewBox="0 0 100 100" className="w-full h-full text-black fill-current">
-                <path d="M 15 30 L 15 50 C 15 55 18 58 20 60 L 20 80 L 22 80 L 22 60 C 24 58 27 55 27 50 L 27 30 L 25 30 L 25 45 L 23 45 L 23 30 L 21 30 L 21 45 L 19 45 L 19 30 Z" />
-                <path d="M 80 30 C 85 30 85 45 85 55 L 82 60 L 82 80 L 80 80 L 80 60 L 78 55 Z" />
-                <path d="M 35 30 C 35 20 40 15 50 15 C 60 15 65 20 65 30 C 70 30 72 35 70 40 L 30 40 C 28 35 30 30 35 30 Z" />
-                <rect x="32" y="41" width="36" height="5" rx="2" />
-                <circle cx="35" cy="50" r="8" />
-                <circle cx="65" cy="50" r="8" />
-                <circle cx="50" cy="62" r="18" />
-                <circle cx="43" cy="58" r="2.5" fill="white" />
-                <circle cx="57" cy="58" r="2.5" fill="white" />
-                <ellipse cx="50" cy="66" rx="6" ry="4" fill="white" />
-                <circle cx="50" cy="65" r="2" />
-                <text x="50" y="85" fontFamily="cursive" fontSize="12" textAnchor="middle" fontWeight="bold">MY</text>
-                <text x="50" y="95" fontFamily="serif" fontSize="10" textAnchor="middle">TEDDY</text>
-              </svg>
-            )}
-          </div>
+            </div>
+          )}
           <h1 className="receipt-text-xl font-bold text-center tracking-wide leading-tight mt-[0.2em]">{restaurantName.toUpperCase()}</h1>
           <p className="receipt-text-base text-gray-800 text-center mt-[0.3em]">{address}</p>
           <p className="receipt-text-base text-gray-800 text-center">Tel: {phone}</p>
@@ -145,15 +129,38 @@ export default function ModernReceiptUI({
           {items.map((item: any, index: number) => {
             const name = item.productName || item.product?.name || item.name || 'Item';
             const qty = item.quantity || item.qty || 1;
-            const unitPrice = Number(item.price || item.unitPrice || 0);
-            const itemTotal = Number(item.total || (unitPrice * qty));
+            
+            // Resilient price extraction matching htmlReceipt.ts
+            let unitPrice = 0;
+            const potentialPrices = [
+                item.price,
+                item.unitPrice,
+                item.priceAtTimeOfSale,
+                item.product?.price,
+                item.package?.price
+            ];
+            
+            for (const p of potentialPrices) {
+                const val = Number(p);
+                if (!isNaN(val) && val > 0) {
+                    unitPrice = val;
+                    break;
+                }
+            }
+
+            if (unitPrice === 0) {
+                const totalVal = Number(item.total || item.totalPrice || item.itemTotal || 0);
+                if (totalVal > 0) unitPrice = totalVal / qty;
+            }
+
+            const itemTotal = Number(item.total || item.itemTotal || (unitPrice * qty));
 
             return (
               <div key={index} className="grid grid-cols-12 gap-[0.5em] receipt-text-base text-gray-900 items-start">
-                <div className="col-span-5 pr-[0.2em] leading-tight">{name}</div>
-                <div className="col-span-2 text-center">{qty}</div>
+                <div className="col-span-5 pr-[0.2em] leading-tight font-bold">{name}</div>
+                <div className="col-span-2 text-center font-bold">{qty}</div>
                 <div className="col-span-2 text-right whitespace-nowrap">{formatCurrency(unitPrice)}</div>
-                <div className="col-span-3 text-right whitespace-nowrap">{formatCurrency(itemTotal)}</div>
+                <div className="col-span-3 text-right whitespace-nowrap font-black">{formatCurrency(itemTotal)}</div>
               </div>
             );
           })}
@@ -182,10 +189,9 @@ export default function ModernReceiptUI({
         </div>
 
         {/* Footer Area */}
-        <div className="mt-[2.5em] text-center flex flex-col items-center">
+        <div className="mt-[2.5em] pb-[2em] text-center flex flex-col items-center">
           <p className="font-bold receipt-text-lg mb-[0.5em]">PAID VIA {paymentMethod.replace('PAID VIA ', '').toUpperCase()}</p>
           <p className="signature-font mb-[0.5em] transform -rotate-2" style={{ fontSize: '2.8em', lineHeight: '1' }}>Thank You!</p>
-          <p className="receipt-text-base font-medium mt-[0.5em]">THANK YOU! COME AGAIN</p>
         </div>
 
       </div>
