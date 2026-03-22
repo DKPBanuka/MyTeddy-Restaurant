@@ -74,23 +74,35 @@ export class PartyBookingsService {
     async getBookings(filters: { date?: string; month?: string; year?: string }) {
         const whereClause: any = {};
 
-        if (filters.date) {
-            const exactDate = new Date(filters.date);
-            exactDate.setHours(0, 0, 0, 0);
-            whereClause.eventDate = {
-                gte: exactDate,
-                lt: new Date(exactDate.getTime() + 24 * 60 * 60 * 1000),
-            };
-        } else if (filters.month && filters.year) {
-            const startOfMonth = new Date(Number(filters.year), Number(filters.month) - 1, 1);
-            const endOfMonth = new Date(Number(filters.year), Number(filters.month), 1);
-            whereClause.eventDate = { gte: startOfMonth, lt: endOfMonth };
-        }
+        try {
+            if (filters.date) {
+                const exactDate = new Date(filters.date);
+                if (!isNaN(exactDate.getTime())) {
+                    exactDate.setHours(0, 0, 0, 0);
+                    whereClause.eventDate = {
+                        gte: exactDate,
+                        lt: new Date(exactDate.getTime() + 24 * 60 * 60 * 1000),
+                    };
+                }
+            } else if (filters.month && filters.year) {
+                const year = Number(filters.year);
+                const month = Number(filters.month);
+                if (!isNaN(year) && !isNaN(month)) {
+                    const startOfMonth = new Date(year, month - 1, 1);
+                    const endOfMonth = new Date(year, month, 1);
+                    whereClause.eventDate = { gte: startOfMonth, lt: endOfMonth };
+                }
+            }
 
-        return this.prisma.partyBooking.findMany({
-            where: whereClause,
-            orderBy: [{ eventDate: 'asc' }, { startTime: 'asc' }],
-        });
+            return await this.prisma.partyBooking.findMany({
+                where: whereClause,
+                orderBy: [{ eventDate: 'asc' }, { startTime: 'asc' }],
+            });
+        } catch (error) {
+            console.error('Error fetching party bookings (backend service):', error);
+            // Return empty array to prevent 500 crash on dashboard
+            return [];
+        }
     }
 
     async updateAdvance(id: string, amount: number) {

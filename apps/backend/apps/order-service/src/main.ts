@@ -1,6 +1,12 @@
 import { NestFactory } from '@nestjs/core';
 import { OrderServiceModule } from './order-service.module';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// Load environment variables for Prisma
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config({ path: path.resolve(process.cwd(), 'apps', 'backend', '.env') });
 
 async function bootstrap() {
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(

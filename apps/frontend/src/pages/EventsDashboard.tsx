@@ -62,6 +62,12 @@ export function EventsDashboard() {
         return new Date(isoStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     };
 
+    const normalizeDate = (date: Date | string) => {
+        if (typeof date === 'string') return date.split('T')[0];
+        const d = date;
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+
     const formatDecimalTime = (decimalTime: number) => {
         const hrs = Math.floor(decimalTime);
         const mins = Math.round((decimalTime - hrs) * 60);
@@ -77,7 +83,7 @@ export function EventsDashboard() {
             if (!matchesSearch) return false;
 
             if (filter === 'TODAY') {
-                return new Date(b.eventDate).toDateString() === new Date().toDateString();
+                return normalizeDate(b.eventDate) === normalizeDate(new Date());
             }
             if (filter === 'THIS_WEEK') {
                 const bDate = new Date(b.eventDate);
@@ -103,7 +109,7 @@ export function EventsDashboard() {
     }, [bookings, searchQuery, filter]);
 
     const selectedDateBookings = useMemo(() => {
-        return bookings.filter(b => new Date(b.eventDate).toDateString() === selectedDate.toDateString());
+        return bookings.filter(b => normalizeDate(b.eventDate) === normalizeDate(selectedDate));
     }, [bookings, selectedDate]);
 
     const totalThisMonth = bookings.length;
@@ -111,7 +117,7 @@ export function EventsDashboard() {
 
     const tileContent = ({ date, view }: { date: Date, view: string }) => {
         if (view === 'month') {
-            const count = bookings.filter(b => new Date(b.eventDate).toDateString() === date.toDateString()).length;
+            const count = bookings.filter(b => normalizeDate(b.eventDate) === normalizeDate(date)).length;
             if (count > 0) {
                 return <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-blue-500 rounded-full"></div>;
             }
@@ -161,7 +167,7 @@ export function EventsDashboard() {
                         </button>
                         <button
                             onClick={() => {
-                                setSelectedSlot(19);
+                                setSelectedSlot(null);
                                 setDuration(3);
                                 setIsModalOpen(true);
                             }}
@@ -351,7 +357,11 @@ export function EventsDashboard() {
                 initialStartTime={selectedSlot ? formatDecimalTime(selectedSlot) : "18:00"}
                 initialDuration={duration}
                 initialData={isSelectingForNewParty ? null : (viewedBooking || null)}
-                onSuccess={() => { fetchBookings(); setViewedBooking(null); }}
+                onSuccess={(date) => { 
+                    if (date) setSelectedDate(date);
+                    fetchBookings(); 
+                    setViewedBooking(null); 
+                }}
             />
 
             <PartiesListModal

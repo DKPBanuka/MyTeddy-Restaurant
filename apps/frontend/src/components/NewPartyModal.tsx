@@ -14,12 +14,14 @@ interface NewPartyModalProps {
     initialStartTime?: string;
     initialDuration?: number;
     initialData?: PartyBookingDto | null;
-    onSuccess: () => void;
+    onSuccess: (date?: Date) => void;
 }
 
 export function NewPartyModal({
     isOpen,
     onClose,
+    initialDate,
+    initialStartTime,
     initialDuration = 3,
     initialData,
     onSuccess,
@@ -73,8 +75,13 @@ export function NewPartyModal({
                 }
                 setSelectedMenuItems(parsedItems);
             } else {
-                setEventDate(null);
-                setStartTime(null);
+                // Initialize from props if creating new
+                if (initialDate) {
+                    setEventDate(initialDate.toISOString().split('T')[0]);
+                } else {
+                    setEventDate(null);
+                }
+                setStartTime(initialStartTime || null);
                 setDurationHrs(initialDuration);
                 setName('');
                 setPhone('');
@@ -84,9 +91,28 @@ export function NewPartyModal({
                 setSelectedMenuItems([]);
             }
         }
-    }, [isOpen, initialData, initialDuration]);
+    }, [isOpen, initialData, initialDuration, initialDate, initialStartTime]);
 
 
+
+    const formatTimeToAMPM = (timeStr: string | null) => {
+        if (!timeStr) return '';
+        const [h, m] = timeStr.split(':').map(Number);
+        const period = h >= 12 ? 'PM' : 'AM';
+        const displayH = h % 12 || 12;
+        return `${displayH}:${String(m).padStart(2, '0')} ${period}`;
+    };
+
+    const getEndTime = (startTimeStr: string | null, duration: number) => {
+        if (!startTimeStr) return '—';
+        try {
+            const [h, m] = startTimeStr.split(':').map(Number);
+            const totalMinutes = h * 60 + m + duration * 60;
+            const endH = Math.floor(totalMinutes / 60) % 24;
+            const endM = totalMinutes % 60;
+            return formatTimeToAMPM(`${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`);
+        } catch (e) { return '—'; }
+    };
 
     const menuTotal = useMemo(() => {
         return selectedMenuItems.reduce((total, item) => {
@@ -152,7 +178,7 @@ export function NewPartyModal({
                 await api.createPartyBooking(payload);
                 toast.success(`Booking for ${name} confirmed! ✅`);
             }
-            onSuccess();
+            onSuccess(dateObj);
             onClose();
             // Reset
             setName(''); setPhone(''); setSelectedMenuItems([]); setManualAdvance(null);
@@ -244,13 +270,27 @@ export function NewPartyModal({
                                                     </span>
                                                 </div>
                                                 <div className="flex items-center gap-3">
-                                                    <span className="flex items-center gap-1 bg-violet-100/50 text-violet-700 px-3 py-1 rounded-full font-black text-[10px]">
-                                                        <Clock size={12} />
-                                                        {startTime}
-                                                    </span>
-                                                    <span className="flex items-center gap-1 bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-black text-[10px]">
-                                                        {durationHrs} Hours
-                                                    </span>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Start</span>
+                                                        <span className="flex items-center gap-1.5 bg-violet-100 text-violet-700 px-3 py-1 rounded-xl font-black text-[11px] shadow-sm shadow-violet-600/5">
+                                                            <Clock size={12} />
+                                                            {formatTimeToAMPM(startTime)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-4 h-px bg-slate-200 mt-4 mr-1"></div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">End</span>
+                                                        <span className="flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1 rounded-xl font-black text-[11px]">
+                                                            <Clock size={12} className="text-slate-400" />
+                                                            {getEndTime(startTime, durationHrs)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="ml-auto flex flex-col items-end">
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Duration</span>
+                                                        <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-xl font-black text-[10px] border border-emerald-100">
+                                                            {durationHrs} Hours
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </>
                                         )}
@@ -481,6 +521,7 @@ export function NewPartyModal({
                         setEventDate(date);
                         setStartTime(time);
                         setDurationHrs(dur);
+                        setIsTimePickerOpen(false);
                     }}
                 />
 

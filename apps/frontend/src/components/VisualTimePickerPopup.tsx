@@ -75,14 +75,17 @@ export function VisualTimePickerPopup({
     const fetchDayBookings = async (dateStr: string) => {
         setIsLoading(true);
         try {
-            const date = new Date(dateStr);
+            // dateStr is "YYYY-MM-DD", parse manually to avoid any timezone shifts
+            const [year, month] = dateStr.split('-').map(Number);
             const data = await api.getPartyBookings({
-                month: date.getMonth() + 1,
-                year: date.getFullYear()
+                month,
+                year
             });
-            const dayBookings = data.filter(b => 
-                new Date(b.eventDate).toDateString() === date.toDateString()
-            );
+            const targetDateStr = dateStr; // Correctly formatted from input
+            const dayBookings = data.filter(b => {
+                const bDateStr = b.eventDate.split('T')[0];
+                return bDateStr === targetDateStr;
+            });
             setBookings(dayBookings);
         } catch (error) {
             console.error("Failed to fetch bookings for picker:", error);
@@ -309,6 +312,16 @@ export function VisualTimePickerPopup({
                 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
                 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
                 .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+                input[type="date"]::-webkit-calendar-picker-indicator {
+                    cursor: pointer;
+                    border-radius: 4px;
+                    margin-right: 2px;
+                    opacity: 0.6;
+                    filter: invert(0.2) sepia(1) saturate(5) hue-rotate(220deg);
+                }
+                input[type="date"]::-webkit-calendar-picker-indicator:hover {
+                    opacity: 1;
+                }
             `}</style>
         </div>
     );

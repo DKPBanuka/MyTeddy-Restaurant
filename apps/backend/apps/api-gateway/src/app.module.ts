@@ -16,9 +16,9 @@ import { RolePermissionsController } from './role-permissions.controller';
     imports: [
         PrismaModule,
         ClientsModule.register([
-            { name: 'AUTH_SERVICE', transport: Transport.TCP, options: { host: 'localhost', port: 3001 } },
-            { name: 'INVENTORY_SERVICE', transport: Transport.TCP, options: { host: 'localhost', port: 3002 } },
-            { name: 'ORDER_SERVICE', transport: Transport.TCP, options: { host: 'localhost', port: 3003 } },
+            { name: 'AUTH_SERVICE', transport: Transport.TCP, options: { host: process.env.AUTH_SERVICE_HOST || 'localhost', port: 3001 } },
+            { name: 'INVENTORY_SERVICE', transport: Transport.TCP, options: { host: process.env.INVENTORY_SERVICE_HOST || 'localhost', port: 3002 } },
+            { name: 'ORDER_SERVICE', transport: Transport.TCP, options: { host: process.env.ORDER_SERVICE_HOST || 'localhost', port: 3003 } },
         ]),
     ],
     controllers: [

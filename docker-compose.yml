@@ -31,6 +31,9 @@ services:
     environment:
       - DATABASE_URL=postgresql://myteddy_user:myteddy_password@postgres:5432/pos_db
       - DIRECT_URL=postgresql://myteddy_user:myteddy_password@postgres:5432/pos_db
+      - AUTH_SERVICE_HOST=auth-service
+      - INVENTORY_SERVICE_HOST=inventory-service
+      - ORDER_SERVICE_HOST=order-service
 
   auth-service:
     build:
