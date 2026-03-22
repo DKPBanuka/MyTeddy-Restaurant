@@ -16,6 +16,7 @@ import { StaffDashboard } from './pages/StaffDashboard';
 import { MenuManagement } from './pages/MenuManagement.tsx';
 import { OrdersDashboard } from './pages/OrdersDashboard';
 import { Settings } from './pages/Settings';
+import ReceiptPreview from './pages/ReceiptPreview';
 
 function App() {
   const { isAuthenticated } = useAuth();
@@ -59,6 +60,7 @@ function App() {
 
               <Route path="/menu-management" element={<MenuManagement />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/receipt-preview" element={<ReceiptPreview />} />
 
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

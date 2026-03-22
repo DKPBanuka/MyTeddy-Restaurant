@@ -614,8 +614,8 @@ export function POSDashboard() {
                 orderData={lastOrder}
                 onPrint={() => {
                     if (lastOrder) {
-                        import('../utils/htmlReceipt').then(m => 
-                            m.generateHTMLReceipt(lastOrder, settings)
+                        import('../utils/pdfReceipt').then(m => 
+                            m.generatePDFReceipt(lastOrder, settings)
                         );
                     }
                 }}
