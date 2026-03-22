@@ -1,220 +1,54 @@
-import React from 'react';
 import { createRoot } from 'react-dom/client';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import ModernReceiptUI from '../components/ModernReceiptUI';
 
-// Group addons to display under items
-const getGroupedAddons = (selectedAddons: any[]) => {
-    if (!selectedAddons) return [];
-    const acc: Record<string, { name: string, count: number, price: number }> = {};
-    selectedAddons.forEach(addon => {
-        if (!acc[addon.id]) acc[addon.id] = { name: addon.name, count: 0, price: Number(addon.price) };
-        acc[addon.id].count++;
+// (getGroupedAddons removed as it is now handled by formatter)
+
+
+export const downloadModernPDFReceipt = async (orderData: any, settings: any) => {
+    // Format dynamic data for the ModernReceiptUI component
+    const items = (orderData.orderItems || orderData.items || []).map((oi: any) => {
+        const basePrice = Number(oi.unitPrice || oi.priceAtTimeOfSale || oi.product?.price || 0);
+        const addons = (oi.selectedAddons || []).map((a: any) => ({
+            name: a.name,
+            price: Number(a.price)
+        }));
+        const addonsTotal = addons.reduce((s: number, a: any) => s + a.price, 0);
+        
+        return {
+            name: oi.name || oi.product?.name || oi.package?.name || 'Item',
+            quantity: oi.quantity,
+            unitPrice: basePrice,
+            total: (basePrice + addonsTotal) * oi.quantity,
+            addons: addons
+        };
     });
-    return Object.values(acc);
-};
 
-const ReceiptContent: React.FC<{ orderData: any, settings: any }> = ({ orderData, settings }) => {
-    const items = orderData.orderItems || orderData.items || [];
     const dateStr = new Date().toLocaleString('en-GB', { 
-        day: '2-digit', 
-        month: '2-digit', 
-        year: 'numeric', 
-        hour: '2-digit', 
-        minute: '2-digit', 
-        second: '2-digit',
+        day: '2-digit', month: '2-digit', year: 'numeric', 
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
         hour12: true 
     });
 
-    return (
-        <div id="receipt-capture-zone" style={{
-            width: '300px', // Slightly narrower for better margins in 80mm
-            backgroundColor: '#ffffff', 
-            color: '#000000', 
-            fontFamily: 'Inter, system-ui, -apple-system, sans-serif', 
-            padding: '20px', 
-            boxSizing: 'border-box',
-            WebkitFontSmoothing: 'antialiased',
-        }}>
-            {/* Header Logo & Info */}
-            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-                {settings?.logoUrl ? (
-                    <div style={{ marginBottom: '12px' }}>
-                        <img 
-                            src={settings.logoUrl} 
-                            alt="Logo" 
-                            style={{ 
-                                maxWidth: '160px', // Increased from 120px
-                                maxHeight: '90px', // Increased from 60px
-                                objectFit: 'contain',
-                                display: 'inline-block' 
-                            }} 
-                        />
-                    </div>
-                ) : (
-                    <div style={{ marginBottom: '12px' }}>
-                        <div style={{ 
-                            width: '50px', 
-                            height: '50px', 
-                            border: '2px solid #000', 
-                            borderRadius: '10px', 
-                            display: 'inline-flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center',
-                            fontWeight: 'bold',
-                            fontSize: '24px'
-                        }}>T</div>
-                    </div>
-                )}
-                
-                <h1 style={{ 
-                    fontSize: '20px', 
-                    margin: '0 0 6px 0', 
-                    fontWeight: '900', 
-                    letterSpacing: '-0.5px',
-                    lineHeight: '1.1'
-                }}>
-                    {settings?.restaurantName?.toUpperCase() || 'MYTEDDY RESTAURANT'}
-                </h1>
-                
-                <div style={{ fontSize: '12px', color: '#111', lineHeight: '1.4' }}>
-                    <div style={{ marginBottom: '2px' }}>{settings?.address || 'Main Street, City'}</div>
-                    <div style={{ fontWeight: 'bold' }}>Tel: {settings?.phone || '0000000000'}</div>
-                </div>
-            </div>
+    const formattedOrderData = {
+        invoiceNumber: orderData.invoiceNumber || '---',
+        date: dateStr,
+        items: items,
+        subtotal: Number(orderData.subTotal || 0),
+        discount: Number(orderData.discount || 0),
+        discountPercentage: orderData.subTotal > 0 ? Math.round((Number(orderData.discount || 0) / Number(orderData.subTotal)) * 100) : 0,
+        tax: Number(orderData.subTotal || 0) * (settings?.taxRate || 0) / 100,
+        grandTotal: Number(orderData.grandTotal || 0),
+        paymentMethod: `PAID VIA ${orderData.paymentMethod || 'CASH'}`
+    };
 
-            <div style={{ borderTop: '1.5px solid #000', margin: '12px 0' }} />
+    const formattedSettings = {
+        restaurantName: settings?.restaurantName?.toUpperCase() || 'MYTEDDY RESTAURANT',
+        address: settings?.address || 'Main Street, City',
+        phone: settings?.phone || '0000000000'
+    };
 
-            {/* Invoice Meta */}
-            <div style={{ fontSize: '11px', marginBottom: '4px', letterSpacing: '0.2px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                    <span style={{ fontWeight: 'bold' }}>INVOICE:</span>
-                    <span>{orderData.invoiceNumber || '---'}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontWeight: 'bold' }}>DATE:</span>
-                    <span>{dateStr}</span>
-                </div>
-            </div>
-
-            <div style={{ borderTop: '1px dashed #000', margin: '12px 0' }} />
-
-            {/* Items Table */}
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                <thead>
-                    <tr>
-                        <th style={{ textAlign: 'left', paddingBottom: '6px', borderBottom: '1.5px solid #000', width: '45%' }}>ITEM</th>
-                        <th style={{ textAlign: 'center', paddingBottom: '6px', borderBottom: '1.5px solid #000', width: '15%' }}>QTY</th>
-                        <th style={{ textAlign: 'right', paddingBottom: '6px', borderBottom: '1.5px solid #000', width: '20%' }}>PRICE</th>
-                        <th style={{ textAlign: 'right', paddingBottom: '6px', borderBottom: '1.5px solid #000', width: '20%' }}>TOTAL</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {items.map((item: any, idx: number) => {
-                        // Priority: item.name (enriched), then product/package name
-                        const name = item.name || item.product?.name || item.package?.name || 'Item';
-                        const basePrice = Number(item.unitPrice || item.priceAtTimeOfSale || item.product?.price || 0);
-                        const addons = item.selectedAddons || [];
-                        const addonsTotal = addons.reduce((s: number, a: any) => s + Number(a.price), 0);
-                        const unitPrice = basePrice + addonsTotal;
-                        const lineTotal = unitPrice * item.quantity;
-                        const groupedAddons = getGroupedAddons(addons);
-
-                        return (
-                            <React.Fragment key={idx}>
-                                <tr>
-                                    <td style={{ paddingTop: '8px', verticalAlign: 'top', fontWeight: 'bold' }}>
-                                        {name}{item.size ? ` (${item.size.name})` : ''}
-                                    </td>
-                                    <td style={{ paddingTop: '8px', textAlign: 'center', verticalAlign: 'top' }}>
-                                        {item.quantity}
-                                    </td>
-                                    <td style={{ paddingTop: '8px', textAlign: 'right', verticalAlign: 'top' }}>
-                                        {unitPrice.toFixed(0)}
-                                    </td>
-                                    <td style={{ paddingTop: '8px', textAlign: 'right', verticalAlign: 'top', fontWeight: 'bold' }}>
-                                        {lineTotal.toFixed(0)}
-                                    </td>
-                                </tr>
-                                {groupedAddons.map((a, aIdx) => (
-                                    <tr key={`addon-${idx}-${aIdx}`}>
-                                        <td colSpan={3} style={{ paddingLeft: '8px', fontSize: '10px', color: '#333' }}>
-                                            + {a.count > 1 ? `${a.count}x ` : ''}{a.name}
-                                        </td>
-                                        <td style={{ textAlign: 'right', fontSize: '10px' }}>{(a.count * a.price).toFixed(0)}</td>
-                                    </tr>
-                                ))}
-                            </React.Fragment>
-                        );
-                    })}
-                </tbody>
-            </table>
-
-            <div style={{ borderTop: '1px dashed #000', margin: '12px 0' }} />
-
-            {/* Totals Section */}
-            <div style={{ fontSize: '12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span>Sub Total:</span>
-                    <span>Rs. {Number(orderData.subTotal || 0).toFixed(0)}</span>
-                </div>
-                
-                {Number(orderData.discount || 0) > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', color: '#000' }}>
-                        <span>Discount:</span>
-                        <span>-Rs. {Number(orderData.discount).toFixed(0)}</span>
-                    </div>
-                )}
-
-                {(settings?.taxRate || 0) > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span>Tax ({settings.taxRate}%):</span>
-                        <span>Rs. {(Number(orderData.subTotal || 0) * settings.taxRate / 100).toFixed(0)}</span>
-                    </div>
-                )}
-
-                <div style={{ 
-                    marginTop: '10px', 
-                    backgroundColor: '#000', 
-                    color: '#fff', 
-                    padding: '10px', 
-                    display: 'flex', 
-                    justifyContent: 'space-between',
-                    fontWeight: '900',
-                    fontSize: '15px',
-                    borderRadius: '4px'
-                }}>
-                    <span>TOTAL:</span>
-                    <span>Rs. {Number(orderData.grandTotal || 0).toFixed(0)}</span>
-                </div>
-            </div>
-
-            <div style={{ borderTop: '1.5px solid #000', margin: '16px 0 12px 0' }} />
-
-            {/* Footer */}
-            <div style={{ textAlign: 'center', fontSize: '11px' }}>
-                <div style={{ marginBottom: '8px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Paid via {orderData.paymentMethod || 'CASH'}
-                </div>
-                
-                <div style={{ 
-                    fontSize: '14px', 
-                    fontWeight: '900', 
-                    marginTop: '10px',
-                    fontFamily: 'cursive',
-                    letterSpacing: '0.5px'
-                }}>
-                    Thank You!
-                </div>
-                <div style={{ fontSize: '10px', marginTop: '4px', opacity: 0.8 }}>
-                    {settings?.receiptFooter || 'PREASE COME AGAIN'}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-export const downloadModernPDFReceipt = async (orderData: any, settings: any) => {
     // 1. Create a hidden isolated div to render the React tree
     const container = document.createElement('div');
     container.style.position = 'absolute';
@@ -222,9 +56,20 @@ export const downloadModernPDFReceipt = async (orderData: any, settings: any) =>
     container.style.top = '-9999px';
     document.body.appendChild(container);
 
-    // 2. Render Component
     const root = createRoot(container);
-    root.render(<ReceiptContent orderData={orderData} settings={settings} />);
+    root.render(
+        <div 
+            id="receipt-capture-zone" 
+            style={{ 
+                width: '350px', 
+                backgroundColor: '#ffffff', 
+                color: '#000000',
+                fontFamily: 'sans-serif'
+            }}
+        >
+            <ModernReceiptUI orderData={formattedOrderData} settings={formattedSettings} />
+        </div>
+    );
 
     // 3. Wait for fonts and inline SVG to flush to DOM
     await new Promise((resolve) => setTimeout(resolve, 800));

@@ -1,24 +1,25 @@
 import { Module } from '@nestjs/common';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { PrismaModule } from '@app/prisma';
 import { OrderServiceController } from './order-service.controller';
 import { OrderServiceService } from './order-service.service';
 import { OrderController } from './order.controller';
 import { OrderService } from './order.service';
 import { PartyBookingController } from './party-booking.controller';
 import { PartyBookingService } from './party-booking.service';
-import { PrismaService } from '@app/prisma';
-import { ClientsModule, Transport } from '@nestjs/microservices';
 
 @Module({
   imports: [
+    PrismaModule,
     ClientsModule.register([
       {
         name: 'INVENTORY_SERVICE',
         transport: Transport.TCP,
-        options: { host: 'localhost', port: 3001 },
+        options: { host: 'localhost', port: 3002 }, // Changed from 3001 to 3002
       },
     ]),
   ],
-  controllers: [OrderServiceController, OrderController, PartyBookingController],
-  providers: [OrderServiceService, OrderService, PartyBookingService, PrismaService],
+  controllers: [OrderController, PartyBookingController, OrderServiceController],
+  providers: [OrderService, PartyBookingService, OrderServiceService],
 })
 export class OrderServiceModule { }

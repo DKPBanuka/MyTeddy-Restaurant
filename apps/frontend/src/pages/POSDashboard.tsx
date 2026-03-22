@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { CheckoutModal } from '../components/CheckoutModal';
 import { ProductSelectionModal } from '../components/ProductSelectionModal';
 import { HeldOrdersModal } from '../components/HeldOrdersModal';
+import { CheckoutSuccessModal } from '../components/CheckoutSuccessModal';
 import { useCart } from '../context/CartContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSettings } from '../context/SettingsContext';
@@ -36,6 +37,7 @@ export function POSDashboard() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
     const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+    const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
     const [isHeldOrdersModalOpen, setIsHeldOrdersModalOpen] = useState(false);
     const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
     const [generatedToken, setGeneratedToken] = useState<string | null>(null);
@@ -389,6 +391,9 @@ export function POSDashboard() {
             // Clear cart LAST to ensure all state used above was available
             handleClearCart();
             
+            // Open Success Modal instead of just toast
+            setIsSuccessModalOpen(true);
+            
             return orderToSave;
 
         } catch (error) {
@@ -601,6 +606,19 @@ export function POSDashboard() {
                 onClose={() => setIsCheckoutModalOpen(false)}
                 totalAmount={cartGrandTotal}
                 onConfirm={handleConfirmCheckout}
+            />
+
+            <CheckoutSuccessModal
+                isOpen={isSuccessModalOpen}
+                onClose={() => setIsSuccessModalOpen(false)}
+                orderData={lastOrder}
+                onPrint={() => {
+                    if (lastOrder) {
+                        import('../utils/htmlReceipt').then(m => 
+                            m.generateHTMLReceipt(lastOrder, settings)
+                        );
+                    }
+                }}
             />
 
             {selectedProductForModal && (

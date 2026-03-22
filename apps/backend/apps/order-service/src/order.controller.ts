@@ -12,6 +12,7 @@ export class OrderController {
     }
 
     @MessagePattern({ cmd: 'get_orders' })
+    @MessagePattern('get_orders')
     async getOrders(@Payload() query: any) {
         return this.orderService.getOrders(query || {});
     }
