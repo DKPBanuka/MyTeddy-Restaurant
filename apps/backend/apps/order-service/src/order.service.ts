@@ -51,11 +51,32 @@ export class OrderService {
                 const cashier = await tx.user.findFirst({ where: { role: 'CASHIER' } });
                 if (!cashier) throw new Error('No cashier found to process order');
 
-                const uniqueEntropy = Math.floor(Math.random() * 10000);
+                // Daily Sequential Numbering: INV-YYYYMMDD-XXXX
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const dateStr = `${year}${month}${day}`;
+
+                const startOfDay = new Date(now);
+                startOfDay.setHours(0, 0, 0, 0);
+
+                const todayCount = await tx.order.count({
+                    where: {
+                        createdAt: {
+                            gte: startOfDay,
+                        },
+                    },
+                });
+
+                const sequence = String(todayCount + 1).padStart(4, '0');
+                const invoiceNumber = `INV-${dateStr}-${sequence}`;
+                const orderNumber = `ORD-${dateStr}-${sequence}`;
+
                 const order = await tx.order.create({
                     data: {
-                        orderNumber: `ORD-${Date.now()}-${uniqueEntropy}`,
-                        invoiceNumber: `INV-${Date.now()}-${uniqueEntropy}`,
+                        orderNumber,
+                        invoiceNumber,
                         totalAmount,
                         paymentMethod: paymentMethod || null,
                         amountReceived: amountReceived || null,

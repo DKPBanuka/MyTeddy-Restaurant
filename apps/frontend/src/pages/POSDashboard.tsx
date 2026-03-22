@@ -6,7 +6,7 @@ import { ProductType } from '../types';
 import { ProductCard } from '../components/ProductCard';
 import { Cart } from '../components/Cart';
 import { toast } from 'sonner';
-import { Store, PackageSearch, Coffee, Search, ShoppingBag, X } from 'lucide-react';
+import { Store, PackageSearch, Coffee, Search, ShoppingBag, X, Printer } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { CheckoutModal } from '../components/CheckoutModal';
@@ -16,6 +16,8 @@ import { CheckoutSuccessModal } from '../components/CheckoutSuccessModal';
 import { useCart } from '../context/CartContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSettings } from '../context/SettingsContext';
+import { generateInvoiceNumber } from '../utils/invoice';
+import { generatePDFReceipt } from '../utils/pdfReceipt';
 
 
 type OrderType = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
@@ -377,7 +379,7 @@ export function POSDashboard() {
                 discount: Number(paymentDetails.discount || createdOrder.discount || 0),
                 grandTotal: Number(paymentDetails.grandTotal || createdOrder.grandTotal || (calculatedTotal - (paymentDetails.discount || 0))),
                 discountPercentage: paymentDetails.discountPercentage || createdOrder.discountPercentage,
-                invoiceNumber: createdOrder.invoiceNumber || `TMP-${Date.now()}`
+                invoiceNumber: createdOrder.invoiceNumber || generateInvoiceNumber()
             };
             
             console.log('FINAL orderToSave for receipt:', orderToSave);
@@ -424,6 +426,18 @@ export function POSDashboard() {
                                 <div className="text-[10px] font-bold text-blue-600 tracking-wider uppercase">{user?.role}</div>
                             </div>
                         </div>
+
+                        {lastOrder && (
+                            <button
+                                onClick={() => {
+                                    generatePDFReceipt(lastOrder, settings, settings?.logoUrl);
+                                }}
+                                className="flex items-center justify-center p-2.5 bg-slate-900 text-white rounded-xl shadow-lg active:scale-95 transition-all"
+                                title="Reprint Last Bill"
+                            >
+                                <Printer size={20} />
+                            </button>
+                        )}
                     </div>
 
                     <div className="relative w-full max-w-xl">
@@ -441,12 +455,12 @@ export function POSDashboard() {
                         {lastOrder && (
                             <button
                                 onClick={() => {
-                                    import('../utils/modernPdfReceipt').then(m => m.downloadModernPDFReceipt(lastOrder, settings));
+                                    generatePDFReceipt(lastOrder, settings, settings?.logoUrl);
                                 }}
-                                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-all shadow-sm group"
+                                className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-2xl font-black text-xs hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 group active:scale-[0.98]"
                             >
-                                <ShoppingBag size={18} className="group-hover:scale-110 transition-transform" />
-                                Reprint Last Bill
+                                <Printer size={16} className="group-hover:rotate-12 transition-transform" />
+                                REPRINT LAST BILL
                             </button>
                         )}
                         <div className="flex items-center gap-3">

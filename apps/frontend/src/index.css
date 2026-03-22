@@ -19,3 +19,9 @@ body {
   background-color: #f8fafc;
   color: #0f172a;
 }
+
+/* Hide navigation and other fixed elements during PDF capture */
+body.is-printing .fixed.bottom-0,
+body.is-printing .fixed.bottom-\[72px\] {
+  display: none !important;
+}

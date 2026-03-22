@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { formatCurrency } from '../utils/format';
-import { downloadModernPDFReceipt } from '../utils/modernPdfReceipt';
 
 interface CheckoutModalProps {
     isOpen: boolean;
@@ -67,7 +66,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
         try {
             setIsSubmitting(true);
-            const order = await onConfirm({
+            await onConfirm({
                 method,
                 amountReceived: method === 'CASH' ? receivedNum : finalGrandTotal,
                 change: method === 'CASH' ? changeAmount : 0,
@@ -76,9 +75,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 grandTotal: finalGrandTotal,
                 discountPercentage: discountType === 'PERCENTAGE' ? Number(discountValue) : undefined
             });
-            
-            // Auto-trigger print
-            downloadModernPDFReceipt(order, settings);
             
             // Close immediately
             onClose();
@@ -106,8 +102,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     </button>
                 </div>
 
-                <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
-                    {/* Amount to Pay Container */}
+                <div className="p-6 pb-0">
+                    {/* Amount to Pay Container - Fixed at top */}
                     <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 text-center shadow-inner">
                         <span className="text-sm font-semibold text-blue-600 uppercase tracking-wider">
                             {totalDiscount > 0 ? 'Sub Total' : 'Total to Pay'}
@@ -121,6 +117,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             {formatCurrency(finalGrandTotal, settings?.currencySymbol || 'Rs.')}
                         </div>
                     </div>
+                </div>
+
+                <div className="p-6 space-y-6 max-h-[50vh] overflow-y-auto">
 
                     {/* Discount Section */}
                     <div className="space-y-3">

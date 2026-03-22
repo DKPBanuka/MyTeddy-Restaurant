@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Trash2, Printer, Settings, MonitorPlay, ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { generatePDFReceipt } from '../utils/pdfReceipt';
+import { generateInvoiceNumber } from '../utils/invoice';
 
 /**
  * ReceiptPreview Component
@@ -13,7 +14,7 @@ export default function ReceiptPreview() {
   const [restaurantName, setRestaurantName] = useState("MYTEDDY RESTAURANT");
   const [address, setAddress] = useState("123, Galle Road, Colombo");
   const [phone, setPhone] = useState("+94 11 234 5678");
-  const [invoiceNo, setInvoiceNo] = useState("INV-" + Date.now());
+  const [invoiceNo, setInvoiceNo] = useState(generateInvoiceNumber());
   const [date, setDate] = useState(new Date().toLocaleString());
   
   const [items, setItems] = useState([
@@ -411,7 +412,6 @@ export default function ReceiptPreview() {
                  <p className="font-bold receipt-text-base tracking-widest whitespace-nowrap uppercase">PAID VIA {paymentMethod.toUpperCase()}</p>
             </div>
             <p className="signature-font mb-[0.2em] transform -rotate-1 text-gray-800" style={{ fontSize: '3em', lineHeight: '1' }}>Thank You!</p>
-            <p className="receipt-text-base font-bold uppercase tracking-widest mt-[0.5em] text-gray-600">THANK YOU! COME AGAIN</p>
           </div>
         </div>
       </div>

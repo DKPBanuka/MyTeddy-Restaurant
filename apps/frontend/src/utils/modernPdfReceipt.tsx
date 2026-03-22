@@ -28,7 +28,8 @@ export const downloadModernPDFReceipt = async (orderData: any, settings: any) =>
     const dateStr = new Date().toLocaleString('en-GB', { 
         day: '2-digit', month: '2-digit', year: 'numeric', 
         hour: '2-digit', minute: '2-digit', second: '2-digit',
-        hour12: true 
+        hour12: true,
+        timeZone: 'Asia/Colombo'
     });
 
     const formattedOrderData = {
@@ -51,10 +52,20 @@ export const downloadModernPDFReceipt = async (orderData: any, settings: any) =>
 
     // 1. Create a hidden isolated div to render the React tree
     const container = document.createElement('div');
-    container.style.position = 'absolute';
-    container.style.left = '-9999px';
-    container.style.top = '-9999px';
+    container.style.position = 'fixed';
+    container.style.left = '0';
+    container.style.top = '0';
+    container.style.width = '1px';
+    container.style.height = '1px';
+    container.style.overflow = 'hidden';
+    container.style.visibility = 'hidden';
+    container.style.pointerEvents = 'none';
+    container.style.zIndex = '-9999';
     document.body.appendChild(container);
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.body.classList.add('is-printing');
 
     const root = createRoot(container);
     root.render(
@@ -80,10 +91,19 @@ export const downloadModernPDFReceipt = async (orderData: any, settings: any) =>
 
     try {
         const canvas = await html2canvas(element, {
-            scale: 2, // Optimized scale (reduced from 3 to save space)
+            scale: 2, 
             useCORS: true,
             logging: false,
-            backgroundColor: '#ffffff'
+            backgroundColor: '#ffffff',
+            onclone: (clonedDoc) => {
+                const clonedZone = clonedDoc.querySelector('#receipt-capture-zone') as HTMLElement;
+                if (clonedZone) {
+                    clonedZone.parentElement!.style.visibility = 'visible';
+                    clonedZone.parentElement!.style.width = '350px';
+                    clonedZone.parentElement!.style.height = 'auto';
+                    clonedZone.parentElement!.style.overflow = 'visible';
+                }
+            }
         });
 
         const imgData = canvas.toDataURL('image/png');
@@ -113,6 +133,9 @@ export const downloadModernPDFReceipt = async (orderData: any, settings: any) =>
     } catch (error) {
         console.error('Failed to generate PDF receipt', error);
     } finally {
+        // Restore body overflow and state
+        document.body.style.overflow = originalOverflow;
+        document.body.classList.remove('is-printing');
         // Cleanup DOM
         root.unmount();
         document.body.removeChild(container);

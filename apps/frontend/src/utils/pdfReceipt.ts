@@ -4,10 +4,15 @@ import html2canvas from 'html2canvas';
 export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?: string) => {
     // 1. Create a hidden element for rendering the receipt
     const container = document.createElement('div');
-    container.style.position = 'absolute';
-    container.style.left = '-9999px';
+    container.style.position = 'fixed';
+    container.style.left = '0';
     container.style.top = '0';
-    container.style.width = '80mm';
+    container.style.width = '1px';
+    container.style.height = '1px';
+    container.style.overflow = 'hidden';
+    container.style.visibility = 'hidden';
+    container.style.pointerEvents = 'none';
+    container.style.zIndex = '-9999';
     container.style.background = 'white';
     container.style.padding = '0';
     container.style.margin = '0';
@@ -51,8 +56,9 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
 
     const dateStr = orderData.date ? new Date(orderData.date).toLocaleString('en-GB', {
         day: '2-digit', month: '2-digit', year: 'numeric',
-        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
-    }) : new Date().toLocaleString('en-GB');
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
+        timeZone: 'Asia/Colombo'
+    }) : new Date().toLocaleString('en-GB', { timeZone: 'Asia/Colombo' });
 
     const formatCurrency = (amount: number) => Number(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
@@ -166,10 +172,12 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
 
             <div class="dashed-line"></div>
 
+            ${(discountAmt > 0 || subTotal !== total) ? `
             <div class="flex justify-between font-bold" style="font-size: 14px; padding: 0 5px;">
                 <span>Subtotal</span>
                 <span>Rs. ${formatCurrency(subTotal)}</span>
             </div>
+            ` : ''}
 
             ${discountAmt > 0 ? `
             <div class="flex justify-between font-bold bg-gray" style="font-size: 14px;">
@@ -190,17 +198,30 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
         </div>
     `;
 
+    // 3. Temporarily lock body to prevent layout shifts/nav bar flashing
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.body.classList.add('is-printing');
+
     try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // 4. Capture Canvas (Use onclone to unhide for capture)
         const element = document.getElementById('receipt-content');
         if (!element) throw new Error("Receipt content not found");
 
-        const canvas = await html2canvas(element, {
-            scale: 4, // ULTRA HIGH RESOLUTION
+        const canvas = await html2canvas(element as HTMLElement, {
+            scale: 4, 
             useCORS: true,
-            allowTaint: true,
+            logging: false,
             backgroundColor: '#ffffff',
-            logging: false
+            onclone: (clonedDoc) => {
+                const clonedContent = clonedDoc.getElementById('receipt-content');
+                if (clonedContent) {
+                    clonedContent.parentElement!.style.visibility = 'visible';
+                    clonedContent.parentElement!.style.width = '80mm';
+                    clonedContent.parentElement!.style.height = 'auto';
+                    clonedContent.parentElement!.style.overflow = 'visible';
+                }
+            }
         });
 
         const imgData = canvas.toDataURL('image/png', 1.0);
@@ -216,8 +237,12 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
         pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
         pdf.save(`Receipt-${orderData.invoiceNumber || 'INV'}.pdf`);
     } catch (error) {
-        console.error("PDF Generation failed:", error);
+        console.error('Failed to generate PDF receipt', error);
     } finally {
+        // Restore body overflow and state
+        document.body.style.overflow = originalOverflow;
+        document.body.classList.remove('is-printing');
+        // Cleanup DOM
         document.body.removeChild(container);
     }
 };

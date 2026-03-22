@@ -19,8 +19,8 @@ export const CheckoutSuccessModal: React.FC<CheckoutSuccessModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+      <div className="bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 relative">
         
         {/* Banner Section */}
         <div className="bg-slate-900 p-8 flex flex-col items-center text-white relative">
@@ -37,29 +37,39 @@ export const CheckoutSuccessModal: React.FC<CheckoutSuccessModalProps> = ({
         </div>
 
         {/* Content Section */}
-        <div className="p-8">
-          <div className="max-h-[50vh] overflow-y-auto bg-slate-50/50 rounded-2xl mb-6 flex justify-center p-4">
-            <ModernReceiptUI 
-              orderData={orderData} 
-              settings={settings} 
-              logoUrl={settings?.logoUrl}
-            />
+        <div className="p-6 md:p-8 flex flex-col md:flex-row gap-8 items-start">
+          <div className="flex-1 w-full max-h-[82vh] overflow-y-auto overflow-x-hidden bg-slate-50 border-2 border-slate-100 rounded-[2rem] flex justify-center p-4 sm:p-6 custom-scrollbar group">
+            <div className="min-w-[320px] transition-transform duration-300">
+              <ModernReceiptUI 
+                orderData={orderData} 
+                settings={settings} 
+                logoUrl={settings?.logoUrl}
+              />
+            </div>
           </div>
 
-          <div className="flex flex-col gap-3">
+          <div className="w-full md:w-72 flex flex-col gap-4 shrink-0">
+            <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-2xl mb-2">
+              <div className="text-emerald-800 font-bold text-sm mb-1 uppercase tracking-wider text-center">Order Recorded</div>
+              <div className="text-emerald-600 text-[10px] font-semibold text-center leading-tight">Your database is updated and items are ready for fulfillment.</div>
+            </div>
+
             <button
-              onClick={() => generatePDFReceipt(orderData, settings, settings?.logoUrl)}
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-xl shadow-slate-200"
+              onClick={() => {
+                generatePDFReceipt(orderData, settings, settings?.logoUrl);
+                setTimeout(onClose, 1000); // Close after starting download
+              }}
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black py-5 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-xl shadow-slate-200"
             >
-              <Printer size={20} />
-              DOWNLOAD PDF RECEIPT
+              <Printer size={22} />
+              PRINT RECEIPT
             </button>
             <button
               onClick={onClose}
-              className="w-full bg-white border-2 border-slate-200 hover:border-slate-900 hover:text-slate-900 text-slate-500 font-black py-4 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-[0.98]"
+              className="w-full bg-white border-2 border-slate-200 hover:border-slate-900 hover:text-slate-900 text-slate-500 font-black py-5 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-[0.98]"
             >
               DONE
-              <ArrowRight size={20} />
+              <ArrowRight size={22} />
             </button>
           </div>
         </div>

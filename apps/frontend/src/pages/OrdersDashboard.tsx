@@ -70,7 +70,7 @@ export function OrdersDashboard() {
 
     const handleReprint = () => {
         try {
-            generatePDFReceipt(selectedOrder, selectedOrder.invoiceNumber || selectedOrder.id, settings);
+            generatePDFReceipt(selectedOrder, settings, settings?.logoUrl);
             toast.success('Reprinting receipt...');
         } catch (error) {
             toast.error('Failed to reprint receipt.');
@@ -404,10 +404,10 @@ export function OrdersDashboard() {
                         <div className="px-10 py-8 bg-slate-50/80 border-t border-slate-100 flex items-center gap-4">
                             <button
                                 onClick={handleReprint}
-                                className="flex-1 flex items-center justify-center gap-3 px-8 py-5 bg-white border border-slate-200 rounded-2xl font-black text-[10px] uppercase tracking-widest text-slate-700 hover:bg-slate-100 transition-all shadow-sm"
+                                className="flex-1 flex items-center justify-center gap-3 px-8 py-5 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 active:scale-[0.98]"
                             >
                                 <Printer size={20} />
-                                Reprint Receipt
+                                REPRINT RECEIPT
                             </button>
 
                             {selectedOrder.paymentStatus !== 'REFUNDED' && (

@@ -89,8 +89,8 @@ export class OrdersService {
 
         const nextToken = (lastOrderToday?.tokenNumber || 0) + 1;
         
-        // Format: INV-YYMMDD-XXXX
-        const year = now.getFullYear().toString().slice(-2);
+        // Format: INV-YYYYMMDD-XXXX
+        const year = now.getFullYear();
         const month = (now.getMonth() + 1).toString().padStart(2, '0');
         const day = now.getDate().toString().padStart(2, '0');
         const sequence = nextToken.toString().padStart(4, '0');
@@ -173,7 +173,7 @@ export class OrdersService {
                 // 4. Create Order Header First
                 const order = await tx.order.create({
                     data: {
-                        orderNumber: `ORD-${Date.now()}-${tokenNumber}`,
+                        orderNumber: invoiceNumber.replace('INV-', 'ORD-'),
                         invoiceNumber,
                         tokenNumber,
                         subTotal: calculatedSubTotal,

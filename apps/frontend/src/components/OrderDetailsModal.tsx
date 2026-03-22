@@ -17,7 +17,7 @@ export function OrderDetailsModal({ order, onClose, onRefunded }: OrderDetailsMo
 
     const handleReprint = () => {
         try {
-            generatePDFReceipt(order, order.invoiceNumber || order.id, settings);
+            generatePDFReceipt(order, settings, settings?.logoUrl);
             toast.success('Reprinting receipt...');
         } catch (error) {
             toast.error('Failed to generate receipt');
@@ -156,10 +156,10 @@ export function OrderDetailsModal({ order, onClose, onRefunded }: OrderDetailsMo
                 <div className="px-8 py-6 border-t border-white/5 bg-slate-900/50 flex gap-4">
                     <button
                         onClick={handleReprint}
-                        className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all border border-white/5"
+                        className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-xs uppercase tracking-[0.3em] flex items-center justify-center gap-2 transition-all shadow-xl shadow-indigo-900/20 active:scale-[0.98]"
                     >
                         <Printer size={18} />
-                        Reprint Receipt
+                        REPRINT RECEIPT
                     </button>
                     {!isRefunded && (
                         <button
