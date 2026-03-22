@@ -1,5 +1,7 @@
 import React from 'react';
 import { CheckCircle2, Printer, XCircle, ArrowRight } from 'lucide-react';
+import { useSettings } from '../context/SettingsContext';
+import ModernReceiptUI from './ModernReceiptUI';
 
 interface CheckoutSuccessModalProps {
   isOpen: boolean;
@@ -14,6 +16,7 @@ export const CheckoutSuccessModal: React.FC<CheckoutSuccessModalProps> = ({
   onPrint,
   orderData
 }) => {
+  const { settings } = useSettings();
   if (!isOpen) return null;
 
   return (
@@ -36,19 +39,12 @@ export const CheckoutSuccessModal: React.FC<CheckoutSuccessModalProps> = ({
 
         {/* Content Section */}
         <div className="p-8">
-          <div className="space-y-4 mb-8">
-            <div className="flex justify-between items-center py-3 border-b border-slate-100">
-              <span className="text-slate-500 text-sm font-bold uppercase tracking-wider">Invoice Number</span>
-              <span className="text-slate-900 font-black">{orderData?.invoiceNumber || '---'}</span>
-            </div>
-            <div className="flex justify-between items-center py-3 border-b border-slate-100">
-              <span className="text-slate-500 text-sm font-bold uppercase tracking-wider">Amount Paid</span>
-              <span className="text-blue-600 text-xl font-black">Rs. {Number(orderData?.grandTotal || 0).toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between items-center py-3 border-b border-slate-100">
-              <span className="text-slate-500 text-sm font-bold uppercase tracking-wider">Payment Method</span>
-              <span className="text-slate-700 font-bold uppercase">{orderData?.paymentMethod?.replace('PAID VIA ', '') || 'CASH'}</span>
-            </div>
+          <div className="max-h-[50vh] overflow-y-auto bg-slate-50/50 rounded-2xl mb-6 flex justify-center p-4">
+            <ModernReceiptUI 
+              orderData={orderData} 
+              settings={settings} 
+              logoUrl={settings?.logoUrl}
+            />
           </div>
 
           {/* Action Buttons */}

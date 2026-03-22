@@ -1,197 +1,194 @@
-import React from 'react';
-
-interface ReceiptItem {
-  name: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
-}
+import { useEffect } from 'react';
 
 interface ModernReceiptUIProps {
-  orderData?: {
-    invoiceNumber: string;
-    date: string;
-    items: ReceiptItem[];
-    subtotal: number;
-    discount: number;
-    discountPercentage?: number;
-    tax: number;
-    grandTotal: number;
-    paymentMethod: string;
-  };
-  settings?: {
-    restaurantName: string;
-    address: string;
-    phone: string;
-  };
+  orderData?: any;
+  settings?: any;
+  logoUrl?: string;
+  paperSize?: string;
 }
 
-const BearLogo = () => (
-  <svg width="120" height="120" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-    {/* Bear Ears */}
-    <circle cx="60" cy="50" r="28" fill="black" />
-    <circle cx="140" cy="50" r="28" fill="black" />
-    <circle cx="60" cy="50" r="15" fill="white" />
-    <circle cx="140" cy="50" r="15" fill="white" />
-    {/* Bear Head */}
-    <circle cx="100" cy="110" r="75" fill="white" stroke="black" strokeWidth="6" />
-    {/* Chef Hat */}
-    <path d="M75 35C75 15 125 15 125 35V50H75V35Z" fill="white" stroke="black" strokeWidth="5" />
-    <path d="M65 50H135V65C135 70 130 73 125 73H75C70 73 65 70 65 65V50Z" fill="white" stroke="black" strokeWidth="5" />
-    {/* Eyes */}
-    <circle cx="75" cy="115" r="7" fill="black" />
-    <circle cx="125" cy="115" r="7" fill="black" />
-    {/* Muzzle */}
-    <ellipse cx="100" cy="145" rx="28" ry="22" fill="#f3f4f6" stroke="black" strokeWidth="3" />
-    <path d="M90 138C90 138 100 130 110 138" stroke="black" strokeWidth="3" strokeLinecap="round" />
-    <circle cx="100" cy="145" r="10" fill="black" />
-    <path d="M100 155V162M100 162C95 162 90 159 90 159M100 162C105 162 110 159 110 159" stroke="black" strokeWidth="3" strokeLinecap="round" />
-    {/* Utensils */}
-    <path d="M35 100V150M25 100H45" stroke="black" strokeWidth="4" strokeLinecap="round" />
-    <path d="M165 100V150M155 100C155 100 155 115 175 115" stroke="black" strokeWidth="4" strokeLinecap="round" />
-  </svg>
-);
-
-const ModernReceiptUI: React.FC<ModernReceiptUIProps> = ({ 
+export default function ModernReceiptUI({ 
   orderData, 
-  settings 
-}) => {
-  const data = orderData || {
-    invoiceNumber: "INV-1774161667070-6460",
-    date: "22/03/2026, 12:14:51 pm",
-    items: [
-      { name: "Colombo Special Burger", quantity: 1, unitPrice: 1800, total: 1800 },
-      { name: "Chef's Signature Tea", quantity: 2, unitPrice: 650, total: 1300 }
-    ],
-    subtotal: 3100,
-    discount: 620,
-    discountPercentage: 20,
-    grandTotal: 2480,
-    paymentMethod: "PAID VIA CARD"
-  };
+  settings, 
+  logoUrl,
+  paperSize = "80mm" 
+}: ModernReceiptUIProps) {
 
-  const restaurant = settings || {
-    restaurantName: "MYTEDDY RESTAURANT",
-    address: "123, Galle Road, Colombo",
-    phone: "+94 11 234 5678"
+  // Load custom font for the "Thank You!" signature
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.href = 'https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+    return () => {
+      document.head.removeChild(link);
+    };
+  }, []);
+
+  // Map application data to UI variables safely
+  const restaurantName = settings?.restaurantName || "MYTEDDY RESTAURANT";
+  const address = settings?.address || "123, Galle Road, Colombo";
+  const phone = settings?.phone || "+94 11 234 5678";
+  
+  const invoiceNo = orderData?.invoiceNumber || "INV-000000000000-0000";
+  const dateStr = orderData?.date ? new Date(orderData.date).toLocaleString('en-GB', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+  }) : "22/03/2026, 12:14:51 pm";
+
+  const items = orderData?.items || orderData?.orderItems || [];
+  const subtotal = Number(orderData?.subTotal || orderData?.subtotal || 0);
+  const discountAmt = Number(orderData?.discount || 0);
+  const discountPct = orderData?.discountPercentage || (subtotal > 0 ? Math.round((discountAmt / subtotal) * 100) : 0);
+  const total = Number(orderData?.grandTotal || 0);
+  const paymentMethod = orderData?.paymentMethod || "CASH";
+
+  const formatCurrency = (amount: number) => {
+    return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   };
 
   return (
-    <div className="flex items-center justify-center p-12 bg-gray-100 min-h-screen font-sans">
-      <div className="w-[480px] bg-white p-12 text-black shadow-2xl rounded-[60px] relative overflow-hidden">
+    <div className="font-sans">
+      <style>
+        {`
+          @media print {
+            @page { margin: 0; }
+            body { 
+              background: white; 
+              margin: 0;
+              padding: 0;
+              display: flex;
+              justify-content: flex-start;
+              align-items: flex-start;
+            }
+            .no-print { display: none !important; }
+            .print-area { 
+              box-shadow: none !important; 
+              margin: 0 !important; 
+              border-radius: 0 !important;
+              width: ${paperSize === '80mm' ? '72mm' : '48mm'} !important;
+              padding: 0.5em !important;
+            }
+          }
+          .signature-font { font-family: 'Great Vibes', cursive; }
+          .receipt-text-base { font-size: 1em; }
+          .receipt-text-sm { font-size: 0.85em; }
+          .receipt-text-xs { font-size: 0.7em; }
+          .receipt-text-lg { font-size: 1.2em; }
+          .receipt-text-xl { font-size: 1.5em; }
+          .receipt-text-2xl { font-size: 1.8em; }
+          .receipt-spacing { margin-top: 1.5em; margin-bottom: 1.5em; }
+        `}
+      </style>
+
+      {/* The Actual Receipt */}
+      <div 
+        id="receipt-preview" 
+        className={`print-area bg-white shadow-2xl text-black relative mx-auto
+          ${paperSize === '80mm' ? 'w-[320px] text-[15px] p-8 rounded-3xl' : 'w-[240px] text-[12px] p-5 rounded-2xl'}
+        `}
+        style={{ lineHeight: '1.4' }}
+      >
         
-        {/* Header Section */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="mb-2 scale-150">
-            <BearLogo />
+        {/* Logo Area */}
+        <div className="flex flex-col items-center mb-[1.5em]">
+          <div className="mb-[0.5em] flex items-center justify-center" style={{ width: '5em', height: '5em' }}>
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+            ) : (
+              <svg viewBox="0 0 100 100" className="w-full h-full text-black fill-current">
+                <path d="M 15 30 L 15 50 C 15 55 18 58 20 60 L 20 80 L 22 80 L 22 60 C 24 58 27 55 27 50 L 27 30 L 25 30 L 25 45 L 23 45 L 23 30 L 21 30 L 21 45 L 19 45 L 19 30 Z" />
+                <path d="M 80 30 C 85 30 85 45 85 55 L 82 60 L 82 80 L 80 80 L 80 60 L 78 55 Z" />
+                <path d="M 35 30 C 35 20 40 15 50 15 C 60 15 65 20 65 30 C 70 30 72 35 70 40 L 30 40 C 28 35 30 30 35 30 Z" />
+                <rect x="32" y="41" width="36" height="5" rx="2" />
+                <circle cx="35" cy="50" r="8" />
+                <circle cx="65" cy="50" r="8" />
+                <circle cx="50" cy="62" r="18" />
+                <circle cx="43" cy="58" r="2.5" fill="white" />
+                <circle cx="57" cy="58" r="2.5" fill="white" />
+                <ellipse cx="50" cy="66" rx="6" ry="4" fill="white" />
+                <circle cx="50" cy="65" r="2" />
+                <text x="50" y="85" fontFamily="cursive" fontSize="12" textAnchor="middle" fontWeight="bold">MY</text>
+                <text x="50" y="95" fontFamily="serif" fontSize="10" textAnchor="middle">TEDDY</text>
+              </svg>
+            )}
           </div>
-          <div className="text-center font-black text-sm uppercase tracking-[0.4em] mt-2 mb-4 border-b-2 border-black pb-1">
-            MY TEDDY
-          </div>
-          <h1 className="text-5xl font-black uppercase tracking-tight text-center leading-tight">
-            {restaurant.restaurantName}
-          </h1>
-          <div className="flex flex-col items-center mt-4 space-y-1">
-            <span className="text-2xl font-medium text-center">{restaurant.address}</span>
-            <span className="text-2xl font-medium">Tel: {restaurant.phone}</span>
-          </div>
+          <h1 className="receipt-text-xl font-bold text-center tracking-wide leading-tight mt-[0.2em]">{restaurantName.toUpperCase()}</h1>
+          <p className="receipt-text-base text-gray-800 text-center mt-[0.3em]">{address}</p>
+          <p className="receipt-text-base text-gray-800 text-center">Tel: {phone}</p>
         </div>
 
-        <div className="border-t border-dotted border-black opacity-60 my-8" />
+        <hr className="border-t-[1.5px] border-dashed border-gray-400 receipt-spacing" />
 
         {/* Invoice Meta */}
-        <div className="space-y-4 mb-8 px-2">
-          <div className="flex justify-between items-center text-2xl font-medium">
-            <span>Invoice:</span>
-            <span className="font-bold">{data.invoiceNumber}</span>
-          </div>
-          <div className="flex justify-between items-center text-2xl font-medium">
-            <span>Date:</span>
-            <span className="font-bold">{data.date}</span>
-          </div>
+        <div className="flex justify-between receipt-text-base mb-[0.3em]">
+          <span className="text-gray-700">Invoice:</span>
+          <span className="font-medium text-gray-900">{invoiceNo}</span>
+        </div>
+        <div className="flex justify-between receipt-text-base">
+          <span className="text-gray-700">Date:</span>
+          <span className="font-medium text-gray-900">{dateStr}</span>
         </div>
 
-        <div className="border-t border-dotted border-black opacity-60 my-8" />
+        <hr className="border-t-[1.5px] border-dashed border-gray-400 receipt-spacing" />
 
-        {/* Items Table */}
-        <div className="mb-6">
-          {/* Header */}
-          <div className="grid grid-cols-12 gap-1 mb-4 border-b-2 border-black pb-2">
-            <div className="col-span-5 text-xl font-black uppercase">ITEM</div>
-            <div className="col-span-1 text-xl font-black uppercase text-center">QTY</div>
-            <div className="col-span-3 text-xl font-black uppercase text-right">PRICE</div>
-            <div className="col-span-3 text-xl font-black uppercase text-right">TOTAL</div>
-          </div>
+        {/* Table Header */}
+        <div className="grid grid-cols-12 gap-[0.5em] font-bold receipt-text-base mb-[0.8em]">
+          <div className="col-span-5">ITEM</div>
+          <div className="col-span-2 text-center">QTY</div>
+          <div className="col-span-2 text-right">PRICE</div>
+          <div className="col-span-3 text-right">TOTAL</div>
+        </div>
 
-          {/* Rows */}
-          <div className="space-y-6">
-            {data.items.map((item, idx) => (
-              <div key={idx} className="grid grid-cols-12 gap-1 items-start text-xl font-semibold">
-                <div className="col-span-5 leading-tight uppercase pr-2">{item.name}</div>
-                <div className="col-span-1 text-center">{item.quantity}</div>
-                <div className="col-span-3 text-right whitespace-nowrap">Rs.{item.unitPrice.toLocaleString()}</div>
-                <div className="col-span-3 text-right font-black whitespace-nowrap">Rs.{item.total.toLocaleString()}</div>
+        {/* Items List */}
+        <div className="space-y-[0.8em] mb-[1.5em]">
+          {items.map((item: any, index: number) => {
+            const name = item.productName || item.product?.name || item.name || 'Item';
+            const qty = item.quantity || item.qty || 1;
+            const unitPrice = Number(item.price || item.unitPrice || 0);
+            const itemTotal = Number(item.total || (unitPrice * qty));
+
+            return (
+              <div key={index} className="grid grid-cols-12 gap-[0.5em] receipt-text-base text-gray-900 items-start">
+                <div className="col-span-5 pr-[0.2em] leading-tight">{name}</div>
+                <div className="col-span-2 text-center">{qty}</div>
+                <div className="col-span-2 text-right whitespace-nowrap">{formatCurrency(unitPrice)}</div>
+                <div className="col-span-3 text-right whitespace-nowrap">{formatCurrency(itemTotal)}</div>
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
 
-        <div className="border-t border-dotted border-black opacity-60 my-6" />
+        <hr className="border-t-[1.5px] border-dashed border-gray-400 receipt-spacing" />
 
-        {/* Totals Section */}
-        <div className="space-y-1">
-          <div className="flex justify-between items-center px-4 py-2 text-xl font-medium">
-            <span>Subtotal</span>
-            <span>Rs. {data.subtotal.toLocaleString()}</span>
-          </div>
-          
-          {data.discount > 0 && (
-            <div className="flex justify-between items-center px-4 py-3 text-xl font-medium bg-gray-100">
-              <span>Discount ({data.discountPercentage || 0}%)</span>
-              <span>-Rs. {data.discount.toLocaleString()}</span>
-            </div>
-          )}
-
-          <div className="flex justify-between items-center px-4 py-5 mt-2 bg-gray-200">
-            <span className="text-4xl font-black uppercase tracking-tighter">Total</span>
-            <span className="text-5xl font-black">
-              <span className="text-2xl mr-1">Rs.</span>
-              {data.grandTotal.toLocaleString()}
-            </span>
-          </div>
+        {/* Subtotal */}
+        <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em]">
+          <span>Subtotal</span>
+          <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(subtotal)}</span>
         </div>
 
-        {/* Footer */}
-        <div className="flex flex-col items-center mt-10 space-y-6">
-          <div className="text-3xl font-black uppercase tracking-widest bg-black text-white px-6 py-1">
-            {data.paymentMethod}
+        {/* Discount */}
+        {discountAmt > 0 && (
+          <div className="flex justify-between items-center bg-gray-200 py-[0.4em] px-[0.5em] receipt-text-lg mb-[0.4em] rounded-sm">
+            <span>Discount ({discountPct}%)</span>
+            <span>-<span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(discountAmt)}</span>
           </div>
-          
-          <div 
-            className="text-6xl text-center py-2"
-            style={{ 
-              fontFamily: "'Dancing Script', cursive", 
-              fontWeight: 700 
-            }}
-          >
-            Thank You!
-          </div>
-          
-          <div className="text-xl font-black uppercase tracking-[0.2em] text-center border-t border-black pt-4 w-full">
-            THANK YOU! COME AGAIN
-          </div>
+        )}
+
+        {/* Total */}
+        <div className="flex justify-between items-center bg-gray-200 py-[0.5em] px-[0.5em] mt-[0.8em] rounded-sm">
+          <span className="font-bold receipt-text-xl">Total</span>
+          <span className="font-bold receipt-text-2xl tracking-tight"><span className="receipt-text-sm mr-[0.2em] font-normal">Rs.</span>{formatCurrency(total)}</span>
         </div>
 
-        {/* Google Fonts Import */}
-        <style dangerouslySetInnerHTML={{ __html: `
-          @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap');
-          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
-          * { font-family: 'Inter', sans-serif; }
-        `}} />
+        {/* Footer Area */}
+        <div className="mt-[2.5em] text-center flex flex-col items-center">
+          <p className="font-bold receipt-text-lg mb-[0.5em]">PAID VIA {paymentMethod.replace('PAID VIA ', '').toUpperCase()}</p>
+          <p className="signature-font mb-[0.5em] transform -rotate-2" style={{ fontSize: '2.8em', lineHeight: '1' }}>Thank You!</p>
+          <p className="receipt-text-base font-medium mt-[0.5em]">THANK YOU! COME AGAIN</p>
+        </div>
 
       </div>
     </div>
   );
-};
-
-export default ModernReceiptUI;
+}

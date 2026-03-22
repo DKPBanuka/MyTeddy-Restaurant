@@ -16,6 +16,7 @@ import { CheckoutSuccessModal } from '../components/CheckoutSuccessModal';
 import { useCart } from '../context/CartContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSettings } from '../context/SettingsContext';
+import { generateHTMLReceipt } from '../utils/htmlReceipt';
 
 
 type OrderType = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
@@ -409,6 +410,12 @@ export function POSDashboard() {
         }
     };
 
+    const handlePrintReceipt = () => {
+        if (lastOrder) {
+            generateHTMLReceipt(lastOrder, settings, settings?.logoUrl);
+        }
+    };
+
     return (
         <div className="flex h-full w-full relative">
             <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50 w-full pb-20 md:pb-0 relative">
@@ -612,13 +619,7 @@ export function POSDashboard() {
                 isOpen={isSuccessModalOpen}
                 onClose={() => setIsSuccessModalOpen(false)}
                 orderData={lastOrder}
-                onPrint={() => {
-                    if (lastOrder) {
-                        import('../utils/pdfReceipt').then(m => 
-                            m.generatePDFReceipt(lastOrder, settings)
-                        );
-                    }
-                }}
+                onPrint={handlePrintReceipt}
             />
 
             {selectedProductForModal && (
