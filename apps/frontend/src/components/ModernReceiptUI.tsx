@@ -5,13 +5,15 @@ interface ModernReceiptUIProps {
   settings?: any;
   logoUrl?: string;
   paperSize?: string;
+  receiptType?: 'NORMAL' | 'PARTY_ADVANCE' | 'PARTY_FINAL';
 }
 
 export default function ModernReceiptUI({ 
   orderData, 
   settings, 
   logoUrl,
-  paperSize = "80mm" 
+  paperSize = "80mm",
+  receiptType = 'NORMAL'
 }: ModernReceiptUIProps) {
 
   // Load custom font for the "Thank You!" signature
@@ -30,22 +32,135 @@ export default function ModernReceiptUI({
   const address = settings?.address || "123, Galle Road, Colombo";
   const phone = settings?.phone || "+94 11 234 5678";
   
-  const invoiceNo = orderData?.invoiceNumber || "INV-000000000000-0000";
-  const dateStr = orderData?.date ? new Date(orderData.date).toLocaleString('en-GB', {
+  const isParty = receiptType === 'PARTY_ADVANCE' || receiptType === 'PARTY_FINAL';
+  
+  const invoiceNo = isParty 
+    ? `PB-${(orderData?.id || '0000').slice(0, 8).toUpperCase()}`
+    : (orderData?.invoiceNumber || "INV-000000000000-0000");
+
+  const actualDate = isParty ? orderData?.eventDate : (orderData?.date || new Date());
+  const dateStr = actualDate ? new Date(actualDate).toLocaleString('en-GB', {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
     timeZone: 'Asia/Colombo'
   }) : new Date().toLocaleString('en-GB', { timeZone: 'Asia/Colombo' });
 
-  const items = orderData?.items || orderData?.orderItems || [];
-  const subtotal = Number(orderData?.subTotal || orderData?.subtotal || 0);
+  // Items Parsing
+  let displayItems = [];
+  if (isParty) {
+    const rawItems = orderData?.items;
+    const parsedItems = typeof rawItems === 'string' ? JSON.parse(rawItems) : (rawItems || []);
+
+    displayItems = parsedItems.map((item: any) => {
+      let itemPrice = 0;
+      if (item.packageId) {
+          itemPrice = parseFloat(item.package?.price || '0');
+      } else if (item.productId) {
+          itemPrice = item.size ? parseFloat(item.size.price) : parseFloat(item.product?.price || '0');
+          if (item.selectedAddons) {
+              itemPrice += item.selectedAddons.reduce((sum: number, a: any) => sum + parseFloat(a.price), 0);
+          }
+      } else if (item.addonIds && item.selectedAddons) {
+          itemPrice = parseFloat(item.selectedAddons[0]?.price || '0');
+      }
+      
+      const rawName = item.package?.name || item.product?.name || item.name || 'Item';
+      const sizeName = typeof item.size === 'string' ? item.size : (item.size?.name || item.sizeName || null);
+      
+      // Truncate name if it's too long to allow space for the size
+      const maxChars = 45;
+      const displayName = rawName.length > maxChars ? rawName.substring(0, maxChars - 3) + '...' : rawName;
+
+      const addons = (item.selectedAddons || []).map((a: any) => a.name);
+
+      return {
+        name: displayName,
+        size: sizeName,
+        addons: addons,
+        qty: item.quantity || 1,
+        price: itemPrice,
+        total: itemPrice * (item.quantity || 1)
+      };
+    });
+
+    // Add Hall Charge if applicable
+    const hallCharge = Number(orderData?.hallCharge || 0);
+    if (hallCharge > 0) {
+      displayItems.push({
+        name: 'Hall Charge (Exclusive)',
+        qty: 1,
+        price: hallCharge,
+        total: hallCharge
+      });
+    }
+
+    // Add Addons Total if applicable
+    const addonsTotal = Number(orderData?.addonsTotal || 0);
+    if (addonsTotal > 0) {
+      displayItems.push({
+        name: 'Additional Extras',
+        qty: 1,
+        price: addonsTotal,
+        total: addonsTotal
+      });
+    }
+  } else {
+    displayItems = (orderData?.items || orderData?.orderItems || []).map((item: any) => {
+      const name = item.productName || item.product?.name || item.name || 'Item';
+      const qty = item.quantity || item.qty || 1;
+      
+      let unitPrice = 0;
+      const potentialPrices = [
+          item.price,
+          item.unitPrice,
+          item.priceAtTimeOfSale,
+          item.product?.price,
+          item.package?.price
+      ];
+      
+      for (const p of potentialPrices) {
+          const val = Number(p);
+          if (!isNaN(val) && val > 0) {
+              unitPrice = val;
+              break;
+          }
+      }
+
+      const maxChars = 45;
+      const displayName = name.length > maxChars ? name.substring(0, maxChars - 3) + '...' : name;
+      const sizeName = item.sizeName || 
+                       item.productSize?.name || 
+                       (typeof item.size === 'string' ? item.size : item.size?.name) || 
+                       item.variantName || 
+                       null;
+
+      const addons = (item.addons || item.orderItemAddons || []).map((a: any) => a.addonName || a.addon?.name || a.name);
+
+      const itemTotal = Number(item.total || item.itemTotal || (unitPrice * qty));
+      return { name: displayName, size: sizeName, addons, qty: qty, price: unitPrice, total: itemTotal };
+    });
+  }
+
+  const subtotal = isParty 
+    ? (Number(orderData?.hallCharge || 0) + Number(orderData?.menuTotal || 0) + Number(orderData?.addonsTotal || 0))
+    : Number(orderData?.subTotal || orderData?.subtotal || 0);
+    
   const discountAmt = Number(orderData?.discount || 0);
-  const discountPct = orderData?.discountPercentage || (subtotal > 0 ? Math.round((discountAmt / subtotal) * 100) : 0);
-  const total = Number(orderData?.grandTotal || 0);
+  const serviceChargeAmt = Number(orderData?.serviceCharge || 0);
+  const discountPct = isParty ? 0 : (orderData?.discountPercentage || (subtotal > 0 ? Math.round((discountAmt / subtotal) * 100) : 0));
+  const total = isParty ? Number(orderData?.totalAmount || 0) : Number(orderData?.grandTotal || 0);
+  const advancePaid = Number(orderData?.advancePaid || 0);
+  
   const paymentMethod = orderData?.paymentMethod || "CASH";
 
   const formatCurrency = (amount: number) => {
     return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  };
+
+  const getReceiptHeader = () => {
+    if (receiptType === 'PARTY_ADVANCE') return 'BOOKING CONFIRMATION - ADVANCE RECEIPT';
+    if (receiptType === 'PARTY_FINAL') return 'FINAL INVOICE - PARTY BOOKING';
+    return null;
   };
 
   return (
@@ -63,6 +178,13 @@ export default function ModernReceiptUI({
               align-items: flex-start;
             }
             .no-print { display: none !important; }
+            .line-clamp-2 {
+              display: -webkit-box;
+              -webkit-line-clamp: 2;
+              -webkit-box-orient: vertical;  
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
             .print-area { 
               box-shadow: none !important; 
               margin: 0 !important; 
@@ -108,6 +230,12 @@ export default function ModernReceiptUI({
           <p className="receipt-text-base text-center" style={{ color: '#1f2937' }}>Tel: {phone}</p>
         </div>
 
+        {getReceiptHeader() && (
+          <div className="bg-black text-white py-1 px-2 text-center receipt-text-sm font-black mb-[1em] tracking-tighter">
+            {getReceiptHeader()}
+          </div>
+        )}
+
         <hr className="border-t-[1.5px] border-dashed receipt-spacing" style={{ borderColor: '#9ca3af' }} />
 
         {/* Invoice Meta */}
@@ -116,7 +244,7 @@ export default function ModernReceiptUI({
           <span className="font-medium" style={{ color: '#111827' }}>{invoiceNo}</span>
         </div>
         <div className="flex justify-between receipt-text-base">
-          <span style={{ color: '#4b5563' }}>Date:</span>
+          <span style={{ color: '#4b5563' }}>{isParty ? 'Event Date:' : 'Date:'}</span>
           <span className="font-medium" style={{ color: '#111827' }}>{dateStr}</span>
         </div>
 
@@ -132,41 +260,27 @@ export default function ModernReceiptUI({
 
         {/* Items List */}
         <div className="space-y-[0.8em] mb-[1.5em]">
-          {items.map((item: any, index: number) => {
-            const name = item.productName || item.product?.name || item.name || 'Item';
-            const qty = item.quantity || item.qty || 1;
-            
-            // Resilient price extraction matching htmlReceipt.ts
-            let unitPrice = 0;
-            const potentialPrices = [
-                item.price,
-                item.unitPrice,
-                item.priceAtTimeOfSale,
-                item.product?.price,
-                item.package?.price
-            ];
-            
-            for (const p of potentialPrices) {
-                const val = Number(p);
-                if (!isNaN(val) && val > 0) {
-                    unitPrice = val;
-                    break;
-                }
-            }
-
-            if (unitPrice === 0) {
-                const totalVal = Number(item.total || item.totalPrice || item.itemTotal || 0);
-                if (totalVal > 0) unitPrice = totalVal / qty;
-            }
-
-            const itemTotal = Number(item.total || item.itemTotal || (unitPrice * qty));
-
+          {displayItems.map((item: any, index: number) => {
             return (
               <div key={index} className="grid grid-cols-12 gap-[0.5em] receipt-text-base items-start" style={{ color: '#111827' }}>
-                <div className="col-span-5 pr-[0.2em] leading-tight font-bold">{name}</div>
-                <div className="col-span-2 text-center font-bold">{qty}</div>
-                <div className="col-span-2 text-right whitespace-nowrap">{formatCurrency(unitPrice)}</div>
-                <div className="col-span-3 text-right whitespace-nowrap font-black">{formatCurrency(itemTotal)}</div>
+                <div className="col-span-5 pr-[0.2em] leading-tight flex flex-col items-start overflow-hidden">
+                  <div className="line-clamp-2 font-bold w-full uppercase">
+                    {item.name}
+                  </div>
+                  {item.size && (
+                    <div className="receipt-text-xs font-black uppercase text-slate-800 bg-slate-50 border border-slate-100 px-1 py-0.5 rounded-sm mt-0.5 leading-none shadow-sm">
+                      ({item.size})
+                    </div>
+                  )}
+                  {item.addons && item.addons.length > 0 && (
+                    <div className="receipt-text-xs font-normal opacity-60 mt-0.5 leading-tight">
+                      + {item.addons.join(', ')}
+                    </div>
+                  )}
+                </div>
+                <div className="col-span-2 text-center font-bold">{item.qty}</div>
+                <div className="col-span-2 text-right whitespace-nowrap">{formatCurrency(item.price)}</div>
+                <div className="col-span-3 text-right whitespace-nowrap font-black">{formatCurrency(item.total)}</div>
               </div>
             );
           })}
@@ -174,32 +288,92 @@ export default function ModernReceiptUI({
 
         <hr className="border-t-[1.5px] border-dashed receipt-spacing" style={{ borderColor: '#9ca3af' }} />
 
-        {/* Subtotal */}
-        {(discountAmt > 0 || subtotal !== total) && (
-          <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em]">
-            <span>Subtotal</span>
-            <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(subtotal)}</span>
-          </div>
-        )}
+        {/* Financials Section */}
+        {receiptType === 'NORMAL' ? (
+          <>
+            {/* Subtotal */}
+            {(discountAmt > 0 || subtotal !== total) && (
+              <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em]">
+                <span>Subtotal</span>
+                <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(subtotal)}</span>
+              </div>
+            )}
 
-        {/* Discount */}
-        {discountAmt > 0 && (
-          <div className="flex justify-between items-center py-[0.4em] px-[0.5em] receipt-text-lg mb-[0.4em] rounded-sm" style={{ backgroundColor: '#e5e7eb' }}>
-            <span>Discount ({discountPct}%)</span>
-            <span>-<span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(discountAmt)}</span>
-          </div>
-        )}
+            {/* Discount */}
+            {discountAmt > 0 && (
+              <div className="flex justify-between items-center py-[0.4em] px-[0.5em] receipt-text-lg mb-[0.4em] rounded-sm" style={{ backgroundColor: '#e5e7eb' }}>
+                <span>Discount ({discountPct}%)</span>
+                <span>-<span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(discountAmt)}</span>
+              </div>
+            )}
 
-        {/* Total */}
-        <div className="flex justify-between items-center py-[0.5em] px-[0.5em] mt-[0.8em] rounded-sm" style={{ backgroundColor: '#e5e7eb' }}>
-          <span className="font-bold receipt-text-xl">Total</span>
-          <span className="font-bold receipt-text-2xl tracking-tight"><span className="receipt-text-sm mr-[0.2em] font-normal">Rs.</span>{formatCurrency(total)}</span>
-        </div>
+            {/* Total */}
+            <div className="flex justify-between items-center py-[0.5em] px-[0.5em] mt-[0.8em] rounded-sm" style={{ backgroundColor: '#e5e7eb' }}>
+              <span className="font-bold receipt-text-xl">Total</span>
+              <span className="font-bold receipt-text-2xl tracking-tight"><span className="receipt-text-sm mr-[0.2em] font-normal">Rs.</span>{formatCurrency(total)}</span>
+            </div>
+          </>
+        ) : receiptType === 'PARTY_ADVANCE' ? (
+          <>
+            <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em]">
+              <span>Base Total</span>
+              <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(subtotal)}</span>
+            </div>
+            {serviceChargeAmt > 0 && (
+              <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em] text-blue-600">
+                <span>Service Charge</span>
+                <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(serviceChargeAmt)}</span>
+              </div>
+            )}
+            {discountAmt > 0 && (
+              <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em] text-red-600">
+                <span>Discount Applied</span>
+                <span>-<span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(discountAmt)}</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em] font-bold">
+              <span>Advance Paid</span>
+              <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(advancePaid)}</span>
+            </div>
+            <div className="flex justify-between items-center py-[0.5em] px-[0.5em] mt-[0.8em] rounded-sm bg-black text-white">
+              <span className="font-bold receipt-text-xl">BALANCE DUE</span>
+              <span className="font-bold receipt-text-2xl tracking-tight"><span className="receipt-text-sm mr-[0.2em] font-normal">Rs.</span>{formatCurrency(total - advancePaid)}</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em]">
+              <span>Base Total</span>
+              <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(subtotal)}</span>
+            </div>
+            {serviceChargeAmt > 0 && (
+              <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em] text-blue-600">
+                <span>Service Charge</span>
+                <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(serviceChargeAmt)}</span>
+              </div>
+            )}
+            {discountAmt > 0 && (
+              <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em] text-red-600">
+                <span>Discount Applied</span>
+                <span>-<span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(discountAmt)}</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em] italic">
+              <span>Less: Advance Paid</span>
+              <span>-<span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(advancePaid)}</span>
+            </div>
+            <div className="flex justify-between items-center py-[0.5em] px-[0.5em] mt-[0.8em] rounded-sm bg-black text-white">
+              <span className="font-bold receipt-text-lg leading-tight">NET AMOUNT<br/>PAYABLE / PAID</span>
+              <span className="font-bold receipt-text-2xl tracking-tight"><span className="receipt-text-sm mr-[0.2em] font-normal">Rs.</span>{formatCurrency(total - advancePaid)}</span>
+            </div>
+          </>
+        )}
 
         {/* Footer Area */}
         <div className="mt-[2.5em] pb-[2em] text-center flex flex-col items-center">
-          <p className="font-bold receipt-text-lg mb-[0.5em]">PAID VIA {paymentMethod.replace('PAID VIA ', '').toUpperCase()}</p>
+          {receiptType === 'NORMAL' && <p className="font-bold receipt-text-lg mb-[0.5em]">PAID VIA {paymentMethod.replace('PAID VIA ', '').toUpperCase()}</p>}
           <p className="signature-font mb-[0.5em] transform -rotate-2" style={{ fontSize: '2.8em', lineHeight: '1' }}>Thank You!</p>
+          {isParty && <p className="receipt-text-xs uppercase tracking-widest opacity-50 font-bold mt-2">Professional Hospitality by MyTeddy</p>}
         </div>
 
       </div>

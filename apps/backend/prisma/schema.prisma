@@ -260,8 +260,11 @@ model PartyBooking {
   hallCharge      Decimal            @default(0) @db.Decimal(10, 2)
   menuTotal       Decimal            @default(0) @db.Decimal(10, 2)
   addonsTotal     Decimal            @default(0) @db.Decimal(10, 2)
+  serviceCharge   Decimal            @default(0) @db.Decimal(10, 2) // Added
+  discount        Decimal            @default(0) @db.Decimal(10, 2) // Added
   totalAmount     Decimal            @default(0) @db.Decimal(10, 2)
   advancePaid     Decimal            @default(0) @db.Decimal(10, 2)
+  paymentMethod   String             @default("CASH") // Added
   status          PartyBookingStatus @default(PENDING)
   bookingType     BookingType        @default(PARTIAL)
   items           Json?              @default("[]")

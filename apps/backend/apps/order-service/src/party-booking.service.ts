@@ -55,8 +55,10 @@ export class PartyBookingService {
         const hallCharge = bookingType === 'EXCLUSIVE' ? 5000 : 0; // Enforce UI rule
         const menuTotal = Number(data.menuTotal) || 0;
         const addonsTotal = Number(data.addonsTotal) || 0;
+        const serviceCharge = Number(data.serviceCharge) || 0;
+        const discount = Number(data.discount) || 0;
 
-        const totalAmount = hallCharge + menuTotal + addonsTotal;
+        const totalAmount = (hallCharge + menuTotal + addonsTotal + serviceCharge) - discount;
         const advancePaid = Number(data.advancePaid) || 0;
 
         // 3. Create Record
@@ -72,10 +74,13 @@ export class PartyBookingService {
                 hallCharge,
                 menuTotal,
                 addonsTotal,
+                serviceCharge,
+                discount,
                 totalAmount,
                 advancePaid,
                 items: data.items || [],
                 bookingType,
+                paymentMethod: data.paymentMethod || 'CASH',
                 status: advancePaid > 0 ? 'CONFIRMED' : 'PENDING'
             }
         });
@@ -197,7 +202,7 @@ export class PartyBookingService {
         if (!booking) throw new RpcException(new NotFoundException('Booking not found'));
 
         const newAddonsTotal = Number(booking.addonsTotal) + Number(additionalAmount);
-        const newTotalAmount = Number(booking.hallCharge) + Number(booking.menuTotal) + newAddonsTotal;
+        const newTotalAmount = (Number(booking.hallCharge) + Number(booking.menuTotal) + newAddonsTotal + Number(booking.serviceCharge)) - Number(booking.discount);
 
         return this.prisma.partyBooking.update({
             where: { id },
@@ -212,7 +217,7 @@ export class PartyBookingService {
         const booking = await this.prisma.partyBooking.findUnique({ where: { id } });
         if (!booking) throw new RpcException(new NotFoundException('Booking not found'));
 
-        const newTotalAmount = Number(booking.hallCharge) + Number(menuTotal) + Number(booking.addonsTotal);
+        const newTotalAmount = (Number(booking.hallCharge) + Number(menuTotal) + Number(booking.addonsTotal) + Number(booking.serviceCharge)) - Number(booking.discount);
 
         return this.prisma.partyBooking.update({
             where: { id },
@@ -272,10 +277,14 @@ export class PartyBookingService {
         const hallCharge = bookingType === 'EXCLUSIVE' ? 5000 : 0;
         const menuTotal = data.menuTotal !== undefined ? Number(data.menuTotal) : Number(booking.menuTotal);
         const addonsTotal = data.addonsTotal !== undefined ? Number(data.addonsTotal) : Number(booking.addonsTotal);
-        const totalAmount = hallCharge + menuTotal + addonsTotal;
+        const serviceCharge = data.serviceCharge !== undefined ? Number(data.serviceCharge) : Number(booking.serviceCharge);
+        const discount = data.discount !== undefined ? Number(data.discount) : Number(booking.discount);
+        
+        const totalAmount = (hallCharge + menuTotal + addonsTotal + serviceCharge) - discount;
         const advancePaid = data.advancePaid !== undefined ? Number(data.advancePaid) : Number(booking.advancePaid);
         const items = data.items !== undefined ? data.items : booking.items;
         const customerPhone = data.customerPhone || booking.customerPhone;
+        const paymentMethod = data.paymentMethod || booking.paymentMethod;
 
         const updateData: any = {
             customerPhone,
@@ -286,10 +295,13 @@ export class PartyBookingService {
             hallCharge,
             menuTotal,
             addonsTotal,
+            serviceCharge,
+            discount,
             totalAmount,
             advancePaid,
             items,
             bookingType: bookingType as any,
+            paymentMethod: paymentMethod || 'CASH',
         };
 
         return this.prisma.partyBooking.update({

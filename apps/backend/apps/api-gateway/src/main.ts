@@ -9,7 +9,7 @@ async function bootstrap() {
   app.use(urlencoded({ extended: true, limit: '100mb' }));
   // Enable CORS for React frontend
   app.enableCors();
-  const port = process.env.PORT || 3000;
+  const port = process.env.PORT || 3010;
   await app.listen(port);
   console.log(`API Gateway is running on: ${await app.getUrl()}`);
 }

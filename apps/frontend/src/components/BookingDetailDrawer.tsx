@@ -3,6 +3,9 @@ import { X, Phone, User, Calendar as CalendarIcon, Clock, DollarSign, MessageCir
 import { api, type PartyBookingDto } from '../api';
 import { toast } from 'sonner';
 import { MenuSelectionPopup } from './MenuSelectionPopup';
+import { useSettings } from '../context/SettingsContext';
+import { generateHTMLReceipt } from '../utils/htmlReceipt';
+import { ReceiptPreparationModal } from './ReceiptPreparationModal';
 
 interface BookingDetailDrawerProps {
     isOpen: boolean;
@@ -13,12 +16,17 @@ interface BookingDetailDrawerProps {
 }
 
 export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdit }: BookingDetailDrawerProps) {
+    const { settings } = useSettings();
     const [paymentAmount, setPaymentAmount] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     // Menu Editing State
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isSavingMenu, setIsSavingMenu] = useState(false);
+    const [preparationModal, setPreparationModal] = useState<{ isOpen: boolean; type: 'PARTY_ADVANCE' | 'PARTY_FINAL' }>({
+        isOpen: false,
+        type: 'PARTY_ADVANCE'
+    });
 
     if (!isOpen || !booking) return null;
 
@@ -76,6 +84,33 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
             toast.error(err?.response?.data?.message || 'Failed to update menu.');
         } finally {
             setIsSavingMenu(false);
+        }
+    };
+
+    const handlePreparationConfirm = async (data: { discount: number; serviceCharge: number; paymentMethod: string }) => {
+        setIsSubmitting(true);
+        try {
+            // 1. Save to backend
+            await api.updatePartyBooking(booking.id!, {
+                discount: data.discount,
+                serviceCharge: data.serviceCharge,
+                paymentMethod: data.paymentMethod
+            });
+            
+            // 2. Refresh local state/parent
+            onSuccess();
+            
+            // 3. Trigger receipt print with updated data
+            const updatedBooking = { ...booking, ...data, totalAmount: (Number(booking.hallCharge || 0) + Number(booking.menuTotal || 0) + Number(booking.addonsTotal || 0) + data.serviceCharge) - data.discount };
+            generateHTMLReceipt(updatedBooking, settings, settings?.logoUrl, preparationModal.type);
+            
+            // 4. Close modal
+            setPreparationModal(prev => ({ ...prev, isOpen: false }));
+            toast.success('Invoiced successfully!');
+        } catch (err: any) {
+            toast.error(err?.response?.data?.message || 'Failed to prepare receipt.');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -215,16 +250,35 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
                                 </div>
                                 <ChevronRight size={18} className="text-slate-300 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
                             </button>
-                            <button className="w-full flex items-center justify-between p-4 bg-white text-slate-700 rounded-3xl border border-white transition-all group opacity-50 grayscale cursor-not-allowed shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-12 h-12 bg-slate-100 text-slate-600 rounded-2xl flex items-center justify-center"><Printer size={20} /></div>
-                                    <div className="text-left">
-                                        <div className="font-black text-sm">Download PDF</div>
-                                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Print Receipt</div>
+                            <div className="space-y-2">
+                                <button 
+                                    onClick={() => setPreparationModal({ isOpen: true, type: 'PARTY_ADVANCE' })}
+                                    className="w-full flex items-center justify-between p-4 bg-white hover:bg-blue-50 text-slate-700 rounded-3xl border border-white transition-all group shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-blue-500/10 hover:border-blue-100"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center transition-colors group-hover:bg-blue-600 group-hover:text-white"><Printer size={20} /></div>
+                                        <div className="text-left">
+                                            <div className="font-black text-sm group-hover:text-blue-700 transition-colors">Advance Receipt</div>
+                                            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Print Confirmation</div>
+                                        </div>
                                     </div>
-                                </div>
-                                <ChevronRight size={18} className="text-slate-300" />
-                            </button>
+                                    <ChevronRight size={18} className="text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+                                </button>
+
+                                <button 
+                                    onClick={() => setPreparationModal({ isOpen: true, type: 'PARTY_FINAL' })}
+                                    className="w-full flex items-center justify-between p-4 bg-white hover:bg-slate-900 hover:text-white text-slate-700 rounded-3xl border border-white transition-all group shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-slate-900/10 hover:border-slate-800"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-12 h-12 bg-slate-100 text-slate-600 rounded-2xl flex items-center justify-center transition-colors group-hover:bg-slate-800 group-hover:text-white"><Printer size={20} /></div>
+                                        <div className="text-left">
+                                            <div className="font-black text-sm transition-colors text-slate-700 group-hover:text-white">Final Invoice</div>
+                                            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Full Settlement</div>
+                                        </div>
+                                    </div>
+                                    <ChevronRight size={18} className="text-slate-300 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -235,7 +289,9 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
                         <X size={20} />
                     </button>
                     
-                    <h3 className="text-xl font-black tracking-tight mb-10 text-white/90">Financial Overview</h3>
+                    <div className="flex items-center justify-between mb-8">
+                        <h3 className="text-xl font-black tracking-tight text-white/90">Financial Overview</h3>
+                    </div>
                     
                     <div className="space-y-4 mb-8 flex-1">
                         <div className="flex justify-between items-center py-4 border-b border-white/5">
@@ -250,6 +306,18 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
                             <span className="text-slate-400 font-bold text-sm tracking-wide">Extra Addons</span>
                             <span className="font-black text-white">Rs. {addonsTotal.toLocaleString()}</span>
                         </div>
+                        {Number(booking.serviceCharge || 0) > 0 && (
+                            <div className="flex justify-between items-center py-4 border-b border-white/5">
+                                <span className="text-blue-400 font-bold text-sm tracking-wide">Service Charge</span>
+                                <span className="font-black text-blue-400">Rs. {Number(booking.serviceCharge).toLocaleString()}</span>
+                            </div>
+                        )}
+                        {Number(booking.discount || 0) > 0 && (
+                            <div className="flex justify-between items-center py-4 border-b border-white/5">
+                                <span className="text-red-400 font-bold text-sm tracking-wide">Discount Applied</span>
+                                <span className="font-black text-red-400">-Rs. {Number(booking.discount).toLocaleString()}</span>
+                            </div>
+                        )}
                         <div className="flex justify-between items-center py-4">
                             <span className="text-white font-black uppercase tracking-widest text-xs">Gross Total</span>
                             <span className="font-black text-2xl text-blue-400 tracking-tight">Rs. {totalAmount.toLocaleString()}</span>
@@ -312,6 +380,18 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
                         initialItems={items}
                     />
                 </div>
+            )}
+            {/* Receipt Preparation Modal */}
+            {preparationModal.isOpen && (
+                <ReceiptPreparationModal 
+                    isOpen={preparationModal.isOpen}
+                    onClose={() => setPreparationModal(prev => ({ ...prev, isOpen: false }))}
+                    booking={booking}
+                    settings={settings}
+                    receiptType={preparationModal.type}
+                    onConfirm={handlePreparationConfirm}
+                    isSubmitting={isSubmitting}
+                />
             )}
         </div>
     );
