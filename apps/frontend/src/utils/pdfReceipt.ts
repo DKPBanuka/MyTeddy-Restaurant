@@ -19,7 +19,8 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
     document.body.appendChild(container);
 
     const items = (orderData.orderItems || orderData.items || []).map((item: any) => {
-        const name = item.productName || item.product?.name || item.name || 'Item';
+        const rawName = item.productName || item.product?.name || item.name || 'Item';
+        const nameWithoutRetail = rawName.replace(/\(RETAIL\)/gi, '').trim();
         const qty = item.quantity || item.qty || 1;
         
         let unitPrice = 0;
@@ -44,13 +45,55 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
             if (totalVal > 0) unitPrice = totalVal / qty;
         }
 
+        const sizeName = item.sizeName || 
+                         item.productSize?.name || 
+                         (typeof item.size === 'string' ? item.size : item.size?.name) || 
+                         item.variantName || 
+                         null;
+        
+        const addons = (item.addons || item.orderItemAddons || []).map((a: any) => a.addonName || a.addon?.name || a.name);
+
         const itemTotal = Number(item.total || item.itemTotal || (unitPrice * qty));
-        return { name, qty, unitPrice, itemTotal };
+        return { 
+            name: nameWithoutRetail, 
+            size: sizeName, 
+            addons, 
+            qty, 
+            unitPrice, 
+            itemTotal,
+            type: item.type || item.product?.type || 'FOOD'
+        };
     });
+
+    const foodItems = items.filter((i: any) => i.type !== 'RETAIL');
+    const retailItems = items.filter((i: any) => i.type === 'RETAIL');
+
+    const renderItemRow = (item: any) => `
+        <tr>
+            <td class="col-item font-bold">
+                <div style="word-wrap: break-word;">
+                    ${item.name.toUpperCase()}
+                    ${item.size ? `
+                        <span style="font-size: 10px; font-weight: 800; color: #444; margin-left: 4px; vertical-align: middle;">
+                            (${item.size.toUpperCase()})
+                        </span>
+                    ` : ''}
+                </div>
+                ${item.addons && item.addons.length > 0 ? `
+                    <div style="font-size: 10px; font-weight: normal; color: #666; margin-top: 1px;">
+                        + ${item.addons.join(', ')}
+                    </div>
+                ` : ''}
+            </td>
+            <td class="col-qty font-bold">${item.qty}</td>
+            <td class="col-price">${formatCurrency(item.unitPrice)}</td>
+            <td class="col-total font-black">${formatCurrency(item.itemTotal)}</td>
+        </tr>
+    `;
 
     const subTotal = Number(orderData.subTotal || orderData.subtotal || 0);
     const discountAmt = Number(orderData.discount || 0);
-    const discountPercentage = orderData.discountPercentage || (subTotal > 0 ? Math.round((discountAmt / subTotal) * 100) : 0);
+    const discountPercentage = subTotal > 0 ? Math.round((discountAmt / subTotal) * 100) : 0;
     const total = Number(orderData.grandTotal || 0);
     const paymentMethod = orderData.paymentMethod || 'CASH';
 
@@ -159,14 +202,13 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
                     </tr>
                 </thead>
                 <tbody>
-                    ${items.map((item: any) => `
+                    ${foodItems.map((item: any) => renderItemRow(item)).join('')}
+                    ${(foodItems.length > 0 && retailItems.length > 0) ? `
                         <tr>
-                            <td class="col-item font-bold">${item.name}</td>
-                            <td class="col-qty font-bold">${item.qty}</td>
-                            <td class="col-price">${formatCurrency(item.unitPrice)}</td>
-                            <td class="col-total font-black">${formatCurrency(item.itemTotal)}</td>
+                            <td colspan="4" style="padding: 10px 0; border-bottom: 2px dashed #eee;"></td>
                         </tr>
-                    `).join('')}
+                    ` : ''}
+                    ${retailItems.map((item: any) => renderItemRow(item)).join('')}
                 </tbody>
             </table>
 

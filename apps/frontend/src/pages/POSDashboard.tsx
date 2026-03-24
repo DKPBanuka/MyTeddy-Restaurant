@@ -164,7 +164,9 @@ export function POSDashboard() {
             a.categories?.some((c: any) => c.id === product.categoryId)
         );
 
-        if ((product.sizes && product.sizes.length > 1) || relevantAddons.length > 0) {
+        const isComplex = (product.sizes && product.sizes.length > 1) || relevantAddons.length > 0;
+
+        if (isComplex) {
             setSelectedProductForModal(product);
             return;
         }
@@ -270,8 +272,9 @@ export function POSDashboard() {
     };
 
     const getProductQtyInCart = (productId: string) => {
-        const item = cartItems.find((itm) => itm.productId === productId);
-        return item ? item.quantity : 0;
+        return cartItems
+            .filter((itm) => itm.productId === productId)
+            .reduce((sum, itm) => sum + itm.quantity, 0);
     };
 
     const cartTotalQty = cartItems.reduce((sum, item) => sum + item.quantity, 0);
@@ -307,15 +310,21 @@ export function POSDashboard() {
                 return sum + (basePrice + addonsPrice) * item.quantity;
             }, 0);
 
-            const payloadItems: any[] = cartItems.map((item) => ({
-                productId: item.productId,
-                packageId: item.packageId || undefined,
-                quantity: item.quantity,
-                type: item.type,
-                sizeId: item.sizeId,
-                addonIds: item.addonIds,
-                notes: item.notes
-            }));
+            const payloadItems: any[] = cartItems.map((item) => {
+                const basePrice = item.size ? Number(item.size.price) : Number(item.product?.price || item.package?.price || 0);
+                const addonsPrice = item.selectedAddons?.reduce((s, a) => s + Number(a.price), 0) || 0;
+                
+                return {
+                    productId: item.productId,
+                    packageId: item.packageId || undefined,
+                    quantity: item.quantity,
+                    type: item.type,
+                    sizeId: item.sizeId || item.size?.id || null,
+                    addonIds: item.addonIds || item.selectedAddons?.map((a: any) => a.id) || [],
+                    unitPrice: basePrice + addonsPrice,
+                    notes: item.notes
+                };
+            });
 
             let createdOrder: any = null;
 
@@ -350,28 +359,44 @@ export function POSDashboard() {
             const orderToSave = {
                 ...createdOrder,
                 // Hardened enrichment: Map cart metadata to order items for the receipt utility.
-                orderItems: (createdOrder.orderItems || createdOrder.items || []).map((oi: any) => {
+                orderItems: (createdOrder.orderItems || createdOrder.items || []).map((oi: any, idx: number) => {
                     const oiProdId = oi.productId?.toString();
                     const oiPkgId = oi.packageId?.toString();
+                    const oiSizeId = oi.sizeId?.toString();
 
-                    const cartItem = (cartItems as any[]).find(ci => {
-                        const ciProdId = ci.productId?.toString() || ci.id?.toString();
-                        const ciPkgId = ci.packageId?.toString() || ci.id?.toString();
-                        
-                        if (oiProdId && ciProdId === oiProdId) return true;
-                        if (oiPkgId && ciPkgId === oiPkgId) return true;
-                        return false;
-                    });
+                    // Try to match by index first as it's the most reliable for 1-to-1 POS orders
+                    let cartItem = (cartItems as any[])[idx];
+                    
+                    // Verify if index match is correct product
+                    const ciProdId = cartItem?.productId?.toString() || cartItem?.id?.toString();
+                    const ciPkgId = cartItem?.packageId?.toString() || cartItem?.id?.toString();
+                    
+                    const isIndexMatch = (oiProdId && ciProdId === oiProdId) || (oiPkgId && ciPkgId === oiPkgId);
 
-                    console.log(`Mapping OI (Prod:${oiProdId}, Pkg:${oiPkgId}) -> Found CartItem:`, cartItem?.name || 'NOT FOUND');
+                    if (!isIndexMatch) {
+                        // Fallback to attribute matching if order changed (unlikely in POS)
+                        cartItem = (cartItems as any[]).find(ci => {
+                            const pId = ci.productId?.toString() || ci.id?.toString();
+                            const pkgId = ci.packageId?.toString() || ci.id?.toString();
+                            if ((oiProdId && pId !== oiProdId) && (oiPkgId && pkgId !== oiPkgId)) return false;
+
+                            const sId = (ci.sizeId || ci.size?.id)?.toString() || null;
+                            if ((oiSizeId || null) !== sId) return false;
+
+                            return true;
+                        });
+                    }
+
+                    // console.log(`Mapping OI [idx:${idx}] (Prod:${oiProdId}, Size:${oiSizeId}) -> Found CartItem:`, cartItem?.name || 'NOT FOUND');
 
                     return {
                         ...oi,
-                        name: cartItem?.name || cartItem?.product?.name || cartItem?.package?.name || oi.product?.name || oi.package?.name || `Item (${oiProdId || oiPkgId || '?'})`,
+                        name: cartItem?.name || cartItem?.product?.name || cartItem?.package?.name || oi.product?.name || oi.package?.name || `Item`,
                         unitPrice: Number(oi.unitPrice || oi.priceAtTimeOfSale || (cartItem?.size ? cartItem.size.price : cartItem?.product?.price || cartItem?.package?.price || 0)),
                         product: cartItem?.product || oi.product,
                         package: cartItem?.package || oi.package,
-                        size: cartItem?.size || oi.size,
+                        size: cartItem?.size?.name || cartItem?.size || oi.productSize?.name || oi.size,
+                        productSize: cartItem?.size || oi.productSize,
                         selectedAddons: cartItem?.selectedAddons || oi.selectedAddons || []
                     };
                 }),
@@ -539,15 +564,23 @@ export function POSDashboard() {
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5 content-start">
-                            {filteredItems.map((item: any) => (
-                                <ProductCard
-                                    key={item.id}
-                                    product={item}
-                                    qtyInCart={getProductQtyInCart(item.id)}
-                                    onAdd={() => handleAddToCart(item)}
-                                    onUpdateQty={(delta) => handleUpdateProductQty(item.id, delta)}
-                                />
-                            ))}
+                            {filteredItems.map((item: any) => {
+                                const relevantAddons = globalAddons.filter(a =>
+                                    a.categories?.some((c: any) => c.id === item.categoryId)
+                                );
+                                const isComplex = (item.sizes && item.sizes.length > 1) || relevantAddons.length > 0;
+
+                                return (
+                                    <ProductCard
+                                        key={item.id}
+                                        product={item}
+                                        qtyInCart={getProductQtyInCart(item.id)}
+                                        onAdd={() => handleAddToCart(item)}
+                                        onUpdateQty={(delta) => handleUpdateProductQty(item.id, delta)}
+                                        isComplex={isComplex}
+                                    />
+                                );
+                            })}
                         </div>
                     )}
                 </div>

@@ -69,7 +69,8 @@ export default function ModernReceiptUI({
       
       // Truncate name if it's too long to allow space for the size
       const maxChars = 45;
-      const displayName = rawName.length > maxChars ? rawName.substring(0, maxChars - 3) + '...' : rawName;
+      const displayNameRaw = rawName.replace(/\(RETAIL\)/gi, '').trim();
+      const displayName = displayNameRaw.length > maxChars ? displayNameRaw.substring(0, maxChars - 3) + '...' : displayNameRaw;
 
       const addons = (item.selectedAddons || []).map((a: any) => a.name);
 
@@ -127,7 +128,8 @@ export default function ModernReceiptUI({
       }
 
       const maxChars = 45;
-      const displayName = name.length > maxChars ? name.substring(0, maxChars - 3) + '...' : name;
+      const displayNameRaw = name.replace(/\(RETAIL\)/gi, '').trim();
+      const displayName = displayNameRaw.length > maxChars ? displayNameRaw.substring(0, maxChars - 3) + '...' : displayNameRaw;
       const sizeName = item.sizeName || 
                        item.productSize?.name || 
                        (typeof item.size === 'string' ? item.size : item.size?.name) || 
@@ -264,16 +266,16 @@ export default function ModernReceiptUI({
             return (
               <div key={index} className="grid grid-cols-12 gap-[0.5em] receipt-text-base items-start" style={{ color: '#111827' }}>
                 <div className="col-span-5 pr-[0.2em] leading-tight flex flex-col items-start overflow-hidden">
-                  <div className="line-clamp-2 font-bold w-full uppercase">
+                  <div className="font-bold w-full uppercase">
                     {item.name}
+                    {item.size && (
+                      <span className="receipt-text-xs font-black uppercase text-slate-800 bg-slate-100 border border-slate-200 px-1 py-0.5 rounded-sm ml-1 inline-block align-middle leading-none shadow-sm translate-y-[-1px]">
+                        ({item.size})
+                      </span>
+                    )}
                   </div>
-                  {item.size && (
-                    <div className="receipt-text-xs font-black uppercase text-slate-800 bg-slate-50 border border-slate-100 px-1 py-0.5 rounded-sm mt-0.5 leading-none shadow-sm">
-                      ({item.size})
-                    </div>
-                  )}
                   {item.addons && item.addons.length > 0 && (
-                    <div className="receipt-text-xs font-normal opacity-60 mt-0.5 leading-tight">
+                    <div className="receipt-text-xs font-normal opacity-60 mt-1 leading-tight normal-case italic">
                       + {item.addons.join(', ')}
                     </div>
                   )}

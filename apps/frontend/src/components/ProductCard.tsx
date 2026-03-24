@@ -7,9 +7,10 @@ interface ProductCardProps {
     qtyInCart: number;
     onAdd: () => void;
     onUpdateQty: (delta: number) => void;
+    isComplex?: boolean;
 }
 
-export function ProductCard({ product, qtyInCart, onAdd, onUpdateQty }: ProductCardProps) {
+export function ProductCard({ product, qtyInCart, onAdd, onUpdateQty, isComplex }: ProductCardProps) {
     const isRetail = product.type === ProductType.RETAIL;
 
     // Quick availability check
@@ -92,9 +93,9 @@ export function ProductCard({ product, qtyInCart, onAdd, onUpdateQty }: ProductC
                         )}
                     </div>
 
-                    {/* Inline Quantifier */}
+                    {/* Inline Quantifier or Selection Trigger */}
                     {!isDisabled && (
-                        qtyInCart > 0 ? (
+                        (qtyInCart > 0 && !isComplex) ? (
                             <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-full p-1 shadow-sm">
                                 <button
                                     onClick={(e) => { e.stopPropagation(); onUpdateQty(-1); }}
@@ -113,12 +114,19 @@ export function ProductCard({ product, qtyInCart, onAdd, onUpdateQty }: ProductC
                                 </button>
                             </div>
                         ) : (
-                            <button
-                                onClick={(e) => { e.stopPropagation(); onAdd(); }}
-                                className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-blue-600 hover:text-white transition-colors shadow-sm"
-                            >
-                                <Plus size={18} strokeWidth={2.5} />
-                            </button>
+                            <div className="relative">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onAdd(); }}
+                                    className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-blue-600 hover:text-white transition-colors shadow-sm"
+                                >
+                                    <Plus size={18} strokeWidth={2.5} />
+                                </button>
+                                {qtyInCart > 0 && isComplex && (
+                                    <div className="absolute -top-2 -right-2 w-5 h-5 bg-blue-600 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                                        {qtyInCart}
+                                    </div>
+                                )}
+                            </div>
                         )
                     )}
                 </div>

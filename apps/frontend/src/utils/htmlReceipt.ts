@@ -25,12 +25,13 @@ export const generateHTMLReceipt = (orderData: any, settings?: any, logoUrl?: st
             
             // Truncate name if it's too long to allow space for the size
             const maxChars = 45;
-            const displayName = rawName.length > maxChars ? rawName.substring(0, maxChars - 3) + '...' : rawName;
+            const displayName = rawName.replace(/\(RETAIL\)/gi, '').trim();
+            const finalName = displayName.length > maxChars ? displayName.substring(0, maxChars - 3) + '...' : displayName;
 
             const addons = (item.selectedAddons || []).map((a: any) => a.name);
             
             return {
-                name: displayName,
+                name: finalName,
                 size: sizeName,
                 addons: addons,
                 qty: item.quantity || 1,
@@ -71,7 +72,7 @@ export const generateHTMLReceipt = (orderData: any, settings?: any, logoUrl?: st
                 if (totalVal > 0) unitPrice = totalVal / qty;
             }
 
-            const rawName = item.productName || item.product?.name || item.name || 'Item';
+            const rawName = (item.productName || item.product?.name || item.name || 'Item').replace(/\(RETAIL\)/gi, '').trim();
             const sizeName = item.sizeName || 
                              item.productSize?.name || 
                              (typeof item.size === 'string' ? item.size : item.size?.name) || 
@@ -79,14 +80,47 @@ export const generateHTMLReceipt = (orderData: any, settings?: any, logoUrl?: st
                              null;
             
             const maxChars = 45;
-            const displayName = rawName.length > maxChars ? rawName.substring(0, maxChars - 3) + '...' : rawName;
+            const displayNameRaw = rawName.replace(/\(RETAIL\)/gi, '').trim();
+            const displayName = displayNameRaw.length > maxChars ? displayNameRaw.substring(0, maxChars - 3) + '...' : displayNameRaw;
 
             const addons = (item.addons || item.orderItemAddons || []).map((a: any) => a.addonName || a.addon?.name || a.name);
 
             const itemTotal = Number(item.total || item.itemTotal || (unitPrice * qty));
-            return { name: displayName, size: sizeName, addons, qty, unitPrice, itemTotal };
+            return { 
+                name: displayName, 
+                size: sizeName, 
+                addons, 
+                qty, 
+                unitPrice, 
+                itemTotal,
+                type: item.type || item.product?.type || 'FOOD'
+            };
         });
     }
+
+    const foodItems = items.filter((i: any) => i.type !== 'RETAIL');
+    const retailItems = items.filter((i: any) => i.type === 'RETAIL');
+    
+    const renderItemRow = (item: any) => `
+        <tr>
+            <td class="col-item font-bold">
+                ${item.name.toUpperCase()}
+                ${item.size ? `
+                    <span style="font-size: 10px; font-weight: 800; color: #444; margin-left: 4px; vertical-align: middle;">
+                        (${item.size.toUpperCase()})
+                    </span>
+                ` : ''}
+                ${item.addons && item.addons.length > 0 ? `
+                    <div style="font-size: 10px; font-weight: normal; color: #666; margin-top: 1px;">
+                        + ${item.addons.join(', ')}
+                    </div>
+                ` : ''}
+            </td>
+            <td class="col-qty font-bold">${item.qty}</td>
+            <td class="col-price">${formatCurrency(item.unitPrice)}</td>
+            <td class="col-total font-black">${formatCurrency(item.itemTotal)}</td>
+        </tr>
+    `;
 
     const subTotal = isParty 
         ? (Number(orderData.hallCharge || 0) + Number(orderData.menuTotal || 0) + Number(orderData.addonsTotal || 0))
@@ -299,26 +333,15 @@ export const generateHTMLReceipt = (orderData: any, settings?: any, logoUrl?: st
                         </tr>
                     </thead>
                     <tbody>
-                        ${items.map((item: any) => `
+                        ${foodItems.map((item: any) => renderItemRow(item)).join('')}
+                        ${(foodItems.length > 0 && retailItems.length > 0) ? `
                             <tr>
-                                <td class="col-item font-bold uppercase">
-                                    <div class="line-clamp-2">${item.name}</div>
-                                    ${item.size ? `
-                                        <div style="font-size: 10px; font-weight: 900; background: #eee; display: inline-block; padding: 1px 3px; border-radius: 2px; margin-top: 2px;">
-                                            (${item.size.toUpperCase()})
-                                        </div>
-                                    ` : ''}
-                                    ${item.addons && item.addons.length > 0 ? `
-                                        <div style="font-size: 10px; font-weight: normal; color: #444; margin-top: 2px; text-transform: none;">
-                                            + ${item.addons.join(', ')}
-                                        </div>
-                                    ` : ''}
+                                <td colspan="4" style="padding: 10px 0;">
+                                    <div class="dashed-line" style="margin: 0;"></div>
                                 </td>
-                                <td class="col-qty font-bold">${item.qty}</td>
-                                <td class="col-price">${formatCurrency(item.unitPrice)}</td>
-                                <td class="col-total font-black">${formatCurrency(item.itemTotal)}</td>
                             </tr>
-                        `).join('')}
+                        ` : ''}
+                        ${retailItems.map((item: any) => renderItemRow(item)).join('')}
                     </tbody>
                 </table>
 
