@@ -1,3 +1,5 @@
+import { toTitleCase } from './format';
+
 export const generateHTMLReceipt = (orderData: any, settings?: any, logoUrl?: string, receiptType: 'NORMAL' | 'PARTY_ADVANCE' | 'PARTY_FINAL' = 'NORMAL') => {
     const isParty = receiptType === 'PARTY_ADVANCE' || receiptType === 'PARTY_FINAL';
     
@@ -31,9 +33,9 @@ export const generateHTMLReceipt = (orderData: any, settings?: any, logoUrl?: st
             const addons = (item.selectedAddons || []).map((a: any) => a.name);
             
             return {
-                name: finalName,
-                size: sizeName,
-                addons: addons,
+                name: toTitleCase(finalName),
+                size: toTitleCase(sizeName),
+                addons: addons.map((a: any) => toTitleCase(a)),
                 qty: item.quantity || 1,
                 unitPrice,
                 itemTotal: unitPrice * (item.quantity || 1)
@@ -87,9 +89,9 @@ export const generateHTMLReceipt = (orderData: any, settings?: any, logoUrl?: st
 
             const itemTotal = Number(item.total || item.itemTotal || (unitPrice * qty));
             return { 
-                name: displayName, 
-                size: sizeName, 
-                addons, 
+                name: toTitleCase(displayName), 
+                size: toTitleCase(sizeName), 
+                addons: addons.map((a: any) => toTitleCase(a)), 
                 qty, 
                 unitPrice, 
                 itemTotal,

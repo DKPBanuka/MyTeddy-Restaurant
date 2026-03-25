@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { toTitleCase } from './format';
 
 export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?: string) => {
     // 1. Create a hidden element for rendering the receipt
@@ -20,7 +21,7 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
 
     const items = (orderData.orderItems || orderData.items || []).map((item: any) => {
         const rawName = item.productName || item.product?.name || item.name || 'Item';
-        const nameWithoutRetail = rawName.replace(/\(RETAIL\)/gi, '').trim();
+        const nameWithoutRetail = toTitleCase(rawName.replace(/\(RETAIL\)/gi, '').trim());
         const qty = item.quantity || item.qty || 1;
         
         let unitPrice = 0;
@@ -50,14 +51,15 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
                          (typeof item.size === 'string' ? item.size : item.size?.name) || 
                          item.variantName || 
                          null;
+        const finalSizeName = toTitleCase(sizeName);
         
         const addons = (item.addons || item.orderItemAddons || []).map((a: any) => a.addonName || a.addon?.name || a.name);
 
         const itemTotal = Number(item.total || item.itemTotal || (unitPrice * qty));
         return { 
             name: nameWithoutRetail, 
-            size: sizeName, 
-            addons, 
+            size: finalSizeName, 
+            addons: addons.map((a: any) => toTitleCase(a)), 
             qty, 
             unitPrice, 
             itemTotal,
@@ -72,10 +74,10 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
         <tr>
             <td class="col-item font-bold">
                 <div style="word-wrap: break-word;">
-                    ${item.name.toUpperCase()}
+                    ${item.name}
                     ${item.size ? `
                         <span style="font-size: 10px; font-weight: 800; color: #444; margin-left: 4px; vertical-align: middle;">
-                            (${item.size.toUpperCase()})
+                            (${item.size})
                         </span>
                     ` : ''}
                 </div>

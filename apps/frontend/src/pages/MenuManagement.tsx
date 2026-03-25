@@ -433,6 +433,7 @@ function ProductModal({ categories, initialData, onClose, onSuccess }: { categor
                             <input
                                 type="number"
                                 value={formData.price}
+                                onFocus={(e) => e.target.select()}
                                 onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
                                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 outline-none font-semibold text-sm"
                             />
@@ -491,6 +492,7 @@ function ProductModal({ categories, initialData, onClose, onSuccess }: { categor
                                         type="number"
                                         placeholder="Price"
                                         value={s.price}
+                                        onFocus={(e) => e.target.select()}
                                         onChange={(e) => {
                                             const newS = [...sizes];
                                             newS[i].price = Number(e.target.value);
@@ -596,19 +598,26 @@ function GlobalAddonsManager({ categories, onRefresh }: { categories: Category[]
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit">
                 <h3 className="text-lg font-bold mb-4">{editingId ? 'Edit Add-on' : 'New Global Add-on'}</h3>
                 <div className="space-y-4">
-                    <input 
-                        placeholder="Add-on Name" 
-                        value={name} 
-                        onChange={e => setName(e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold outline-none"
-                    />
-                    <input 
-                        type="number" 
-                        placeholder="Price" 
-                        value={price} 
-                        onChange={e => setPrice(Number(e.target.value))}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold outline-none"
-                    />
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Add-on Name</label>
+                        <input 
+                            placeholder="Add-on Name (e.g. Extra Cheese)" 
+                            value={name} 
+                            onChange={e => setName(e.target.value)}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold outline-none focus:border-blue-500 transition-all"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Price (Rs.)</label>
+                        <input 
+                            type="number" 
+                            placeholder="Price" 
+                            value={price} 
+                            onFocus={(e) => e.target.select()}
+                            onChange={e => setPrice(Number(e.target.value))}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold outline-none focus:border-blue-500 transition-all"
+                        />
+                    </div>
 
                     <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">Apply to Categories</label>
