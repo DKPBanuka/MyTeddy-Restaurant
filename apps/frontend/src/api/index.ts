@@ -309,4 +309,18 @@ export const api = {
         const res = await apiClient.patch(`/settings`, data);
         return res.data;
     },
+
+    // --- Customers ---
+    getCustomers: async () => {
+        const res = await apiClient.get(`/customers`);
+        return res.data;
+    },
+    createCustomer: async (data: { name: string, phone?: string, email?: string, address?: string }) => {
+        const res = await apiClient.post(`/customers`, data);
+        return res.data;
+    },
+    updateCustomer: async (id: string, data: Partial<{ name: string, phone?: string, email?: string, address?: string }>) => {
+        const res = await apiClient.patch(`/customers/${id}`, data);
+        return res.data;
+    },
 };

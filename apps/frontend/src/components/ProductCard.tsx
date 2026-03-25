@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type { Product } from '../types';
 import { ProductType } from '../types';
 import { Package, Utensils, Plus, Minus } from 'lucide-react';
@@ -11,6 +12,15 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, qtyInCart, onAdd, onUpdateQty, isComplex }: ProductCardProps) {
+    const laabaya = useMemo(() => {
+        if (!product.isPackage || !(product as any).items) return 0;
+        const individualTotal = (product as any).items.reduce((sum: number, pkgItem: any) => {
+            const price = pkgItem.size ? parseFloat(pkgItem.size.price) : parseFloat(pkgItem.product?.price || '0');
+            return sum + (price * pkgItem.quantity);
+        }, 0);
+        return individualTotal - parseFloat(product.price || '0');
+    }, [product]);
+
     const isRetail = product.type === ProductType.RETAIL;
 
     // Quick availability check
@@ -52,6 +62,11 @@ export function ProductCard({ product, qtyInCart, onAdd, onUpdateQty, isComplex 
                     {isRetail && (
                         <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm text-[10px] font-bold px-2 py-1 rounded-md text-slate-800 shadow-md">
                             Stock: {product.retailStock?.stockQty || 0}
+                        </div>
+                    )}
+                    {laabaya > 0 && (
+                        <div className="absolute bottom-2 left-2 bg-green-500 text-white px-2 py-1 rounded-lg font-black text-[8px] uppercase tracking-widest shadow-lg shadow-green-500/20">
+                            Save Rs. {laabaya.toLocaleString()}
                         </div>
                     )}
                 </div>

@@ -111,7 +111,8 @@ export class OrderService {
                         orderItems: {
                             include: {
                                 product: true,
-                                package: true
+                                package: true,
+                                size: true
                             }
                         } 
                     },
@@ -158,7 +159,8 @@ export class OrderService {
                         orderItems: {
                             include: {
                                 product: true,
-                                package: true
+                                package: true,
+                                size: true
                             }
                         } 
                     },
@@ -182,7 +184,15 @@ export class OrderService {
                     paymentStatus: 'PAID',
                     status: 'COMPLETED', // Move to COMPLETED upon payment
                 },
-                include: { orderItems: true },
+                include: { 
+                    orderItems: {
+                        include: {
+                            product: true,
+                            package: true,
+                            size: true
+                        }
+                    } 
+                },
             });
             return order;
         } catch (error: any) {
@@ -328,7 +338,8 @@ export class OrderService {
                         orderItems: {
                             include: {
                                 product: true,
-                                package: true
+                                package: true,
+                                size: true
                             }
                         },
                         user: { select: { name: true, role: true } }

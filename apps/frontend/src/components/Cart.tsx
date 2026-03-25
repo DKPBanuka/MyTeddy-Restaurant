@@ -1,9 +1,11 @@
-import { ShoppingCart, Trash2, Layers, Archive, History as HistoryIcon, Plus } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { ShoppingCart, Trash2, Layers, Archive, History as HistoryIcon, Plus, User2, Phone, Star, X as XIcon } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
 import type { OrderItemDto } from '../types';
 import { ProductType } from '../types';
 import { useCart } from '../context/CartContext';
 import { useSettings } from '../context/SettingsContext';
+import { api } from '../api';
 
 interface CartProps {
     onCheckout: () => void;
@@ -30,6 +32,13 @@ export function Cart({
         removeItem, updateQty, clearCart, holdOrder, heldOrders 
     } = useCart();
 
+    const [customerResults, setCustomerResults] = useState<any[]>([]);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [searching, setSearching] = useState(false);
+    const [linkedCustomer, setLinkedCustomer] = useState<any | null>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const searchTimeout = useRef<any>(null);
+
     const subTotal = items.reduce((sum, item) => {
         const basePrice = item.size ? Number(item.size.price) : Number(item.product?.price || item.package?.price || 0);
         const addonsPrice = item.selectedAddons?.reduce((s, a) => s + Number(a.price), 0) || 0;
@@ -42,10 +51,133 @@ export function Cart({
 
     const handleHoldClick = () => {
         const ref = window.prompt("Enter a reference name for this order (e.g., 'Guy in red shirt')", `Order ${heldOrders.length + 1}`);
-        if (ref) {
-            holdOrder(ref);
-        }
+        if (ref) holdOrder(ref);
     };
+
+    // Close dropdown on outside click
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setShowDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
+
+    // Search customers when name changes
+    const handleNameChange = useCallback((value: string) => {
+        setOrderMetadata(prev => ({ ...prev, customerName: value }));
+        setLinkedCustomer(null); // unlink if user edits manually
+
+        clearTimeout(searchTimeout.current);
+        if (value.trim().length < 1) {
+            setCustomerResults([]);
+            setShowDropdown(false);
+            return;
+        }
+        setSearching(true);
+        searchTimeout.current = setTimeout(async () => {
+            try {
+                const all = await api.getCustomers();
+                const filtered = all.filter((c: any) =>
+                    c.name.toLowerCase().includes(value.toLowerCase()) ||
+                    (c.phone && c.phone.includes(value))
+                );
+                setCustomerResults(filtered);
+                setShowDropdown(filtered.length > 0);
+            } catch {
+                setCustomerResults([]);
+            } finally {
+                setSearching(false);
+            }
+        }, 250);
+    }, [setOrderMetadata]);
+
+    const handleSelectCustomer = (customer: any) => {
+        setOrderMetadata(prev => ({
+            ...prev,
+            customerName: customer.name,
+            customerPhone: customer.phone || ''
+        }));
+        setLinkedCustomer(customer);
+        setCustomerResults([]);
+        setShowDropdown(false);
+    };
+
+    const handleUnlinkCustomer = () => {
+        setLinkedCustomer(null);
+        setOrderMetadata(prev => ({ ...prev, customerName: '', customerPhone: '' }));
+    };
+
+    const CustomerNameInput = (inputClass: string) => (
+        <div className="relative" ref={dropdownRef}>
+            {linkedCustomer ? (
+                <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-3 py-2">
+                    <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">
+                            {linkedCustomer.name.charAt(0)}
+                        </div>
+                        <div>
+                            <div className="text-xs font-black text-blue-800 leading-tight">{linkedCustomer.name}</div>
+                            <div className="flex items-center gap-1 text-[10px] text-amber-600 font-black">
+                                <Star size={9} className="fill-current" />
+                                {linkedCustomer.points} pts
+                            </div>
+                        </div>
+                    </div>
+                    <button
+                        onClick={handleUnlinkCustomer}
+                        className="text-blue-400 hover:text-red-500 transition-colors"
+                    >
+                        <XIcon size={14} />
+                    </button>
+                </div>
+            ) : (
+                <>
+                    <div className="relative">
+                        <User2 size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                        <input
+                            type="text"
+                            placeholder="Customer Name"
+                            value={orderMetadata.customerName}
+                            onChange={(e) => handleNameChange(e.target.value)}
+                            onFocus={() => {
+                                if (customerResults.length > 0) setShowDropdown(true);
+                            }}
+                            className={inputClass}
+                            autoComplete="off"
+                        />
+                    </div>
+                    {showDropdown && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
+                            {searching ? (
+                                <div className="px-4 py-3 text-xs text-slate-400 text-center">Searching...</div>
+                            ) : customerResults.map((c: any) => (
+                                <button
+                                    key={c.id}
+                                    onMouseDown={(e) => { e.preventDefault(); handleSelectCustomer(c); }}
+                                    className="w-full text-left px-4 py-2.5 hover:bg-blue-50 flex items-center justify-between border-b border-slate-50 last:border-0 group"
+                                >
+                                    <div>
+                                        <div className="font-bold text-slate-800 text-xs group-hover:text-blue-600 transition-colors">{c.name}</div>
+                                        <div className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                                            <Phone size={9} />
+                                            {c.phone || 'No phone'}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1 bg-amber-50 border border-amber-100 text-amber-700 px-2 py-0.5 rounded-lg text-[10px] font-black">
+                                        <Star size={9} className="fill-current" />
+                                        {c.points}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </>
+            )}
+        </div>
+    );
 
     return (
         <div className="flex flex-col h-full bg-white relative">
@@ -93,10 +225,8 @@ export function Cart({
 
                 {/* Metadata Inputs */}
                 <div className="space-y-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                    <div className="flex items-center justify-between">
-                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                            {orderType === 'DINE_IN' ? 'Table Details' : orderType === 'TAKEAWAY' ? 'Customer Details' : 'Delivery Details'}
-                        </div>
+                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                        {orderType === 'DINE_IN' ? 'Table Details' : orderType === 'TAKEAWAY' ? 'Customer Details' : 'Delivery Details'}
                     </div>
 
                     {orderType === 'DINE_IN' && (
@@ -108,42 +238,35 @@ export function Cart({
                                 onChange={(e) => setOrderMetadata(prev => ({ ...prev, tableNo: e.target.value }))}
                                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-400"
                             />
-                            {/* Optional Customer Tagging for Dine-in too */}
                             <div className="grid grid-cols-2 gap-2">
-                                <input
-                                    type="text"
-                                    placeholder="Cust. Name (Optional)"
-                                    value={orderMetadata.customerName}
-                                    onChange={(e) => setOrderMetadata(prev => ({ ...prev, customerName: e.target.value }))}
-                                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-[11px] font-semibold text-slate-800 focus:outline-none"
-                                />
-                                <input
-                                    type="tel"
-                                    placeholder="Phone (Optional)"
-                                    value={orderMetadata.customerPhone}
-                                    onChange={(e) => setOrderMetadata(prev => ({ ...prev, customerPhone: e.target.value }))}
-                                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-[11px] font-semibold text-slate-800 focus:outline-none"
-                                />
+                                {CustomerNameInput('w-full pl-8 pr-3 bg-white border border-slate-200 rounded-xl py-1.5 text-[11px] font-semibold text-slate-800 focus:outline-none focus:border-blue-400 placeholder:text-slate-400')}
+                                <div className="relative">
+                                    <Phone size={11} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                                    <input
+                                        type="tel"
+                                        placeholder="Phone (Optional)"
+                                        value={orderMetadata.customerPhone}
+                                        onChange={(e) => setOrderMetadata(prev => ({ ...prev, customerPhone: e.target.value }))}
+                                        className="w-full pl-7 pr-3 bg-white border border-slate-200 rounded-xl py-1.5 text-[11px] font-semibold text-slate-800 focus:outline-none"
+                                    />
+                                </div>
                             </div>
                         </div>
                     )}
 
                     {(orderType === 'TAKEAWAY' || orderType === 'DELIVERY') && (
                         <div className="grid grid-cols-2 gap-2">
-                            <input
-                                type="text"
-                                placeholder="Customer Name"
-                                value={orderMetadata.customerName}
-                                onChange={(e) => setOrderMetadata(prev => ({ ...prev, customerName: e.target.value }))}
-                                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-400"
-                            />
-                            <input
-                                type="tel"
-                                placeholder="Phone"
-                                value={orderMetadata.customerPhone}
-                                onChange={(e) => setOrderMetadata(prev => ({ ...prev, customerPhone: e.target.value }))}
-                                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-400"
-                            />
+                            {CustomerNameInput('w-full pl-8 pr-3 bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-400')}
+                            <div className="relative">
+                                <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                                <input
+                                    type="tel"
+                                    placeholder="Phone"
+                                    value={orderMetadata.customerPhone}
+                                    onChange={(e) => setOrderMetadata(prev => ({ ...prev, customerPhone: e.target.value }))}
+                                    className="w-full pl-8 pr-4 py-2.5 text-sm font-semibold text-slate-800 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-400"
+                                />
+                            </div>
                         </div>
                     )}
 
@@ -171,7 +294,6 @@ export function Cart({
                         {items.map((item, index) => (
                             <div key={`${item.productId || item.packageId}-${index}`} className="flex items-start justify-between group">
                                 <div className="flex items-center gap-3">
-                                    {/* Thumbnail Image Placeholder */}
                                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border border-slate-100 shadow-sm overflow-hidden ${item.packageId ? 'bg-blue-50 text-blue-200' : item.product?.type === ProductType.RETAIL ? 'bg-indigo-50 text-indigo-200' : 'bg-orange-50 text-orange-200'}`}>
                                         <div className="w-10 h-10 bg-white rounded-lg shadow-sm border border-slate-50 flex items-center justify-center">
                                             {item.packageId ? (
@@ -188,7 +310,7 @@ export function Cart({
                                                 <h4 className="font-bold text-slate-800 text-sm leading-tight line-clamp-1 pt-1">{item.product?.name || item.package?.name}</h4>
                                                 {item.package && item.package.items && (
                                                     <div className="text-[10px] font-bold text-slate-500 mt-1 leading-relaxed bg-slate-50 p-1.5 rounded-lg border border-slate-100 italic">
-                                                        Includes: {item.package.items.map(it => `${it.quantity}x ${it.product?.name}${it.size ? ` (${it.size.name})` : ''}`).join(', ')}
+                                                        Includes: {item.package.items.map((it: any) => `${it.quantity}x ${it.product?.name}${it.size ? ` (${it.size.name})` : ''}`).join(', ')}
                                                     </div>
                                                 )}
                                                 {item.size && (
@@ -226,7 +348,6 @@ export function Cart({
                                             <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md">
                                                 {item.quantity}x
                                             </span>
-                                            {/* Quantity Adjusters */}
                                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
                                                 <button onClick={() => updateQty(index, -1)} className="w-6 h-6 rounded bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300 font-bold leading-none">-</button>
                                                 <button onClick={() => updateQty(index, 1)} className="w-6 h-6 rounded bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300 font-bold leading-none">+</button>
@@ -235,7 +356,6 @@ export function Cart({
                                                 </button>
                                             </div>
                                         </div>
-
                                     </div>
                                 </div>
                             </div>
@@ -285,8 +405,6 @@ export function Cart({
                         <span className="text-lg font-black text-slate-800">{formatCurrency(totalAmount, settings?.currencySymbol || 'Rs.')}</span>
                     </div>
 
-                    {/* Payment Toggles */}
-                    {/* Action Buttons */}
                     <div className="mt-6">
                         <button
                             onClick={onCheckout}

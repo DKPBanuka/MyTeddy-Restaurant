@@ -66,6 +66,7 @@ model ProductSize {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   packageItems PackageItem[]
+  orderItems   OrderItem[]
   product      Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
 
@@ -140,6 +141,19 @@ model RetailStock {
   product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
 
+model Customer {
+  id            String         @id @default(uuid())
+  name          String
+  phone         String?        @unique
+  email         String?        @unique
+  address       String?
+  points        Int            @default(0)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  orders        Order[]
+  partyBookings PartyBooking[]
+}
+
 model Order {
   id              String         @id @default(uuid())
   orderNumber     String         @unique
@@ -165,24 +179,27 @@ model Order {
   tokenId         String?
   tokenNumber     Int            @default(0)
   user            User           @relation(fields: [userId], references: [id])
+  customerId      String?
+  customer        Customer?      @relation(fields: [customerId], references: [id])
   orderItems      OrderItem[]
 }
 
 model OrderItem {
-  id                String   @id @default(uuid())
+  id                String       @id @default(uuid())
   orderId           String
   productId         String?
   quantity          Int
-  unitPrice         Decimal  @db.Decimal(10, 2)
-  subtotal          Decimal  @db.Decimal(10, 2)
+  unitPrice         Decimal      @db.Decimal(10, 2)
+  subtotal          Decimal      @db.Decimal(10, 2)
   addonIds          String[]
   notes             String?
   packageId         String?
-  priceAtTimeOfSale Decimal? @db.Decimal(10, 2)
+  priceAtTimeOfSale Decimal?     @db.Decimal(10, 2)
   sizeId            String?
-  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  package           Package? @relation(fields: [packageId], references: [id])
-  product           Product? @relation(fields: [productId], references: [id])
+  order             Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  package           Package?     @relation(fields: [packageId], references: [id])
+  product           Product?     @relation(fields: [productId], references: [id])
+  size              ProductSize? @relation(fields: [sizeId], references: [id])
 }
 
 model PartyBooking {
@@ -209,6 +226,7 @@ model PartyBooking {
   updatedAt     DateTime           @updatedAt
   userId        String?
   user          User?              @relation(fields: [userId], references: [id])
+  customer      Customer?          @relation(fields: [customerId], references: [id])
 }
 
 model RestaurantSettings {

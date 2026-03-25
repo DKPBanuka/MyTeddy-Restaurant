@@ -41,7 +41,7 @@ export class OrdersService {
                 where,
                 skip,
                 take: Number(limit),
-                include: { orderItems: { include: { product: true, package: true } } },
+                include: { orderItems: { include: { product: true, package: true, size: true } } },
                 orderBy: { createdAt: 'desc' },
             }),
             this.prisma.order.count({ where }),
@@ -101,7 +101,7 @@ export class OrdersService {
     }
 
     async createOrder(createOrderDto: CreateOrderDto) {
-        const { items, discount = 0, paymentMethod, paymentStatus, amountReceived, change, orderType, tableNo, customerName, customerPhone, deliveryAddress } = createOrderDto;
+        const { items, discount = 0, paymentMethod, paymentStatus, amountReceived, change, orderType, tableNo, customerName, customerPhone, deliveryAddress, customerId } = createOrderDto;
 
         try {
             // Increase timeout to 15s for complex orders with stock deduction
@@ -170,7 +170,22 @@ export class OrdersService {
 
                 const grandTotal = Math.max(0, calculatedSubTotal - discount);
 
-                // 4. Create Order Header First
+                // 4. Auto-upsert Customer from POS name/phone fields
+                // If a phone is provided (from the POS invoice panel), ensure customer exists in DB
+                let resolvedCustomerId = customerId || null;
+                if (customerPhone && !resolvedCustomerId) {
+                    const upsertedCustomer = await tx.customer.upsert({
+                        where: { phone: customerPhone },
+                        update: { name: customerName || undefined },
+                        create: {
+                            name: customerName || 'Unknown',
+                            phone: customerPhone,
+                        },
+                    });
+                    resolvedCustomerId = upsertedCustomer.id;
+                }
+
+                // 5. Create Order Header First
                 const order = await tx.order.create({
                     data: {
                         orderNumber: invoiceNumber.replace('INV-', 'ORD-'),
@@ -190,6 +205,7 @@ export class OrdersService {
                         customerName: customerName || null,
                         customerPhone: customerPhone || null,
                         deliveryAddress: deliveryAddress || null,
+                        customerId: resolvedCustomerId,
                     }
                 });
 
@@ -209,7 +225,7 @@ export class OrdersService {
                             sizeId: itemData.sizeId || null,
                             addonIds: itemData.addonIds || [],
                         },
-                        include: { product: true, package: true }
+                        include: { product: true, package: true, size: true }
                     });
                     
                     createdItems.push(orderItem);
@@ -228,6 +244,17 @@ export class OrdersService {
                         }
                     } else if (itemData.productId) {
                         await this.processStockDeduction(tx, itemData.productId, itemData.productType, itemData.quantity);
+                    }
+                }
+
+                // 7. Award Loyalty Points if order is PAID at creation time (direct POS checkout)
+                if ((paymentStatus as string) === 'PAID' && resolvedCustomerId && grandTotal > 0) {
+                    const pointsToAdd = Math.floor(grandTotal / 100);
+                    if (pointsToAdd > 0) {
+                        await tx.customer.update({
+                            where: { id: resolvedCustomerId },
+                            data: { points: { increment: pointsToAdd } },
+                        });
                     }
                 }
 
@@ -277,7 +304,7 @@ export class OrdersService {
         const order = await this.prisma.order.findUnique({ where: { id } });
         if (!order) throw new NotFoundException(`Order ${id} not found`);
 
-        return this.prisma.order.update({
+        const updatedOrder = await this.prisma.order.update({
             where: { id },
             data: {
                 paymentStatus: 'PAID',
@@ -288,8 +315,23 @@ export class OrdersService {
                 grandTotal: paymentDetails.grandTotal ?? order.grandTotal,
                 status: 'COMPLETED',
             },
-            include: { orderItems: { include: { product: true } } },
+            include: { orderItems: { include: { product: true, size: true } } },
         });
+
+        // Award Loyalty Points (1 point per 100 LKR)
+        if (updatedOrder.customerId && updatedOrder.grandTotal) {
+            const pointsToAdd = Math.floor(Number(updatedOrder.grandTotal) / 100);
+            if (pointsToAdd > 0) {
+                await this.prisma.customer.update({
+                    where: { id: updatedOrder.customerId },
+                    data: {
+                        points: { increment: pointsToAdd }
+                    }
+                });
+            }
+        }
+
+        return updatedOrder;
     }
 
 
@@ -341,7 +383,7 @@ export class OrdersService {
                         })),
                     },
                 },
-                include: { orderItems: { include: { product: true, package: true } } },
+                include: { orderItems: { include: { product: true, package: true, size: true } } },
             });
         }, { timeout: 10000 });
     }

@@ -1,0 +1,169 @@
+﻿{
+    "value":  [
+                  {
+                      "id":  "2da5f2d5-33e1-4687-81b0-961b26f17a69",
+                      "name":  "Chicken Fried Rice",
+                      "description":  "",
+                      "price":  "650",
+                      "type":  "FOOD",
+                      "barcode":  null,
+                      "createdAt":  "2026-03-25T06:30:55.867Z",
+                      "updatedAt":  "2026-03-25T06:31:15.139Z",
+                      "categoryId":  "0e619c5a-0a30-4ce3-9121-0d7f5db896f1",
+                      "imageUrl":  "https://rklgrledilbgzvsypnjt.supabase.co/storage/v1/object/public/product-images/1774420203689-Bang-Bang-Chicken-Fried-Rice-3.jpg",
+                      "isActive":  true,
+                      "category":  {
+                                       "id":  "0e619c5a-0a30-4ce3-9121-0d7f5db896f1",
+                                       "name":  "Rice",
+                                       "createdAt":  "2026-03-25T06:24:43.414Z",
+                                       "updatedAt":  "2026-03-25T06:24:43.414Z"
+                                   },
+                      "retailStock":  null,
+                      "sizes":  [
+                                    {
+                                        "id":  "0639d8f3-89e5-48b3-8c69-edb7033c4fce",
+                                        "name":  "Normal",
+                                        "price":  "650",
+                                        "productId":  "2da5f2d5-33e1-4687-81b0-961b26f17a69",
+                                        "createdAt":  "2026-03-25T06:31:15.139Z",
+                                        "updatedAt":  "2026-03-25T06:31:15.139Z"
+                                    },
+                                    {
+                                        "id":  "a5068281-ae02-4f79-b3e1-63bcd440670f",
+                                        "name":  "Full",
+                                        "price":  "1000",
+                                        "productId":  "2da5f2d5-33e1-4687-81b0-961b26f17a69",
+                                        "createdAt":  "2026-03-25T06:31:15.139Z",
+                                        "updatedAt":  "2026-03-25T06:31:15.139Z"
+                                    }
+                                ],
+                      "recipeBOMs":  [
+
+                                     ]
+                  },
+                  {
+                      "id":  "25a51fd7-0c35-44ad-9c0f-791730abb77a",
+                      "name":  "Mixed Rice",
+                      "description":  "",
+                      "price":  "1000",
+                      "type":  "FOOD",
+                      "barcode":  null,
+                      "createdAt":  "2026-03-25T06:32:32.733Z",
+                      "updatedAt":  "2026-03-25T06:32:32.733Z",
+                      "categoryId":  "0e619c5a-0a30-4ce3-9121-0d7f5db896f1",
+                      "imageUrl":  "https://rklgrledilbgzvsypnjt.supabase.co/storage/v1/object/public/product-images/1774420291707-mix%20rice.jpg",
+                      "isActive":  true,
+                      "category":  {
+                                       "id":  "0e619c5a-0a30-4ce3-9121-0d7f5db896f1",
+                                       "name":  "Rice",
+                                       "createdAt":  "2026-03-25T06:24:43.414Z",
+                                       "updatedAt":  "2026-03-25T06:24:43.414Z"
+                                   },
+                      "retailStock":  null,
+                      "sizes":  [
+                                    {
+                                        "id":  "41ed901c-450b-492c-8bdc-fbcb75d4608d",
+                                        "name":  "Normal",
+                                        "price":  "1000",
+                                        "productId":  "25a51fd7-0c35-44ad-9c0f-791730abb77a",
+                                        "createdAt":  "2026-03-25T06:32:32.733Z",
+                                        "updatedAt":  "2026-03-25T06:32:32.733Z"
+                                    },
+                                    {
+                                        "id":  "00981992-6b44-48ab-8d9a-fbb1f526856c",
+                                        "name":  "Full",
+                                        "price":  "1800",
+                                        "productId":  "25a51fd7-0c35-44ad-9c0f-791730abb77a",
+                                        "createdAt":  "2026-03-25T06:32:32.733Z",
+                                        "updatedAt":  "2026-03-25T06:32:32.733Z"
+                                    }
+                                ],
+                      "recipeBOMs":  [
+
+                                     ]
+                  },
+                  {
+                      "id":  "99354ac9-546c-42a6-9071-99047ff07131",
+                      "name":  "Chicken Kottu",
+                      "description":  "",
+                      "price":  "700",
+                      "type":  "FOOD",
+                      "barcode":  null,
+                      "createdAt":  "2026-03-25T06:34:38.917Z",
+                      "updatedAt":  "2026-03-25T06:59:37.830Z",
+                      "categoryId":  "e6973049-e8c2-4fb1-8b71-c292353383fe",
+                      "imageUrl":  "https://rklgrledilbgzvsypnjt.supabase.co/storage/v1/object/public/product-images/1774420408004-sri-lankan-spicy-chicken-kottu-600nw-2249794983.webp",
+                      "isActive":  true,
+                      "category":  {
+                                       "id":  "e6973049-e8c2-4fb1-8b71-c292353383fe",
+                                       "name":  "Kottu",
+                                       "createdAt":  "2026-03-25T06:24:37.827Z",
+                                       "updatedAt":  "2026-03-25T06:24:37.827Z"
+                                   },
+                      "retailStock":  null,
+                      "sizes":  [
+                                    {
+                                        "id":  "f5e27761-569e-4f88-b3c7-ad625b13c2c8",
+                                        "name":  "Normal",
+                                        "price":  "700",
+                                        "productId":  "99354ac9-546c-42a6-9071-99047ff07131",
+                                        "createdAt":  "2026-03-25T06:59:37.830Z",
+                                        "updatedAt":  "2026-03-25T06:59:37.830Z"
+                                    },
+                                    {
+                                        "id":  "567a43f8-7d8f-471b-9481-616ab17b7d53",
+                                        "name":  "Large",
+                                        "price":  "1200",
+                                        "productId":  "99354ac9-546c-42a6-9071-99047ff07131",
+                                        "createdAt":  "2026-03-25T06:59:37.830Z",
+                                        "updatedAt":  "2026-03-25T06:59:37.830Z"
+                                    }
+                                ],
+                      "recipeBOMs":  [
+
+                                     ]
+                  },
+                  {
+                      "id":  "c93b139f-ffef-4254-9fb7-186208067e7e",
+                      "name":  "Margherita Pizza",
+                      "description":  "Classic cheese and tomato pizza",
+                      "price":  "1000",
+                      "type":  "FOOD",
+                      "barcode":  null,
+                      "createdAt":  "2026-03-25T11:00:27.038Z",
+                      "updatedAt":  "2026-03-25T11:00:27.038Z",
+                      "categoryId":  "e6d7e1f3-a5cf-4339-abfd-81d2e02e7792",
+                      "imageUrl":  null,
+                      "isActive":  true,
+                      "category":  {
+                                       "id":  "e6d7e1f3-a5cf-4339-abfd-81d2e02e7792",
+                                       "name":  "Pizza",
+                                       "createdAt":  "2026-03-25T11:00:27.027Z",
+                                       "updatedAt":  "2026-03-25T11:00:27.027Z"
+                                   },
+                      "retailStock":  null,
+                      "sizes":  [
+                                    {
+                                        "id":  "9a7333f0-9698-4f4b-98e1-d05876de835b",
+                                        "name":  "Small",
+                                        "price":  "800",
+                                        "productId":  "c93b139f-ffef-4254-9fb7-186208067e7e",
+                                        "createdAt":  "2026-03-25T11:00:27.038Z",
+                                        "updatedAt":  "2026-03-25T11:00:27.038Z"
+                                    },
+                                    {
+                                        "id":  "60e87d2c-438e-455f-9509-fbc5284ac179",
+                                        "name":  "Large",
+                                        "price":  "1500",
+                                        "productId":  "c93b139f-ffef-4254-9fb7-186208067e7e",
+                                        "createdAt":  "2026-03-25T11:00:27.038Z",
+                                        "updatedAt":  "2026-03-25T11:00:27.038Z"
+                                    }
+                                ],
+                      "recipeBOMs":  [
+
+                                     ]
+                  }
+              ],
+    "Count":  4
+}

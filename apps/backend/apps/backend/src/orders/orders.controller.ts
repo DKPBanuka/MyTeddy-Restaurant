@@ -26,6 +26,7 @@ export interface CreateOrderDto {
     customerName?: string;
     customerPhone?: string;
     deliveryAddress?: string;
+    customerId?: string;
 }
 
 @Controller('orders')

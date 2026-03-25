@@ -51,9 +51,11 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
                          (typeof item.size === 'string' ? item.size : item.size?.name) || 
                          item.variantName || 
                          null;
-        const finalSizeName = toTitleCase(sizeName);
+        const finalSizeName = sizeName ? toTitleCase(sizeName as string) : null;
         
-        const addons = (item.addons || item.orderItemAddons || []).map((a: any) => a.addonName || a.addon?.name || a.name);
+        const addons = (item.addons || item.selectedAddons || item.orderItemAddons || []).map((a: any) => 
+            a.addonName || a.addon?.name || a.name || (typeof a === 'string' ? a : 'Addon')
+        );
 
         const itemTotal = Number(item.total || item.itemTotal || (unitPrice * qty));
         return { 
@@ -67,6 +69,29 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
         };
     });
 
+    // Consolidate Addons
+    let grandAddonsTotal = 0;
+    (orderData.orderItems || orderData.items || []).forEach((item: any) => {
+        const itemAddons = (item.addons || item.selectedAddons || item.orderItemAddons || []);
+        const itemAddonTotal = itemAddons.reduce((sum: number, a: any) => {
+            const p = Number(a.price || a.addonPrice || a.unitPrice || 0);
+            return sum + p;
+        }, 0);
+        const qty = item.quantity || item.qty || 1;
+        grandAddonsTotal += (itemAddonTotal * qty);
+    });
+
+    if (grandAddonsTotal > 0) {
+        items.push({
+            name: 'Addition items',
+            size: null,
+            qty: 1,
+            unitPrice: grandAddonsTotal,
+            itemTotal: grandAddonsTotal,
+            type: 'FOOD'
+        });
+    }
+
     const foodItems = items.filter((i: any) => i.type !== 'RETAIL');
     const retailItems = items.filter((i: any) => i.type === 'RETAIL');
 
@@ -76,16 +101,11 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
                 <div style="word-wrap: break-word;">
                     ${item.name}
                     ${item.size ? `
-                        <span style="font-size: 10px; font-weight: 800; color: #444; margin-left: 4px; vertical-align: middle;">
+                        <div style="font-size: 13px; font-weight: 900; color: #000; margin-top: 2px;">
                             (${item.size})
-                        </span>
+                        </div>
                     ` : ''}
                 </div>
-                ${item.addons && item.addons.length > 0 ? `
-                    <div style="font-size: 10px; font-weight: normal; color: #666; margin-top: 1px;">
-                        + ${item.addons.join(', ')}
-                    </div>
-                ` : ''}
             </td>
             <td class="col-qty font-bold">${item.qty}</td>
             <td class="col-price">${formatCurrency(item.unitPrice)}</td>

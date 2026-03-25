@@ -46,12 +46,15 @@ export default function ModernReceiptUI({
   }) : new Date().toLocaleString('en-GB', { timeZone: 'Asia/Colombo' });
 
   // Items Parsing
-  let displayItems = [];
+  let displayItems: any[] = [];
+  let baseItems: any[] = [];
+  let grandAddonsTotal = 0;
+
   if (isParty) {
     const rawItems = orderData?.items;
-    const parsedItems = typeof rawItems === 'string' ? JSON.parse(rawItems) : (rawItems || []);
+    baseItems = typeof rawItems === 'string' ? JSON.parse(rawItems) : (rawItems || []);
 
-    displayItems = parsedItems.map((item: any) => {
+    const mappedItems = baseItems.map((item: any) => {
       let itemPrice = 0;
       if (item.packageId) {
           itemPrice = parseFloat(item.package?.price || '0');
@@ -83,6 +86,7 @@ export default function ModernReceiptUI({
         total: itemPrice * (item.quantity || 1)
       };
     });
+    displayItems = [...displayItems, ...mappedItems];
 
     // Add Hall Charge if applicable
     const hallCharge = Number(orderData?.hallCharge || 0);
@@ -106,7 +110,11 @@ export default function ModernReceiptUI({
       });
     }
   } else {
-    displayItems = (orderData?.items || orderData?.orderItems || []).map((item: any) => {
+    // NORMAL RECEIPT PATH
+    const rawItems = orderData?.items || orderData?.orderItems || [];
+    baseItems = typeof rawItems === 'string' ? JSON.parse(rawItems) : (rawItems || []);
+
+    const mappedItems = baseItems.map((item: any) => {
       const name = item.productName || item.product?.name || item.name || 'Item';
       const qty = item.quantity || item.qty || 1;
       
@@ -130,17 +138,52 @@ export default function ModernReceiptUI({
       const maxChars = 45;
       const displayNameRaw = name.replace(/\(RETAIL\)/gi, '').trim();
       const displayName = displayNameRaw.length > maxChars ? displayNameRaw.substring(0, maxChars - 3) + '...' : displayNameRaw;
+      
+      // Robust size detection
       const sizeName = item.sizeName || 
                        item.productSize?.name || 
                        (typeof item.size === 'string' ? item.size : item.size?.name) || 
                        item.variantName || 
                        null;
 
-      const addons = (item.addons || item.orderItemAddons || []).map((a: any) => a.addonName || a.addon?.name || a.name);
+      // Addons detection
+      const addons = (item.addons || item.selectedAddons || item.orderItemAddons || []).map((a: any) => 
+          a.addonName || a.addon?.name || a.name || (typeof a === 'string' ? a : 'Addon')
+      );
 
       const itemTotal = Number(item.total || item.itemTotal || (unitPrice * qty));
-      return { name: displayName, size: sizeName, addons, qty: qty, price: unitPrice, total: itemTotal };
+      return { 
+          name: displayName, 
+          size: sizeName, 
+          addons, 
+          qty: qty, 
+          price: unitPrice, 
+          total: itemTotal 
+      };
     });
+    
+    displayItems = [...displayItems, ...mappedItems];
+
+    // Consolidate Addons for Normal Receipts
+    baseItems.forEach((item: any) => {
+      const itemAddons = (item.addons || item.selectedAddons || item.orderItemAddons || []);
+      const itemAddonTotal = itemAddons.reduce((sum: number, a: any) => {
+          const p = Number(a.price || a.addonPrice || a.unitPrice || 0);
+          return sum + p;
+      }, 0);
+      const qty = item.quantity || item.qty || 1;
+      grandAddonsTotal += (itemAddonTotal * qty);
+    });
+
+    if (grandAddonsTotal > 0) {
+      displayItems.push({
+        name: 'Addition items',
+        qty: 1,
+        price: grandAddonsTotal,
+        total: grandAddonsTotal,
+        isAddonRow: true
+      });
+    }
   }
 
   const subtotal = isParty 
@@ -266,19 +309,14 @@ export default function ModernReceiptUI({
             return (
               <div key={index} className="grid grid-cols-12 gap-[0.5em] receipt-text-base items-start" style={{ color: '#111827' }}>
                 <div className="col-span-5 pr-[0.2em] leading-tight flex flex-col items-start overflow-hidden">
-                  <div className="font-bold w-full uppercase">
+                  <div className="font-bold w-full">
                     {item.name}
                     {item.size && (
-                      <span className="receipt-text-xs font-black uppercase text-slate-800 bg-slate-100 border border-slate-200 px-1 py-0.5 rounded-sm ml-1 inline-block align-middle leading-none shadow-sm translate-y-[-1px]">
+                      <div className="receipt-text-sm font-black text-slate-900 mt-1">
                         ({item.size})
-                      </span>
+                      </div>
                     )}
                   </div>
-                  {item.addons && item.addons.length > 0 && (
-                    <div className="receipt-text-xs font-normal opacity-60 mt-1 leading-tight normal-case italic">
-                      + {item.addons.join(', ')}
-                    </div>
-                  )}
                 </div>
                 <div className="col-span-2 text-center font-bold">{item.qty}</div>
                 <div className="col-span-2 text-right whitespace-nowrap">{formatCurrency(item.price)}</div>

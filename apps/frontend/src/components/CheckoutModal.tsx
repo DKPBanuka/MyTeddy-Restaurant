@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
     X, 
     CreditCard, 
-    Banknote
+    Banknote,
 } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { formatCurrency } from '../utils/format';
@@ -20,6 +20,7 @@ interface CheckoutModalProps {
         discount?: number;
         grandTotal?: number;
         discountPercentage?: number;
+        customerId?: string;
     }) => Promise<any>;
 }
 
@@ -34,11 +35,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     const [method, setMethod] = useState<'CARD' | 'CASH' | 'ONLINE'>(initialMethod as any);
     const [cashReceived, setCashReceived] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    // Discount State
     const [discountValue, setDiscountValue] = useState<string>('0');
     const [discountType, setDiscountType] = useState<'FIXED' | 'PERCENTAGE'>('FIXED');
 
-    // Sync initial method when modal opens
     useEffect(() => {
         if (isOpen) {
             setMethod(initialMethod as any);
@@ -60,9 +59,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     const changeAmount = Math.max(0, receivedNum - finalGrandTotal);
 
     const handleConfirm = async () => {
-        if (method === 'CASH' && receivedNum < finalGrandTotal) {
-            return;
-        }
+        if (method === 'CASH' && receivedNum < finalGrandTotal) return;
 
         try {
             setIsSubmitting(true);
@@ -73,10 +70,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 subTotal: totalAmount,
                 discount: totalDiscount,
                 grandTotal: finalGrandTotal,
-                discountPercentage: discountType === 'PERCENTAGE' ? Number(discountValue) : undefined
+                discountPercentage: discountType === 'PERCENTAGE' ? Number(discountValue) : undefined,
             });
-            
-            // Close immediately
             onClose();
         } catch (error) {
             console.error(error);
@@ -103,7 +98,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </div>
 
                 <div className="p-6 pb-0">
-                    {/* Amount to Pay Container - Fixed at top */}
+                    {/* Amount Display */}
                     <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 text-center shadow-inner">
                         <span className="text-sm font-semibold text-blue-600 uppercase tracking-wider">
                             {totalDiscount > 0 ? 'Sub Total' : 'Total to Pay'}

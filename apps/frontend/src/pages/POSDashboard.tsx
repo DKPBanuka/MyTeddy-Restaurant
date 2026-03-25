@@ -356,38 +356,55 @@ export function POSDashboard() {
             console.log('Checkout SUCCESS. createdOrder from API:', createdOrder);
             console.log('Current cartItems in state:', cartItems);
 
-            const orderToSave = {
-                ...createdOrder,
-                // Hardened enrichment: Map cart metadata to order items for the receipt utility.
-                orderItems: (createdOrder.orderItems || createdOrder.items || []).map((oi: any, idx: number) => {
+                // Robust 1-to-1 matching to handle potential reordering and multiple identical items
+                const itemPool = [...(cartItems as any[])];
+                const claimedIndices = new Set<number>();
+
+                const orderItems = (createdOrder.orderItems || createdOrder.items || []).map((oi: any, oiIdx: number) => {
                     const oiProdId = oi.productId?.toString();
                     const oiPkgId = oi.packageId?.toString();
-                    const oiSizeId = oi.sizeId?.toString();
+                    const oiSizeId = (oi.sizeId || oi.productSizeId || oi.size?.id)?.toString() || null;
 
-                    // Try to match by index first as it's the most reliable for 1-to-1 POS orders
-                    let cartItem = (cartItems as any[])[idx];
+                    // 1. Try matching by index first
+                    let cartIdx = oiIdx;
+                    let cartItem = itemPool[cartIdx];
                     
-                    // Verify if index match is correct product
                     const ciProdId = cartItem?.productId?.toString() || cartItem?.id?.toString();
                     const ciPkgId = cartItem?.packageId?.toString() || cartItem?.id?.toString();
-                    
-                    const isIndexMatch = (oiProdId && ciProdId === oiProdId) || (oiPkgId && ciPkgId === oiPkgId);
+                    const ciSizeId = (cartItem?.sizeId || cartItem?.size?.id)?.toString() || null;
 
-                    if (!isIndexMatch) {
-                        // Fallback to attribute matching if order changed (unlikely in POS)
-                        cartItem = (cartItems as any[]).find(ci => {
+                    const isIndexMatch = !claimedIndices.has(cartIdx) && 
+                                        ((oiProdId && ciProdId === oiProdId) || (oiPkgId && ciPkgId === oiPkgId)) &&
+                                        (oiSizeId === ciSizeId);
+
+                    if (isIndexMatch) {
+                        claimedIndices.add(cartIdx);
+                    } else {
+                        // 2. Fallback: Search pool for first unclaimed match
+                        cartIdx = itemPool.findIndex((ci, idx) => {
+                            if (claimedIndices.has(idx)) return false;
                             const pId = ci.productId?.toString() || ci.id?.toString();
                             const pkgId = ci.packageId?.toString() || ci.id?.toString();
-                            if ((oiProdId && pId !== oiProdId) && (oiPkgId && pkgId !== oiPkgId)) return false;
-
                             const sId = (ci.sizeId || ci.size?.id)?.toString() || null;
-                            if ((oiSizeId || null) !== sId) return false;
-
-                            return true;
+                            
+                            return ((oiProdId && pId === oiProdId) || (oiPkgId && pkgId === oiPkgId)) && (oiSizeId === sId);
                         });
+
+                        if (cartIdx !== -1) {
+                            cartItem = itemPool[cartIdx];
+                            claimedIndices.add(cartIdx);
+                        } else {
+                            cartItem = null; // Unmatched
+                        }
                     }
 
-                    // console.log(`Mapping OI [idx:${idx}] (Prod:${oiProdId}, Size:${oiSizeId}) -> Found CartItem:`, cartItem?.name || 'NOT FOUND');
+                    const sizeValue = cartItem?.size?.name || 
+                                     (typeof cartItem?.size === 'string' ? cartItem.size : null) || 
+                                     oi.productSize?.name || 
+                                     oi.size?.name || 
+                                     (typeof oi.size === 'string' ? oi.size : null);
+
+                    const addonsValue = cartItem?.selectedAddons || oi.selectedAddons || oi.orderItemAddons || [];
 
                     return {
                         ...oi,
@@ -395,12 +412,18 @@ export function POSDashboard() {
                         unitPrice: Number(oi.unitPrice || oi.priceAtTimeOfSale || (cartItem?.size ? cartItem.size.price : cartItem?.product?.price || cartItem?.package?.price || 0)),
                         product: cartItem?.product || oi.product,
                         package: cartItem?.package || oi.package,
-                        size: cartItem?.size?.name || cartItem?.size || oi.productSize?.name || oi.size,
-                        productSize: cartItem?.size || oi.productSize,
-                        selectedAddons: cartItem?.selectedAddons || oi.selectedAddons || []
+                        size: sizeValue,
+                        productSize: cartItem?.size || oi.productSize || oi.size,
+                        addons: addonsValue,
+                        selectedAddons: addonsValue
                     };
-                }),
-                subTotal: Number(paymentDetails.subTotal || createdOrder.subTotal || calculatedTotal),
+                });
+
+                const orderToSave = {
+                    ...createdOrder,
+                    orderItems,
+                    items: orderItems, // Force unified naming to avoid template mismatches
+                    subTotal: Number(paymentDetails.subTotal || createdOrder.subTotal || calculatedTotal),
                 discount: Number(paymentDetails.discount || createdOrder.discount || 0),
                 grandTotal: Number(paymentDetails.grandTotal || createdOrder.grandTotal || (calculatedTotal - (paymentDetails.discount || 0))),
                 discountPercentage: paymentDetails.discountPercentage || createdOrder.discountPercentage,

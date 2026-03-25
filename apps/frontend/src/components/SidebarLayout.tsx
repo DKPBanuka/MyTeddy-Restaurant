@@ -101,6 +101,12 @@ export function SidebarLayout() {
                             {actualExpanded && <span className="whitespace-nowrap">Staff</span>}
                         </NavLink>
                     )}
+                    {hasPermission('POS') && (
+                        <NavLink to="/customers" className={navLinkClass} title="Customers">
+                            <Users size={24} className="shrink-0" />
+                            {actualExpanded && <span className="whitespace-nowrap">Customers</span>}
+                        </NavLink>
+                    )}
                     {user?.role === 'ADMIN' && (
                         <NavLink to="/menu-management" className={navLinkClass} title="Menu Management">
                             <Library size={24} className="shrink-0" />
@@ -149,6 +155,12 @@ export function SidebarLayout() {
                     <NavLink to="/inventory" className={({ isActive }) => `flex flex-col items-center gap-1 p-2 w-16 transition-all ${isActive ? 'text-white' : 'text-slate-500'}`}>
                         <Layers size={24} />
                         <span className="text-[10px] font-bold">Inv.</span>
+                    </NavLink>
+                )}
+                {hasPermission('POS') && (
+                    <NavLink to="/customers" className={({ isActive }) => `flex flex-col items-center gap-1 p-2 w-16 transition-all ${isActive ? 'text-white' : 'text-slate-500'}`}>
+                        <Users size={24} />
+                        <span className="text-[10px] font-bold">Cust.</span>
                     </NavLink>
                 )}
                 {user?.role === 'ADMIN' && (

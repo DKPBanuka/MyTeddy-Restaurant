@@ -140,7 +140,7 @@ export interface Order {
     customerName?: string | null;
     customerPhone?: string | null;
     deliveryAddress?: string | null;
-    tokenId?: string | null;
+    customerId?: string | null;
     totalAmount: number | string;
     paymentMethod?: string | null;
     amountReceived?: number | string | null;
@@ -150,4 +150,18 @@ export interface Order {
     updatedAt: string;
     refundReason?: string | null;
     orderItems?: any[];
+}
+
+export interface Customer {
+    id: string;
+    name: string;
+    phone?: string | null;
+    email?: string | null;
+    address?: string | null;
+    points: number;
+    createdAt: string;
+    updatedAt: string;
+    _count?: {
+        orders: number;
+    };
 }

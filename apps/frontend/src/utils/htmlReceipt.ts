@@ -85,12 +85,14 @@ export const generateHTMLReceipt = (orderData: any, settings?: any, logoUrl?: st
             const displayNameRaw = rawName.replace(/\(RETAIL\)/gi, '').trim();
             const displayName = displayNameRaw.length > maxChars ? displayNameRaw.substring(0, maxChars - 3) + '...' : displayNameRaw;
 
-            const addons = (item.addons || item.orderItemAddons || []).map((a: any) => a.addonName || a.addon?.name || a.name);
+            const addons = (item.addons || item.selectedAddons || item.orderItemAddons || []).map((a: any) => 
+                a.addonName || a.addon?.name || a.name || (typeof a === 'string' ? a : 'Addon')
+            );
 
             const itemTotal = Number(item.total || item.itemTotal || (unitPrice * qty));
             return { 
                 name: toTitleCase(displayName), 
-                size: toTitleCase(sizeName), 
+                size: sizeName ? toTitleCase(sizeName as string) : null, 
                 addons: addons.map((a: any) => toTitleCase(a)), 
                 qty, 
                 unitPrice, 
@@ -98,6 +100,29 @@ export const generateHTMLReceipt = (orderData: any, settings?: any, logoUrl?: st
                 type: item.type || item.product?.type || 'FOOD'
             };
         });
+
+        // Consolidate Addons
+        let grandAddonsTotal = 0;
+        (orderData.orderItems || orderData.items || []).forEach((item: any) => {
+            const itemAddons = (item.addons || item.selectedAddons || item.orderItemAddons || []);
+            const itemAddonTotal = itemAddons.reduce((sum: number, a: any) => {
+                const p = Number(a.price || a.addonPrice || a.unitPrice || 0);
+                return sum + p;
+            }, 0);
+            const qty = item.quantity || item.qty || 1;
+            grandAddonsTotal += (itemAddonTotal * qty);
+        });
+
+        if (grandAddonsTotal > 0) {
+            items.push({
+                name: 'Addition items',
+                size: null,
+                qty: 1,
+                unitPrice: grandAddonsTotal,
+                itemTotal: grandAddonsTotal,
+                type: 'FOOD'
+            });
+        }
     }
 
     const foodItems = items.filter((i: any) => i.type !== 'RETAIL');
@@ -106,15 +131,10 @@ export const generateHTMLReceipt = (orderData: any, settings?: any, logoUrl?: st
     const renderItemRow = (item: any) => `
         <tr>
             <td class="col-item font-bold">
-                ${item.name.toUpperCase()}
+                ${item.name}
                 ${item.size ? `
-                    <span style="font-size: 10px; font-weight: 800; color: #444; margin-left: 4px; vertical-align: middle;">
-                        (${item.size.toUpperCase()})
-                    </span>
-                ` : ''}
-                ${item.addons && item.addons.length > 0 ? `
-                    <div style="font-size: 10px; font-weight: normal; color: #666; margin-top: 1px;">
-                        + ${item.addons.join(', ')}
+                    <div style="font-size: 13px; font-weight: 900; color: #000; margin-top: 2px;">
+                        (${item.size})
                     </div>
                 ` : ''}
             </td>

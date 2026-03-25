@@ -468,12 +468,23 @@ function ProductModal({ categories, initialData, onClose, onSuccess }: { categor
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Product Sizes</h3>
-                            <button 
-                                onClick={() => setSizes([...sizes, { name: '', price: 0 }])}
-                                className="text-blue-600 text-xs font-bold hover:underline flex items-center gap-1"
-                            >
-                                <Plus size={14} /> Add Size
-                            </button>
+                            <div className="flex gap-2">
+                                {['Small', 'Normal', 'Large'].map(stdSize => (
+                                    <button 
+                                        key={stdSize}
+                                        onClick={() => setSizes([...sizes, { name: stdSize, price: 0 }])}
+                                        className="px-2 py-1 bg-blue-50 text-blue-600 text-[10px] font-black uppercase rounded hover:bg-blue-100 transition-colors border border-blue-100"
+                                    >
+                                        + {stdSize}
+                                    </button>
+                                ))}
+                                <button 
+                                    onClick={() => setSizes([...sizes, { name: '', price: 0 }])}
+                                    className="text-blue-600 text-xs font-bold hover:underline flex items-center gap-1 ml-2"
+                                >
+                                    <Plus size={14} /> Add Size
+                                </button>
+                            </div>
                         </div>
                         <div className="space-y-2">
                             {sizes.map((s, i) => (
@@ -967,6 +978,7 @@ function PackageModal({ initialData, onClose, onSuccess }: { initialData: any | 
                                 type="number" 
                                 placeholder="0.00" 
                                 value={formData.price} 
+                                onFocus={(e) => e.target.select()}
                                 onChange={e => setFormData({ ...formData, price: Number(e.target.value) })} 
                                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-black outline-none focus:border-blue-500" 
                             />
@@ -1068,6 +1080,7 @@ function PackageModal({ initialData, onClose, onSuccess }: { initialData: any | 
                                                 min="1"
                                                 placeholder="Qty"
                                                 value={it.quantity}
+                                                onFocus={(e) => e.target.select()}
                                                 onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))}
                                                 className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-black text-center outline-none"
                                             />

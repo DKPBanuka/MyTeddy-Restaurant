@@ -12,9 +12,10 @@ import { RolePermissionsModule } from './role-permissions/role-permissions.modul
 
 import { CategoriesModule } from './categories/categories.module';
 import { SettingsModule } from './settings/settings.module';
+import { CustomersModule } from './customers/customers.module';
 
 @Module({
-  imports: [PrismaModule, ProductsModule, OrdersModule, AuthModule, PartyBookingsModule, InventoryModule, StaffModule, RolePermissionsModule, CategoriesModule, SettingsModule],
+  imports: [PrismaModule, ProductsModule, OrdersModule, AuthModule, PartyBookingsModule, InventoryModule, StaffModule, RolePermissionsModule, CategoriesModule, SettingsModule, CustomersModule],
   controllers: [AppController],
   providers: [AppService],
 })

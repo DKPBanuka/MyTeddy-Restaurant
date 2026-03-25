@@ -17,6 +17,7 @@ import { MenuManagement } from './pages/MenuManagement.tsx';
 import { OrdersDashboard } from './pages/OrdersDashboard';
 import { Settings } from './pages/Settings';
 import ReceiptPreview from './pages/ReceiptPreview';
+import { Customers } from './pages/Customers';
 
 function App() {
   const { isAuthenticated } = useAuth();
@@ -39,6 +40,7 @@ function App() {
             <Route element={<SidebarLayout />}>
               <Route element={<ProtectedRoute requiredPermission="POS" />}>
                 <Route path="/" element={<POSDashboard />} />
+                <Route path="/customers" element={<Customers />} />
               </Route>
 
               <Route element={<ProtectedRoute requiredPermission="EVENTS" />}>

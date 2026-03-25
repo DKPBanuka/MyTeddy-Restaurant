@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Product, ProductSize, GlobalAddon } from '../types';
-import { X, Check, ShoppingBag } from 'lucide-react';
+import { X, Check, ShoppingBag, Search } from 'lucide-react';
 
 interface ProductSelectionModalProps {
     product: Product;
@@ -32,6 +32,8 @@ export function ProductSelectionModal({
         return counts;
     });
 
+    const [searchTerm, setSearchTerm] = useState('');
+
     const updateAddonCount = (addonId: string, delta: number) => {
         setAddonCounts(prev => {
             const newCount = Math.max(0, (prev[addonId] || 0) + delta);
@@ -49,6 +51,10 @@ export function ProductSelectionModal({
     }, 0);
 
     const totalPrice = (selectedSize ? Number(selectedSize.price) : Number(product.price)) + totalAddonsPrice;
+
+    const filteredAddons = globalAddons.filter(a =>
+        a.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     const handleConfirm = () => {
         // Flatten addonCounts back into a GlobalAddon array (repeating items based on count)
@@ -109,13 +115,27 @@ export function ProductSelectionModal({
 
                     {/* Global Add-ons Section */}
                     <div className="space-y-4">
-                        <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                            <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-[10px]">2</span>
-                            Extra Add-ons
-                        </h3>
-                        {globalAddons.length > 0 ? (
+                        <div className="flex items-center justify-between gap-4">
+                            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2 shrink-0">
+                                <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-[10px]">2</span>
+                                Extra Add-ons
+                            </h3>
+                            {globalAddons.length > 5 && (
+                                <div className="relative flex-1 max-w-[200px]">
+                                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="w-full pl-9 pr-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl text-[11px] font-bold focus:bg-white focus:border-orange-400 outline-none transition-all placeholder:text-slate-400"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                        {filteredAddons.length > 0 ? (
                             <div className="grid grid-cols-1 gap-2">
-                                {globalAddons.map((a) => {
+                                {filteredAddons.map((a) => {
                                     const count = addonCounts[a.id] || 0;
                                     const isSelected = count > 0;
                                     return (
