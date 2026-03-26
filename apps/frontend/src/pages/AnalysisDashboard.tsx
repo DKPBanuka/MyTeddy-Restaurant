@@ -44,6 +44,13 @@ interface AnalysisData {
         netProfit: number;
         lowStockCount: number;
     };
+    salesTrend: { date: string, revenue: number }[];
+    topSellers: { name: string, quantity: number, value: number }[];
+    categoryRevenue: { name: string, value: number, percent: number, products: { name: string, quantity: number, value: number }[] }[];
+    paymentMethodSplit: { name: string, value: number }[];
+    hourlyData: { hour: string, revenue: number }[];
+    partyStats: { count: number, totalValue: number, advanceCollected: number };
+    customerStats: { totalCustomers: number, activeCustomers: number, customerGrowth: number };
 }
 
 const COLORS = ['#6366f1', '#a855f7', '#ec4899', '#f43f5e', '#f59e0b', '#10b981'];
@@ -57,6 +64,172 @@ export const AnalysisDashboard: React.FC = () => {
     const [customRange, setCustomRange] = useState({ start: '', end: '' });
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [dashboardMode, setDashboardMode] = useState<'ANALYTICS' | 'EXECUTIVE'>('EXECUTIVE');
+    const [lang, setLang] = useState<'EN' | 'SI'>('EN');
+
+    const t: any = {
+        EN: {
+            title_main: "Business",
+            title_sub: "Intelligence",
+            subtitle: "Executive Command Center v5.0",
+            mode_exec: "Executive Hub",
+            mode_analytics: "Pure Analytics",
+            loading: "Generating Intelligence",
+            compare: "COMPARE",
+            comparing: "COMPARING",
+            apply_filter: "Apply Filter",
+            start_date: "Start Date",
+            end_date: "End Date",
+            
+            // Executive Metrics
+            inv_cost: "Inventory Value (Cost)",
+            retail_val: "Retail Market Value",
+            gross_profit: "Potential Gross Profit",
+            low_stock: "Low Stock Assets",
+            
+            // BI Modules
+            p_and_l: "Financial P&L",
+            p_and_l_desc: "Comprehensive profit & loss analysis with real-time expense integration.",
+            sales_intel: "Sales Intelligence",
+            sales_intel_desc: "Deep dive into transaction patterns, peak hours, and category performance.",
+            expense_analysis: "Expense Analysis",
+            expense_analysis_desc: "Granular breakdown of operational costs and procurement cycles.",
+            employee_roi: "Employee ROI",
+            employee_roi_desc: "Tracking service speed, upsell rates, and labor efficiency.",
+            receivables: "Receivables Aging",
+            receivables_desc: "Advanced tracking for party booking balances and credit cycles.",
+            strategic: "Strategic Growth",
+            strategic_desc: "AI-powered projections and market trend correlation.",
+            
+            // Labels
+            net_profit: "Net Profit",
+            expenses: "Expenses",
+            avg_order: "Avg Order",
+            volume: "Volume",
+            items: "items",
+            procurement: "Procurement",
+            utilities: "Utilities",
+            top_performer: "Top Performer",
+            svc_speed: "Svc Speed",
+            unpaid_parties: "Unpaid Parties",
+            balance_due: "Balance Due",
+            projection: "Projection",
+            market_cap: "Market Cap",
+            
+            // Charts
+            rev_period: "Revenue for Period",
+            party_impact: "Party Impact",
+            active_customers: "Active Customers",
+            periodic_growth: "Periodic Revenue Growth",
+            rev_by_payment: "Revenues by Payment",
+            hourly_peak: "Hourly Peak Activity",
+            cat_volume: "Category Volume",
+            drill_down: "Click to drill down",
+            breakdown: "Breakdown",
+            top_products: "Top performing products within this category",
+            close_drilldown: "Close Drilldown",
+
+            // Footer labels
+            today: "Today",
+            total_orders_footer: "total completed orders",
+            events: "events",
+            collected: "Collected",
+            out_of: "Out of",
+            total_records: "total records",
+            real_time: "Real-time processing",
+            trend_confirmed: "Trend Confirmed",
+            system_health: "System Health",
+            nodes_op: "Nodes Operational",
+            retention_rate: "Retention Rate",
+            retention_desc: "Based on returning customer transactions over total volume.",
+            top_assets: "Top Performance Assets",
+            vol_sold: "Volume Sold",
+            audit_log: "Audit Log",
+            refund_impact: "Refund/Discount Impact",
+            est_5: "Est. 5%"
+        },
+        SI: {
+            title_main: "ව්‍යාපාරික",
+            title_sub: "බුද්ධිය",
+            subtitle: "විධායක මෙහෙයුම් මධ්‍යස්ථානය v5.0",
+            mode_exec: "විධායක කේන්ද්‍රය",
+            mode_analytics: "විශ්ලේෂණාත්මක දසුන",
+            loading: "තොරතුරු ජනනය වෙමින් පවතී",
+            compare: "සසඳන්න",
+            comparing: "සසඳමින් පවතී",
+            apply_filter: "පෙරහන් යොදන්න",
+            start_date: "ආරම්භක දිනය",
+            end_date: "අවසන් දිනය",
+            
+            // Executive Metrics
+            inv_cost: "තොග වටිනාකම (පිරිවැය)",
+            retail_val: "වෙළඳපල වටිනාකම",
+            gross_profit: "අපේක්ෂිත ලාභය",
+            low_stock: "අඩු තොග අයිතම",
+            
+            // BI Modules
+            p_and_l: "මූල්‍ය ලාභ අලාභ",
+            p_and_l_desc: "වියදම් සමඟ සසඳන ලද සවිස්තරාත්මක ලාභ අලාභ විශ්ලේෂණය.",
+            sales_intel: "විකුණුම් බුද්ධිය",
+            sales_intel_desc: "ගනුදෙනු රටා, කාර්යබහුල වේලාවන් සහ කාණ්ඩ ක්‍රියාකාරිත්වය.",
+            expense_analysis: "වියදම් විශ්ලේෂණය",
+            expense_analysis_desc: "මෙහෙයුම් පිරිවැය සහ ප්‍රසම්පාදන චක්‍රවල සවිස්තරාත්මක බිඳවැටීම.",
+            employee_roi: "සේවක ප්‍රතිලාභ",
+            employee_roi_desc: "සේවා වේගය සහ ශ්‍රම කාර්යක්ෂමතාව නිරීක්ෂණය කිරීම.",
+            receivables: "හිඟ මුදල් නිරීක්ෂණය",
+            receivables_desc: "සාද වෙන් කිරීම් සහ වෙනත් හිඟ මුදල් පිළිබඳ උසස් නිරීක්ෂණය.",
+            strategic: "උපායමාර්ගික වර්ධනය",
+            strategic_desc: "AI ආධාරයෙන් වෙළඳපල ප්‍රවණතා පුරෝකථනය කිරීම.",
+            
+            // Labels
+            net_profit: "ශුද්ධ ලාභය",
+            expenses: "වියදම්",
+            avg_order: "සාමාන්‍ය ඇණවුම",
+            volume: "ප්‍රමාණය",
+            items: "භාණ්ඩ",
+            procurement: "ප්‍රසම්පාදන",
+            utilities: "උපයෝගිතා",
+            top_performer: "ප්‍රමුඛ සේවකයා",
+            svc_speed: "සේවා වේගය",
+            unpaid_parties: "නොගෙවූ සාද",
+            balance_due: "ගෙවිය යුතු ඉතිරිය",
+            projection: "අපේක්ෂිත වර්ධනය",
+            market_cap: "වෙළඳපල ප්‍රාග්ධනය",
+            
+            // Charts
+            rev_period: "කාලසීමාවේ ආදායම",
+            party_impact: "සාදවල බලපෑම",
+            active_customers: "ක්‍රියාකාරී පාරිභෝගිකයන්",
+            periodic_growth: "කාලානුරූපී ආදායම් වර්ධනය",
+            rev_by_payment: "ගෙවීම් ක්‍රම අනුව ආදායම",
+            hourly_peak: "පැයකට උපරිම ක්‍රියාකාරකම්",
+            cat_volume: "කාණ්ඩය අනුව ප්‍රමාණය",
+            drill_down: "විස්තර බැලීමට ක්ලික් කරන්න",
+            breakdown: "විශ්ලේෂණය",
+            top_products: "මෙම කාණ්ඩය යටතේ වැඩියෙන්ම අලෙවි වන නිෂ්පාදන",
+            close_drilldown: "වසා දමන්න",
+
+             // Footer labels
+            today: "අද",
+            total_orders_footer: "සම්පූර්ණ කරන ලද ඇණවුම් සංඛ්‍යාව",
+            events: "උත්සව",
+            collected: "එකතු කරන ලද ප්‍රමාණය",
+            out_of: "සමස්ත",
+            total_records: "වාර්තා වලින්",
+            real_time: "එසැණින් සැකසෙමින් පවතී",
+            trend_confirmed: "ප්‍රවණතාව තහවුරුයි",
+            system_health: "පද්ධති සෞඛ්‍යය",
+            nodes_op: "මෙහෙයුම් ක්‍රියාකාරීයි",
+            retention_rate: "පාරිභෝගික රඳවා ගැනීමේ අනුපාතය",
+            retention_desc: "සමස්ත ගනුදෙනු වලට සාපේක්ෂව නැවත පැමිණෙන පාරිභෝගික ගනුදෙනු.",
+            top_assets: "උපරිම ක්‍රියාකාරී අංග",
+            vol_sold: "විකුණුම් ප්‍රමාණය",
+            audit_log: "විගණන සටහන",
+            refund_impact: "මුදල් ආපසු ගෙවීම්/වට්ටම් බලපෑම",
+            est_5: "අනුමාන 5%"
+        }
+    };
+
+    const strings = t[lang];
 
     const handleDownloadCSV = () => {
         if (!data) return;
@@ -137,7 +310,7 @@ export const AnalysisDashboard: React.FC = () => {
                             <div className="h-12 w-12 rounded-full border-r-4 border-l-4 border-pink-500 animate-spin-slow"></div>
                         </div>
                     </div>
-                    <p className="text-indigo-400 font-black tracking-[0.2em] animate-pulse uppercase text-xs">Generating Intelligence</p>
+                    <p className="text-indigo-400 font-black tracking-[0.2em] animate-pulse uppercase text-xs">{strings.loading}</p>
                 </div>
             </div>
         );
@@ -154,23 +327,23 @@ export const AnalysisDashboard: React.FC = () => {
                     <div className="space-y-2">
                         <div className="flex items-center gap-3 mb-1">
                             <TrendingUp className="text-indigo-500" size={24} />
-                            <span className="text-[10px] uppercase tracking-[0.3em] font-black text-slate-500">Executive Command Center v5.0</span>
+                            <span className="text-[10px] uppercase tracking-[0.3em] font-black text-slate-500">{strings.subtitle}</span>
                         </div>
                         <h1 className="text-4xl lg:text-5xl font-black tracking-tight text-white drop-shadow-sm">
-                            Business <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">Intelligence</span>
+                            {strings.title_main} <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">{strings.title_sub}</span>
                         </h1>
                         <div className="flex items-center gap-4 mt-2">
                             <button 
                                 onClick={() => setDashboardMode('EXECUTIVE')}
                                 className={`text-xs font-black tracking-widest uppercase transition-all ${dashboardMode === 'EXECUTIVE' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1' : 'text-slate-500 hover:text-slate-300'}`}
                             >
-                                Executive Hub
+                                {strings.mode_exec}
                             </button>
                             <button 
                                 onClick={() => setDashboardMode('ANALYTICS')}
                                 className={`text-xs font-black tracking-widest uppercase transition-all ${dashboardMode === 'ANALYTICS' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1' : 'text-slate-500 hover:text-slate-300'}`}
                             >
-                                Pure Analytics
+                                {strings.mode_analytics}
                             </button>
                         </div>
                     </div>
@@ -201,8 +374,26 @@ export const AnalysisDashboard: React.FC = () => {
                             }`}
                         >
                             <RefreshCcw size={12} className={compare ? 'animate-spin-slow' : ''} />
-                            {compare ? 'COMPARING' : 'COMPARE'}
+                            {compare ? strings.comparing : strings.compare}
                         </button>
+
+                        <div className="h-8 w-px bg-white/10 mx-2 hidden sm:block"></div>
+
+                        {/* Language Toggle */}
+                        <div className="flex bg-white/5 rounded-full p-1 border border-white/10">
+                            <button 
+                                onClick={() => setLang('EN')}
+                                className={`px-4 py-1.5 rounded-full text-[10px] font-black transition-all ${lang === 'EN' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-500 hover:text-slate-300'}`}
+                            >
+                                EN
+                            </button>
+                            <button 
+                                onClick={() => setLang('SI')}
+                                className={`px-4 py-1.5 rounded-full text-[10px] font-black transition-all ${lang === 'SI' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-500 hover:text-slate-300'}`}
+                            >
+                                සිංහල
+                            </button>
+                        </div>
 
                         <div className="h-8 w-px bg-white/10 mx-2 hidden sm:block"></div>
                         
@@ -235,7 +426,7 @@ export const AnalysisDashboard: React.FC = () => {
                 {period === 'CUSTOM' && (
                     <div className="flex flex-wrap items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
                         <div className="flex flex-col gap-1.5">
-                            <span className="text-[10px] uppercase tracking-widest font-black text-slate-500 ml-4">Start Date</span>
+                            <span className="text-[10px] uppercase tracking-widest font-black text-slate-500 ml-4">{strings.start_date}</span>
                             <input 
                                 type="date"
                                 value={customRange.start}
@@ -244,7 +435,7 @@ export const AnalysisDashboard: React.FC = () => {
                             />
                         </div>
                         <div className="flex flex-col gap-1.5">
-                            <span className="text-[10px] uppercase tracking-widest font-black text-slate-500 ml-4">End Date</span>
+                            <span className="text-[10px] uppercase tracking-widest font-black text-slate-500 ml-4">{strings.end_date}</span>
                             <input 
                                 type="date"
                                 value={customRange.end}
@@ -256,7 +447,7 @@ export const AnalysisDashboard: React.FC = () => {
                             onClick={fetchData}
                             className="mt-6 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white px-8 py-3.5 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg shadow-indigo-500/20 uppercase"
                         >
-                            Apply Filter
+                            {strings.apply_filter}
                         </button>
                     </div>
                 )}
@@ -267,7 +458,7 @@ export const AnalysisDashboard: React.FC = () => {
                         {/* Executive High-Density Metrics */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                             <MetricCard 
-                                title="Inventory Value (Cost)" 
+                                title={strings.inv_cost} 
                                 value={formatCurrency(data.financials?.inventoryValueCost || 0)} 
                                 color="text-blue-400"
                                 bg="bg-blue-500/5"
@@ -275,7 +466,7 @@ export const AnalysisDashboard: React.FC = () => {
                                 icon={<Briefcase size={20} />}
                             />
                             <MetricCard 
-                                title="Retail Market Value" 
+                                title={strings.retail_val} 
                                 value={formatCurrency(data.financials?.inventoryValueRetail || 0)} 
                                 color="text-indigo-400"
                                 bg="bg-indigo-500/5"
@@ -283,7 +474,7 @@ export const AnalysisDashboard: React.FC = () => {
                                 icon={<TrendingUp size={20} />}
                             />
                             <MetricCard 
-                                title="Potential Gross Profit" 
+                                title={strings.gross_profit} 
                                 value={formatCurrency(data.financials?.potentialProfit || 0)} 
                                 color="text-emerald-400"
                                 bg="bg-emerald-500/5"
@@ -291,7 +482,7 @@ export const AnalysisDashboard: React.FC = () => {
                                 icon={<DollarSign size={20} />}
                             />
                             <MetricCard 
-                                title="Low Stock Assets" 
+                                title={strings.low_stock} 
                                 value={data.financials?.lowStockCount?.toString() || "0"} 
                                 color="text-rose-400"
                                 bg="bg-rose-500/5"
@@ -303,68 +494,68 @@ export const AnalysisDashboard: React.FC = () => {
                         {/* Modular BI Hub (3x2 Grid) */}
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
                             <BIModule 
-                                title="Financial P&L" 
-                                description="Comprehensive profit & loss analysis with real-time expense integration."
+                                title={strings.p_and_l} 
+                                description={strings.p_and_l_desc}
                                 icon={<TrendingUp className="text-emerald-400" />}
                                 stats={[
-                                    { label: 'Net Profit', value: formatCurrency(data.financials?.netProfit || 0) },
-                                    { label: 'Expenses', value: formatCurrency(data.financials?.totalExpenses || 0) }
+                                    { label: strings.net_profit, value: formatCurrency(data.financials?.netProfit || 0) },
+                                    { label: strings.expenses, value: formatCurrency(data.financials?.totalExpenses || 0) }
                                 ]}
                                 trend="+12.4% vs prev period"
                                 color="from-emerald-500/20"
                             />
                             <BIModule 
-                                title="Sales Intelligence" 
-                                description="Deep dive into transaction patterns, peak hours, and category performance."
+                                title={strings.sales_intel} 
+                                description={strings.sales_intel_desc}
                                 icon={<ShoppingBag className="text-indigo-400" />}
                                 stats={[
-                                    { label: 'Avg Order', value: formatCurrency(data.averageOrderValue) },
-                                    { label: 'Volume', value: `${data.totalOrders} items` }
+                                    { label: strings.avg_order, value: formatCurrency(data.averageOrderValue) },
+                                    { label: strings.volume, value: `${data.totalOrders} ${strings.items}` }
                                 ]}
                                 trend="Processing real-time data"
                                 color="from-indigo-500/20"
                             />
                             <BIModule 
-                                title="Expense Analysis" 
-                                description="Granular breakdown of operational costs and procurement cycles."
+                                title={strings.expense_analysis} 
+                                description={strings.expense_analysis_desc}
                                 icon={<DollarSign className="text-pink-400" />}
                                 stats={[
-                                    { label: 'Procurement', value: formatCurrency(data.financials?.inventoryValueCost || 0) },
-                                    { label: 'Utilities', value: 'Coming soon' }
+                                    { label: strings.procurement, value: formatCurrency(data.financials?.inventoryValueCost || 0) },
+                                    { label: strings.utilities, value: 'Coming soon' }
                                 ]}
                                 trend="Updated 5m ago"
                                 color="from-pink-500/20"
                             />
                             <BIModule 
-                                title="Employee ROI" 
-                                description="Tracking service speed, upsell rates, and labor efficiency."
+                                title={strings.employee_roi} 
+                                description={strings.employee_roi_desc}
                                 icon={<Users className="text-amber-400" />}
                                 stats={[
-                                    { label: 'Top Performer', value: 'Cashier #1' },
-                                    { label: 'Svc Speed', value: '4.2 min' }
+                                    { label: strings.top_performer, value: 'Cashier #1' },
+                                    { label: strings.svc_speed, value: '4.2 min' }
                                 ]}
                                 trend="High performance alert"
                                 color="from-amber-500/20"
                                 disabled
                             />
                             <BIModule 
-                                title="Receivables Aging" 
-                                description="Advanced tracking for party booking balances and credit cycles."
+                                title={strings.receivables} 
+                                description={strings.receivables_desc}
                                 icon={<Clock className="text-purple-400" />}
                                 stats={[
-                                    { label: 'Unpaid Parties', value: data.partyStats.count.toString() },
-                                    { label: 'Balance Due', value: formatCurrency(data.partyStats.totalValue - data.partyStats.advanceCollected) }
+                                    { label: strings.unpaid_parties, value: data.partyStats.count.toString() },
+                                    { label: strings.balance_due, value: formatCurrency(data.partyStats.totalValue - data.partyStats.advanceCollected) }
                                 ]}
                                 trend="Low risk profile"
                                 color="from-purple-500/20"
                             />
                             <BIModule 
-                                title="Strategic Growth" 
-                                description="AI-powered projections and market trend correlation."
+                                title={strings.strategic} 
+                                description={strings.strategic_desc}
                                 icon={<Award className="text-cyan-400" />}
                                 stats={[
-                                    { label: 'Projection', value: '+18% YoY' },
-                                    { label: 'Market Cap', value: '--' }
+                                    { label: strings.projection, value: '+18% YoY' },
+                                    { label: strings.market_cap, value: '--' }
                                 ]}
                                 trend="Model training complete"
                                 color="from-cyan-500/20"
@@ -377,40 +568,40 @@ export const AnalysisDashboard: React.FC = () => {
                         {/* KPI Micro-Grid (Standard) */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                             <SummaryCard 
-                                title="Revenue for Period" 
+                                title={strings.rev_period} 
                                 value={formatCurrency(data.totalRevenue)} 
                                 icon={<DollarSign />} 
                                 trend={compare ? `${data.revenueGrowth > 0 ? '+' : ''}${data.revenueGrowth}%` : undefined} 
                                 positive={data.revenueGrowth >= 0}
                                 color="from-blue-600 to-indigo-600"
-                                footer={`Today: ${formatCurrency(data.todayRevenue)}`}
+                                footer={`${strings.today}: ${formatCurrency(data.todayRevenue)}`}
                             />
                             <SummaryCard 
-                                title="Average Order" 
+                                title={strings.avg_order} 
                                 value={formatCurrency(data.averageOrderValue)} 
                                 icon={<ShoppingBag />} 
                                 trend={compare ? `${data.orderGrowth > 0 ? '+' : ''}${data.orderGrowth}%` : undefined} 
                                 positive={data.orderGrowth >= 0}
                                 color="from-emerald-600 to-teal-600"
-                                footer={`${data.totalOrders} total completed orders`}
+                                footer={`${data.totalOrders} ${strings.total_orders_footer}`}
                             />
                             <SummaryCard 
-                                title="Party Impact" 
+                                title={strings.party_impact} 
                                 value={formatCurrency(data.partyStats.totalValue)} 
                                 icon={<Briefcase />} 
-                                trend={`${data.partyStats.count} events`} 
+                                trend={`${data.partyStats.count} ${strings.events}`} 
                                 positive={true}
                                 color="from-amber-500 to-orange-600"
-                                footer={`Collected: ${formatCurrency(data.partyStats.advanceCollected)}`}
+                                footer={`${strings.collected}: ${formatCurrency(data.partyStats.advanceCollected)}`}
                             />
                             <SummaryCard 
-                                title="Active Customers" 
+                                title={strings.active_customers} 
                                 value={data.customerStats.activeCustomers.toString()} 
                                 icon={<UserCheck />} 
                                 trend={compare ? `${data.customerStats.customerGrowth > 0 ? '+' : ''}${data.customerStats.customerGrowth}%` : undefined} 
                                 positive={data.customerStats.customerGrowth >= 0}
                                 color="from-purple-600 to-pink-600"
-                                footer={`Out of ${data.customerStats.totalCustomers} total records`}
+                                footer={`${strings.out_of} ${data.customerStats.totalCustomers} ${strings.total_records}`}
                             />
                         </div>
 
@@ -424,11 +615,11 @@ export const AnalysisDashboard: React.FC = () => {
                                     <div className="flex items-center justify-between mb-8">
                                         <h3 className="text-xl font-bold text-white flex items-center gap-3">
                                             <span className="h-8 w-1.5 rounded-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]"></span>
-                                            Periodic Revenue Growth
+                                            {strings.periodic_growth}
                                         </h3>
                                         <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
                                             <Clock size={14} className="text-slate-600" />
-                                            Real-time processing
+                                            {strings.real_time}
                                         </div>
                                     </div>
                                     <div className="h-[400px] w-full">
@@ -454,7 +645,7 @@ export const AnalysisDashboard: React.FC = () => {
                                                     tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} 
                                                     tickFormatter={(val) => `Rs.${val/1000}k`} 
                                                 />
-                                                <RechartsTooltip content={<CustomTooltip />} />
+                                                <RechartsTooltip content={<CustomTooltip strings={strings} />} />
                                                 <Area 
                                                     type="monotone" 
                                                     dataKey="revenue" 
@@ -473,7 +664,7 @@ export const AnalysisDashboard: React.FC = () => {
                             <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-8 backdrop-blur-3xl shadow-2xl relative flex flex-col">
                                 <h3 className="text-xl font-bold mb-8 text-white flex items-center gap-3">
                                     <span className="h-8 w-1.5 rounded-full bg-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.5)]"></span>
-                                    Revenues by Payment
+                                    {strings.rev_by_payment}
                                 </h3>
                                 <div className="flex-1 min-h-[300px]">
                                     <ResponsiveContainer width="100%" height="100%">
@@ -511,7 +702,7 @@ export const AnalysisDashboard: React.FC = () => {
                                 <div className="flex items-center justify-between mb-8">
                                     <h3 className="text-xl font-bold text-white flex items-center gap-3">
                                         <span className="h-8 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]"></span>
-                                        Hourly Peak Activity
+                                        {strings.hourly_peak}
                                     </h3>
                                     <Clock size={24} className="text-slate-700" />
                                 </div>
@@ -553,9 +744,9 @@ export const AnalysisDashboard: React.FC = () => {
                                 <div className="flex items-center justify-between mb-8">
                                     <h3 className="text-xl font-bold text-white flex items-center gap-3">
                                         <span className="h-8 w-1.5 rounded-full bg-orange-500 shadow-[0_0_15px_rgba(245,158,11,0.5)]"></span>
-                                        Category Volume
+                                        {strings.cat_volume}
                                     </h3>
-                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Click to drill down</p>
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{strings.drill_down}</p>
                                 </div>
                                 <div className="h-[350px]">
                                     <ResponsiveContainer width="100%" height="100%">
@@ -593,15 +784,15 @@ export const AnalysisDashboard: React.FC = () => {
                         <div className="flex items-center justify-between mb-8">
                             <div>
                                 <h3 className="text-2xl font-black text-white uppercase tracking-tight">
-                                    {selectedCategory} <span className="text-indigo-500">Breakdown</span>
+                                    {selectedCategory} <span className="text-indigo-500">{strings.breakdown}</span>
                                 </h3>
-                                <p className="text-slate-500 text-xs font-bold">Top performing products within this category</p>
+                                <p className="text-slate-500 text-xs font-bold">{strings.top_products}</p>
                             </div>
                             <button 
                                 onClick={() => setSelectedCategory(null)}
                                 className="px-6 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-slate-400 hover:text-white"
                             >
-                                Close Drilldown
+                                {strings.close_drilldown}
                             </button>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -613,7 +804,7 @@ export const AnalysisDashboard: React.FC = () => {
                                         </div>
                                         <div>
                                             <h4 className="font-black text-white text-sm uppercase">{p.name}</h4>
-                                            <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">{p.quantity} units sold</p>
+                                            <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">{p.quantity} {strings.volume}</p>
                                         </div>
                                     </div>
                                     <div className="text-right">
@@ -633,7 +824,7 @@ export const AnalysisDashboard: React.FC = () => {
                         <div className="flex items-center justify-between mb-8">
                             <h3 className="text-xl font-bold text-white flex items-center gap-3">
                                 <span className="h-8 w-1.5 rounded-full bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]"></span>
-                                Top Performance Assets
+                                {strings.top_assets}
                             </h3>
                             <Award className="text-amber-500" size={24} />
                         </div>
@@ -650,7 +841,7 @@ export const AnalysisDashboard: React.FC = () => {
                                         </div>
                                         <div>
                                             <h4 className="font-black text-white text-lg group-hover:text-indigo-400 transition-colors uppercase tracking-tight">{product.name}</h4>
-                                            <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">Volume Sold: <span className="text-indigo-500">{product.quantity}</span></p>
+                                            <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">{strings.vol_sold}: <span className="text-indigo-500">{product.quantity}</span></p>
                                         </div>
                                     </div>
                                     <ChevronRight size={20} className="text-slate-800 group-hover:text-indigo-500 transition-colors" />
@@ -664,28 +855,28 @@ export const AnalysisDashboard: React.FC = () => {
                         <div className="col-span-full mb-4">
                              <h3 className="text-xl font-bold text-white flex items-center gap-3">
                                 <span className="h-8 w-1.5 rounded-full bg-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.5)]"></span>
-                                Strategic Insights
+                                {strings.strategic}
                             </h3>
                         </div>
                         
                         <div className="bg-gradient-to-br from-indigo-500/10 to-transparent border border-white/5 p-8 rounded-[2rem] flex flex-col justify-between">
                             <div className="space-y-2">
                                 <Users className="text-indigo-400 mb-4" size={32} />
-                                <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest">Retention Rate</h4>
+                                <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest">{strings.retention_rate}</h4>
                                 <p className="text-4xl font-black text-white">42.8<span className="text-indigo-500">%</span></p>
                             </div>
-                            <p className="text-[10px] text-slate-500 font-bold leading-relaxed mt-6">Based on returning customer transactions over total volume.</p>
+                            <p className="text-[10px] text-slate-500 font-bold leading-relaxed mt-6">{strings.retention_desc}</p>
                         </div>
 
                         <div className="bg-gradient-to-br from-pink-500/10 to-transparent border border-white/5 p-8 rounded-[2rem] flex flex-col justify-between">
                             <div className="space-y-2">
                                 <AlertCircle className="text-pink-400 mb-4" size={32} />
-                                <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest">System Health</h4>
+                                <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest">{strings.system_health}</h4>
                                 <p className="text-4xl font-black text-white">99.9<span className="text-pink-500">%</span></p>
                             </div>
                             <div className="flex items-center gap-2 mt-6">
                                 <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                                <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest">Nodes Operational</span>
+                                <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest">{strings.nodes_op}</span>
                             </div>
                         </div>
 
@@ -695,11 +886,11 @@ export const AnalysisDashboard: React.FC = () => {
                                     <Tag size={24} />
                                 </div>
                                 <div>
-                                    <h4 className="font-black text-white uppercase text-sm tracking-widest">Refund/Discount Impact</h4>
-                                    <p className="text-xs text-slate-500 font-bold italic">Period impact: -{formatCurrency(data.totalRevenue * 0.05)} (Est. 5%)</p>
+                                    <h4 className="font-black text-white uppercase text-sm tracking-widest">{strings.refund_impact}</h4>
+                                    <p className="text-xs text-slate-500 font-bold italic">{period} impact: -{formatCurrency(data.totalRevenue * 0.05)} ({strings.est_5})</p>
                                 </div>
                             </div>
-                            <button className="px-6 py-2.5 bg-white/5 group-hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">Audit Log</button>
+                            <button className="px-6 py-2.5 bg-white/5 group-hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">{strings.audit_log}</button>
                         </div>
                     </div>
 
@@ -789,7 +980,7 @@ const SummaryCard = ({ title, value, icon, trend, positive, color, footer }: any
     </div>
 );
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label, strings }: any) => {
     if (active && payload && payload.length) {
         return (
             <div className="bg-[#1e293b]/90 border border-white/10 p-5 rounded-3xl shadow-2xl backdrop-blur-2xl ring-1 ring-white/10">
@@ -800,7 +991,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                 </div>
                 <div className="mt-4 pt-4 border-t border-white/5">
                     <p className="text-[9px] text-indigo-400 font-black uppercase tracking-widest flex items-center gap-1.5">
-                        <TrendingUp size={10} /> Trend Confirmed
+                        <TrendingUp size={10} /> {strings.trend_confirmed}
                     </p>
                 </div>
             </div>
@@ -812,23 +1003,20 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 const CustomPieTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-[#1e293b]/90 border border-white/10 p-5 rounded-3xl shadow-2xl backdrop-blur-2xl ring-1 ring-white/10">
-                <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-2">{payload[0].name}</p>
-                <div className="flex items-center gap-3">
-                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: payload[0].fill }}></div>
-                    <p className="text-2xl font-black text-white uppercase">{formatCurrency(payload[0].value)}</p>
-                </div>
+            <div className="bg-[#1e293b]/90 border border-white/10 p-4 rounded-2xl shadow-2xl backdrop-blur-2xl">
+                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">{payload[0].name}</p>
+                <p className="text-lg font-black text-white">{formatCurrency(payload[0].value)}</p>
             </div>
         );
     }
     return null;
 };
 
-const CustomBarTooltip = ({ active, payload, money }: any) => {
+const CustomBarTooltip = ({ active, payload, label, money }: any) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-[#0f172a]/95 border border-white/10 p-4 rounded-2xl shadow-2xl backdrop-blur-xl ring-1 ring-white/10">
-                <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1.5">{payload[0].payload.hour || payload[0].payload.name}</p>
+            <div className="bg-[#1e293b]/90 border border-white/10 p-4 rounded-2xl shadow-2xl backdrop-blur-2xl">
+                <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-1">{label}</p>
                 <p className="text-lg font-black text-white">
                     {money ? formatCurrency(payload[0].value) : payload[0].value}
                 </p>
