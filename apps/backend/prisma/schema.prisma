@@ -19,6 +19,7 @@ model User {
   updatedAt     DateTime       @updatedAt
   orders        Order[]
   partyBookings PartyBooking[]
+  expenses      Expense[]
 }
 
 model RolePermission {
@@ -62,6 +63,7 @@ model ProductSize {
   id           String        @id @default(uuid())
   name         String
   price        Decimal       @db.Decimal(10, 2)
+  costPrice    Decimal       @default(0) @db.Decimal(10, 2)
   productId    String
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
@@ -113,6 +115,7 @@ model Ingredient {
   stockQty      Decimal     @db.Decimal(12, 3)
   unitOfMeasure String
   minLevel      Decimal     @db.Decimal(12, 3)
+  costPrice     Decimal     @default(0) @db.Decimal(10, 2)
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   recipeBOMs    RecipeBOM[]
@@ -135,10 +138,23 @@ model RetailStock {
   id              String   @id @default(uuid())
   productId       String   @unique
   stockQty        Int
+  costPrice       Decimal  @default(0) @db.Decimal(10, 2)
   supplierDetails String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  description String
+  amount      Decimal  @db.Decimal(10, 2)
+  category    String   @default("GENERAL")
+  date        DateTime @default(now())
+  userId      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User?    @relation(fields: [userId], references: [id])
 }
 
 model Customer {

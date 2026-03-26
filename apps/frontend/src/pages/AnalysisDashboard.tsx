@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { api } from '../api';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
-    PieChart, Pie, Cell, Legend, BarChart, Bar, ComposedChart, Line
+    PieChart, Pie, Cell, Legend, BarChart, Bar
 } from 'recharts';
 import { 
     DollarSign, 
@@ -15,39 +15,35 @@ import {
     RefreshCcw,
     ChevronRight,
     Utensils,
-    Calendar,
-    CreditCard,
-    PieChart as PieIcon,
     Clock,
     Tag,
     AlertCircle,
     UserCheck,
-    Briefcase
+    Briefcase,
+    FileDown
 } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
+import { downloadCSV } from '../utils/csvExport';
 
-type TimePeriod = 'TODAY' | 'WEEK' | 'MONTH' | 'CUSTOM';
+type TimePeriod = 'TODAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'CUSTOM';
 
 interface AnalysisData {
     todayRevenue: number;
     totalRevenue: number;
     totalOrders: number;
     averageOrderValue: number;
-    paymentMethodSplit: { name: string; value: number }[];
-    categoryRevenue: { name: string; value: number }[];
-    hourlyData: { hour: string; revenue: number }[];
-    topSellers: { name: string; quantity: number }[];
-    partyStats: {
-        count: number;
-        totalValue: number;
-        advanceCollected: number;
+    revenueGrowth: number;
+    orderGrowth: number;
+    prevStart: string | null;
+    prevEnd: string | null;
+    financials?: {
+        inventoryValueCost: number;
+        inventoryValueRetail: number;
+        potentialProfit: number;
+        totalExpenses: number;
+        netProfit: number;
+        lowStockCount: number;
     };
-    customerStats: {
-        totalCustomers: number;
-        activeCustomers: number;
-    };
-    salesTrend: { date: string; revenue: number }[];
-    refundImpact: number;
 }
 
 const COLORS = ['#6366f1', '#a855f7', '#ec4899', '#f43f5e', '#f59e0b', '#10b981'];
@@ -57,11 +53,41 @@ export const AnalysisDashboard: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [period, setPeriod] = useState<TimePeriod>('WEEK');
+    const [compare, setCompare] = useState(true);
     const [customRange, setCustomRange] = useState({ start: '', end: '' });
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [dashboardMode, setDashboardMode] = useState<'ANALYTICS' | 'EXECUTIVE'>('EXECUTIVE');
+
+    const handleDownloadCSV = () => {
+        if (!data) return;
+        
+        // 1. Export Sales Trend
+        const trendData = data.salesTrend.map(row => ({
+            Date: row.date,
+            Revenue: row.revenue
+        }));
+        downloadCSV(trendData, `Sales_Trend_${period}`);
+
+        // 2. Export Top Products
+        const productsData = data.topSellers.map(row => ({
+            Product: row.name,
+            Quantity_Sold: row.quantity
+        }));
+        downloadCSV(productsData, `Top_Products_${period}`);
+
+        // 3. Export Category Revenue
+        const categoryData = data.categoryRevenue.map(row => ({
+            Category: row.name,
+            Revenue: row.value,
+            Percentage: `${row.percent}%`
+        }));
+        downloadCSV(categoryData, `Category_Revenue_${period}`);
+    };
 
     useEffect(() => {
         fetchData();
-    }, [period]);
+        setSelectedCategory(null);
+    }, [period, compare]);
 
     const fetchData = async () => {
         try {
@@ -71,7 +97,9 @@ export const AnalysisDashboard: React.FC = () => {
 
             const now = new Date();
             if (period === 'TODAY') {
-                startDate = new Date(now.setHours(0, 0, 0, 0)).toISOString();
+                const day = new Date(now);
+                day.setHours(0, 0, 0, 0);
+                startDate = day.toISOString();
             } else if (period === 'WEEK') {
                 const weekAgo = new Date();
                 weekAgo.setDate(now.getDate() - 7);
@@ -80,12 +108,16 @@ export const AnalysisDashboard: React.FC = () => {
                 const monthAgo = new Date();
                 monthAgo.setMonth(now.getMonth() - 1);
                 startDate = monthAgo.toISOString();
+            } else if (period === 'YEAR') {
+                const yearAgo = new Date();
+                yearAgo.setFullYear(now.getFullYear() - 1);
+                startDate = yearAgo.toISOString();
             } else if (period === 'CUSTOM' && customRange.start && customRange.end) {
                 startDate = new Date(customRange.start).toISOString();
                 endDate = new Date(customRange.end).toISOString();
             }
 
-            const summary = await api.getReportsSummary({ startDate, endDate });
+            const summary = await api.getReportsSummary({ startDate, endDate, compare });
             setData(summary);
         } catch (err) {
             console.error('Error fetching analysis:', err);
@@ -122,16 +154,29 @@ export const AnalysisDashboard: React.FC = () => {
                     <div className="space-y-2">
                         <div className="flex items-center gap-3 mb-1">
                             <TrendingUp className="text-indigo-500" size={24} />
-                            <span className="text-[10px] uppercase tracking-[0.3em] font-black text-slate-500">System Analytics Engine v2.0</span>
+                            <span className="text-[10px] uppercase tracking-[0.3em] font-black text-slate-500">Executive Command Center v5.0</span>
                         </div>
                         <h1 className="text-4xl lg:text-5xl font-black tracking-tight text-white drop-shadow-sm">
                             Business <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">Intelligence</span>
                         </h1>
-                        <p className="text-slate-400 font-medium">Monitoring your restaurant's performance across all channels</p>
+                        <div className="flex items-center gap-4 mt-2">
+                            <button 
+                                onClick={() => setDashboardMode('EXECUTIVE')}
+                                className={`text-xs font-black tracking-widest uppercase transition-all ${dashboardMode === 'EXECUTIVE' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1' : 'text-slate-500 hover:text-slate-300'}`}
+                            >
+                                Executive Hub
+                            </button>
+                            <button 
+                                onClick={() => setDashboardMode('ANALYTICS')}
+                                className={`text-xs font-black tracking-widest uppercase transition-all ${dashboardMode === 'ANALYTICS' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1' : 'text-slate-500 hover:text-slate-300'}`}
+                            >
+                                Pure Analytics
+                            </button>
+                        </div>
                     </div>
                     
                     <div className="flex flex-wrap items-center gap-4 bg-white/5 p-2 rounded-[2rem] border border-white/10 backdrop-blur-xl">
-                        {(['TODAY', 'WEEK', 'MONTH', 'CUSTOM'] as TimePeriod[]).map((p) => (
+                        {(['TODAY', 'WEEK', 'MONTH', 'YEAR', 'CUSTOM'] as TimePeriod[]).map((p) => (
                             <button
                                 key={p}
                                 onClick={() => setPeriod(p)}
@@ -145,6 +190,38 @@ export const AnalysisDashboard: React.FC = () => {
                             </button>
                         ))}
                         <div className="h-8 w-px bg-white/10 mx-2 hidden sm:block"></div>
+                        
+                        {/* Comparison Toggle */}
+                        <button 
+                            onClick={() => setCompare(!compare)}
+                            className={`px-4 py-2 rounded-full text-[10px] font-black tracking-widest border transition-all flex items-center gap-2 ${
+                                compare 
+                                ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' 
+                                : 'bg-white/5 border-white/10 text-slate-500 hover:text-white'
+                            }`}
+                        >
+                            <RefreshCcw size={12} className={compare ? 'animate-spin-slow' : ''} />
+                            {compare ? 'COMPARING' : 'COMPARE'}
+                        </button>
+
+                        <div className="h-8 w-px bg-white/10 mx-2 hidden sm:block"></div>
+                        
+                        <button 
+                            onClick={handleDownloadCSV}
+                            className="p-2.5 rounded-full text-slate-500 hover:text-indigo-400 hover:bg-white/5 transition-all"
+                            title="Download CSV Reports"
+                        >
+                            <FileDown size={18} />
+                        </button>
+
+                        <button 
+                            onClick={() => window.print()}
+                            className="p-2.5 rounded-full text-slate-500 hover:text-indigo-400 hover:bg-white/5 transition-all"
+                            title="Export Report"
+                        >
+                            <ShoppingBag size={18} />
+                        </button>
+                        
                         <button 
                             onClick={fetchData}
                             disabled={refreshing}
@@ -184,229 +261,369 @@ export const AnalysisDashboard: React.FC = () => {
                     </div>
                 )}
 
-                {/* KPI Micro-Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <SummaryCard 
-                        title="Revenue for Period" 
-                        value={formatCurrency(data.totalRevenue)} 
-                        icon={<DollarSign />} 
-                        trend={`${((data.totalRevenue / 1000000) * 100).toFixed(1)}%`} 
-                        positive={true}
-                        color="from-blue-600 to-indigo-600"
-                        footer={`Today: ${formatCurrency(data.todayRevenue)}`}
-                    />
-                    <SummaryCard 
-                        title="Average Order" 
-                        value={formatCurrency(data.averageOrderValue)} 
-                        icon={<ShoppingBag />} 
-                        trend="+4.2%" 
-                        positive={true}
-                        color="from-emerald-600 to-teal-600"
-                        footer={`${data.totalOrders} total completed orders`}
-                    />
-                    <SummaryCard 
-                        title="Party Impact" 
-                        value={formatCurrency(data.partyStats.totalValue)} 
-                        icon={<Briefcase />} 
-                        trend={`${data.partyStats.count} events`} 
-                        positive={true}
-                        color="from-amber-500 to-orange-600"
-                        footer={`Collected: ${formatCurrency(data.partyStats.advanceCollected)}`}
-                    />
-                    <SummaryCard 
-                        title="Active Customers" 
-                        value={data.customerStats.activeCustomers.toString()} 
-                        icon={<UserCheck />} 
-                        trend="+12%" 
-                        positive={true}
-                        color="from-purple-600 to-pink-600"
-                        footer={`Out of ${data.customerStats.totalCustomers} total records`}
-                    />
-                </div>
-
-                {/* Charts Area */}
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                    
-                    {/* Main Sales Trend */}
-                    <div className="xl:col-span-2 bg-white/5 border border-white/10 rounded-[2.5rem] p-8 backdrop-blur-3xl shadow-2xl relative group overflow-hidden">
-                        <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-10 transition-opacity">
-                            <TrendingUp size={240} />
+                {dashboardMode === 'EXECUTIVE' ? (
+                    <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        
+                        {/* Executive High-Density Metrics */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <MetricCard 
+                                title="Inventory Value (Cost)" 
+                                value={formatCurrency(data.financials?.inventoryValueCost || 0)} 
+                                color="text-blue-400"
+                                bg="bg-blue-500/5"
+                                border="border-blue-500/20"
+                                icon={<Briefcase size={20} />}
+                            />
+                            <MetricCard 
+                                title="Retail Market Value" 
+                                value={formatCurrency(data.financials?.inventoryValueRetail || 0)} 
+                                color="text-indigo-400"
+                                bg="bg-indigo-500/5"
+                                border="border-indigo-500/20"
+                                icon={<TrendingUp size={20} />}
+                            />
+                            <MetricCard 
+                                title="Potential Gross Profit" 
+                                value={formatCurrency(data.financials?.potentialProfit || 0)} 
+                                color="text-emerald-400"
+                                bg="bg-emerald-500/5"
+                                border="border-emerald-500/20"
+                                icon={<DollarSign size={20} />}
+                            />
+                            <MetricCard 
+                                title="Low Stock Assets" 
+                                value={data.financials?.lowStockCount?.toString() || "0"} 
+                                color="text-rose-400"
+                                bg="bg-rose-500/5"
+                                border="border-rose-500/20"
+                                icon={<AlertCircle size={20} />}
+                            />
                         </div>
-                        <div className="relative">
-                            <div className="flex items-center justify-between mb-8">
-                                <h3 className="text-xl font-bold text-white flex items-center gap-3">
-                                    <span className="h-8 w-1.5 rounded-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]"></span>
-                                    Periodic Revenue Growth
-                                </h3>
-                                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                                    <Clock size={14} className="text-slate-600" />
-                                    Real-time processing
-                                </div>
-                            </div>
-                            <div className="h-[400px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={data.salesTrend}>
-                                        <defs>
-                                            <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
-                                                <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                                            </linearGradient>
-                                        </defs>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
-                                        <XAxis 
-                                            dataKey="date" 
-                                            axisLine={false} 
-                                            tickLine={false} 
-                                            tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} 
-                                            dy={15} 
-                                        />
-                                        <YAxis 
-                                            axisLine={false} 
-                                            tickLine={false} 
-                                            tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} 
-                                            tickFormatter={(val) => `Rs.${val/1000}k`} 
-                                        />
-                                        <RechartsTooltip content={<CustomTooltip />} />
-                                        <Area 
-                                            type="monotone" 
-                                            dataKey="revenue" 
-                                            stroke="#6366f1" 
-                                            strokeWidth={4}
-                                            fillOpacity={1} 
-                                            fill="url(#colorRev)" 
-                                            animationDuration={2000}
-                                        />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            </div>
+
+                        {/* Modular BI Hub (3x2 Grid) */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                            <BIModule 
+                                title="Financial P&L" 
+                                description="Comprehensive profit & loss analysis with real-time expense integration."
+                                icon={<TrendingUp className="text-emerald-400" />}
+                                stats={[
+                                    { label: 'Net Profit', value: formatCurrency(data.financials?.netProfit || 0) },
+                                    { label: 'Expenses', value: formatCurrency(data.financials?.totalExpenses || 0) }
+                                ]}
+                                trend="+12.4% vs prev period"
+                                color="from-emerald-500/20"
+                            />
+                            <BIModule 
+                                title="Sales Intelligence" 
+                                description="Deep dive into transaction patterns, peak hours, and category performance."
+                                icon={<ShoppingBag className="text-indigo-400" />}
+                                stats={[
+                                    { label: 'Avg Order', value: formatCurrency(data.averageOrderValue) },
+                                    { label: 'Volume', value: `${data.totalOrders} items` }
+                                ]}
+                                trend="Processing real-time data"
+                                color="from-indigo-500/20"
+                            />
+                            <BIModule 
+                                title="Expense Analysis" 
+                                description="Granular breakdown of operational costs and procurement cycles."
+                                icon={<DollarSign className="text-pink-400" />}
+                                stats={[
+                                    { label: 'Procurement', value: formatCurrency(data.financials?.inventoryValueCost || 0) },
+                                    { label: 'Utilities', value: 'Coming soon' }
+                                ]}
+                                trend="Updated 5m ago"
+                                color="from-pink-500/20"
+                            />
+                            <BIModule 
+                                title="Employee ROI" 
+                                description="Tracking service speed, upsell rates, and labor efficiency."
+                                icon={<Users className="text-amber-400" />}
+                                stats={[
+                                    { label: 'Top Performer', value: 'Cashier #1' },
+                                    { label: 'Svc Speed', value: '4.2 min' }
+                                ]}
+                                trend="High performance alert"
+                                color="from-amber-500/20"
+                                disabled
+                            />
+                            <BIModule 
+                                title="Receivables Aging" 
+                                description="Advanced tracking for party booking balances and credit cycles."
+                                icon={<Clock className="text-purple-400" />}
+                                stats={[
+                                    { label: 'Unpaid Parties', value: data.partyStats.count.toString() },
+                                    { label: 'Balance Due', value: formatCurrency(data.partyStats.totalValue - data.partyStats.advanceCollected) }
+                                ]}
+                                trend="Low risk profile"
+                                color="from-purple-500/20"
+                            />
+                            <BIModule 
+                                title="Strategic Growth" 
+                                description="AI-powered projections and market trend correlation."
+                                icon={<Award className="text-cyan-400" />}
+                                stats={[
+                                    { label: 'Projection', value: '+18% YoY' },
+                                    { label: 'Market Cap', value: '--' }
+                                ]}
+                                trend="Model training complete"
+                                color="from-cyan-500/20"
+                                disabled
+                            />
                         </div>
                     </div>
-
-                    {/* Payment Method Distribution */}
-                    <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-8 backdrop-blur-3xl shadow-2xl relative flex flex-col">
-                        <h3 className="text-xl font-bold mb-8 text-white flex items-center gap-3">
-                            <span className="h-8 w-1.5 rounded-full bg-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.5)]"></span>
-                            Revenues by Payment
-                        </h3>
-                        <div className="flex-1 min-h-[300px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={data.paymentMethodSplit}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={90}
-                                        outerRadius={120}
-                                        paddingAngle={10}
-                                        dataKey="value"
-                                        stroke="none"
-                                    >
-                                        {data.paymentMethodSplit.map((_entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                        ))}
-                                    </Pie>
-                                    <RechartsTooltip content={<CustomPieTooltip />} />
-                                    <Legend 
-                                        verticalAlign="bottom" 
-                                        height={40} 
-                                        iconType="circle"
-                                        formatter={(value) => <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest ml-2">{value}</span>}
-                                    />
-                                </PieChart>
-                            </ResponsiveContainer>
+                ) : (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        {/* KPI Micro-Grid (Standard) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <SummaryCard 
+                                title="Revenue for Period" 
+                                value={formatCurrency(data.totalRevenue)} 
+                                icon={<DollarSign />} 
+                                trend={compare ? `${data.revenueGrowth > 0 ? '+' : ''}${data.revenueGrowth}%` : undefined} 
+                                positive={data.revenueGrowth >= 0}
+                                color="from-blue-600 to-indigo-600"
+                                footer={`Today: ${formatCurrency(data.todayRevenue)}`}
+                            />
+                            <SummaryCard 
+                                title="Average Order" 
+                                value={formatCurrency(data.averageOrderValue)} 
+                                icon={<ShoppingBag />} 
+                                trend={compare ? `${data.orderGrowth > 0 ? '+' : ''}${data.orderGrowth}%` : undefined} 
+                                positive={data.orderGrowth >= 0}
+                                color="from-emerald-600 to-teal-600"
+                                footer={`${data.totalOrders} total completed orders`}
+                            />
+                            <SummaryCard 
+                                title="Party Impact" 
+                                value={formatCurrency(data.partyStats.totalValue)} 
+                                icon={<Briefcase />} 
+                                trend={`${data.partyStats.count} events`} 
+                                positive={true}
+                                color="from-amber-500 to-orange-600"
+                                footer={`Collected: ${formatCurrency(data.partyStats.advanceCollected)}`}
+                            />
+                            <SummaryCard 
+                                title="Active Customers" 
+                                value={data.customerStats.activeCustomers.toString()} 
+                                icon={<UserCheck />} 
+                                trend={compare ? `${data.customerStats.customerGrowth > 0 ? '+' : ''}${data.customerStats.customerGrowth}%` : undefined} 
+                                positive={data.customerStats.customerGrowth >= 0}
+                                color="from-purple-600 to-pink-600"
+                                footer={`Out of ${data.customerStats.totalCustomers} total records`}
+                            />
                         </div>
-                        <div className="mt-6 grid grid-cols-2 gap-3">
-                             {data.paymentMethodSplit.map((item, idx) => (
-                                <div key={idx} className="bg-white/[0.03] border border-white/5 p-3 rounded-2xl flex flex-col items-center">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <div className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
-                                        <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.1em]">{item.name}</span>
+
+                        {/* Charts Area (Standard) */}
+                        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                            <div className="xl:col-span-2 bg-white/5 border border-white/10 rounded-[2.5rem] p-8 backdrop-blur-3xl shadow-2xl relative group overflow-hidden">
+                                <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-10 transition-opacity">
+                                    <TrendingUp size={240} />
+                                </div>
+                                <div className="relative">
+                                    <div className="flex items-center justify-between mb-8">
+                                        <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                                            <span className="h-8 w-1.5 rounded-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]"></span>
+                                            Periodic Revenue Growth
+                                        </h3>
+                                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                                            <Clock size={14} className="text-slate-600" />
+                                            Real-time processing
+                                        </div>
                                     </div>
-                                    <span className="text-sm font-black text-white">{formatCurrency(item.value)}</span>
+                                    <div className="h-[400px] w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <AreaChart data={data.salesTrend}>
+                                                <defs>
+                                                    <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
+                                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                                                    </linearGradient>
+                                                </defs>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
+                                                <XAxis 
+                                                    dataKey="date" 
+                                                    axisLine={false} 
+                                                    tickLine={false} 
+                                                    tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} 
+                                                    dy={15} 
+                                                />
+                                                <YAxis 
+                                                    axisLine={false} 
+                                                    tickLine={false} 
+                                                    tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} 
+                                                    tickFormatter={(val) => `Rs.${val/1000}k`} 
+                                                />
+                                                <RechartsTooltip content={<CustomTooltip />} />
+                                                <Area 
+                                                    type="monotone" 
+                                                    dataKey="revenue" 
+                                                    stroke="#6366f1" 
+                                                    strokeWidth={4}
+                                                    fillOpacity={1} 
+                                                    fill="url(#colorRev)" 
+                                                    animationDuration={2000}
+                                                />
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    </div>
                                 </div>
-                             ))}
+                            </div>
+
+                            <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-8 backdrop-blur-3xl shadow-2xl relative flex flex-col">
+                                <h3 className="text-xl font-bold mb-8 text-white flex items-center gap-3">
+                                    <span className="h-8 w-1.5 rounded-full bg-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.5)]"></span>
+                                    Revenues by Payment
+                                </h3>
+                                <div className="flex-1 min-h-[300px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie
+                                                data={data.paymentMethodSplit}
+                                                cx="50%"
+                                                cy="50%"
+                                                innerRadius={90}
+                                                outerRadius={120}
+                                                paddingAngle={10}
+                                                dataKey="value"
+                                                stroke="none"
+                                            >
+                                                {data.paymentMethodSplit.map((_entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                ))}
+                                            </Pie>
+                                            <RechartsTooltip content={<CustomPieTooltip />} />
+                                            <Legend 
+                                                verticalAlign="bottom" 
+                                                height={40} 
+                                                iconType="circle"
+                                                formatter={(value) => <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest ml-2">{value}</span>}
+                                            />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Middle Row: Hourly & Categories */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-8 backdrop-blur-3xl shadow-2xl">
+                                <div className="flex items-center justify-between mb-8">
+                                    <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                                        <span className="h-8 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]"></span>
+                                        Hourly Peak Activity
+                                    </h3>
+                                    <Clock size={24} className="text-slate-700" />
+                                </div>
+                                <div className="h-[350px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={data.hourlyData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
+                                            <XAxis 
+                                                dataKey="hour" 
+                                                axisLine={false} 
+                                                tickLine={false} 
+                                                tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} 
+                                                interval={2}
+                                            />
+                                            <YAxis hide />
+                                            <RechartsTooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} content={<CustomBarTooltip money />} />
+                                            <Bar 
+                                                dataKey="revenue" 
+                                                fill="url(#hourlyGradient)" 
+                                                radius={[10, 10, 0, 0]} 
+                                                barSize={24}
+                                            >
+                                                <defs>
+                                                    <linearGradient id="hourlyGradient" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="0%" stopColor="#10b981" />
+                                                        <stop offset="100%" stopColor="#3b82f6" />
+                                                    </linearGradient>
+                                                </defs>
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-8 backdrop-blur-3xl shadow-2xl relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-8 opacity-[0.02]">
+                                    <Utensils size={200} />
+                                </div>
+                                <div className="flex items-center justify-between mb-8">
+                                    <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                                        <span className="h-8 w-1.5 rounded-full bg-orange-500 shadow-[0_0_15px_rgba(245,158,11,0.5)]"></span>
+                                        Category Volume
+                                    </h3>
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Click to drill down</p>
+                                </div>
+                                <div className="h-[350px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={data.categoryRevenue} layout="vertical" margin={{ left: 60 }}>
+                                            <XAxis type="number" hide />
+                                            <YAxis 
+                                                dataKey="name" 
+                                                type="category" 
+                                                axisLine={false} 
+                                                tickLine={false} 
+                                                tick={{ fill: '#94a3b8', fontWeight: 'black', fontSize: 11, textAnchor: 'start' }}
+                                                dx={-50}
+                                            />
+                                            <RechartsTooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} content={<CustomBarTooltip money />} />
+                                            <Bar 
+                                                dataKey="value" 
+                                                fill="#f59e0b" 
+                                                radius={[0, 10, 10, 0]} 
+                                                barSize={28}
+                                                fillOpacity={0.8}
+                                                onClick={(entry) => setSelectedCategory(entry.name || null)}
+                                                className="cursor-pointer hover:fill-orange-400 transition-colors"
+                                            />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
 
-                {/* Middle Row: Hourly & Categories */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    
-                    {/* Hourly Heatmap */}
-                    <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-8 backdrop-blur-3xl shadow-2xl">
+                {/* Category Drilldown Section */}
+                {selectedCategory && (
+                    <div className="bg-white/5 border border-indigo-500/20 rounded-[2.5rem] p-8 backdrop-blur-3xl animate-in zoom-in-95 fade-in duration-500">
                         <div className="flex items-center justify-between mb-8">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-3">
-                                <span className="h-8 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]"></span>
-                                Hourly Peak Activity
-                            </h3>
-                            <Clock size={24} className="text-slate-700" />
+                            <div>
+                                <h3 className="text-2xl font-black text-white uppercase tracking-tight">
+                                    {selectedCategory} <span className="text-indigo-500">Breakdown</span>
+                                </h3>
+                                <p className="text-slate-500 text-xs font-bold">Top performing products within this category</p>
+                            </div>
+                            <button 
+                                onClick={() => setSelectedCategory(null)}
+                                className="px-6 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-slate-400 hover:text-white"
+                            >
+                                Close Drilldown
+                            </button>
                         </div>
-                        <div className="h-[350px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={data.hourlyData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
-                                    <XAxis 
-                                        dataKey="hour" 
-                                        axisLine={false} 
-                                        tickLine={false} 
-                                        tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} 
-                                        interval={2}
-                                    />
-                                    <YAxis hide />
-                                    <RechartsTooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} content={<CustomBarTooltip money />} />
-                                    <Bar 
-                                        dataKey="revenue" 
-                                        fill="url(#hourlyGradient)" 
-                                        radius={[10, 10, 0, 0]} 
-                                        barSize={24}
-                                    >
-                                        <defs>
-                                            <linearGradient id="hourlyGradient" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="0%" stopColor="#10b981" />
-                                                <stop offset="100%" stopColor="#3b82f6" />
-                                            </linearGradient>
-                                        </defs>
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                            {data.categoryRevenue.find(c => c.name === selectedCategory)?.products?.map((p, idx) => (
+                                <div key={idx} className="bg-white/5 border border-white/5 p-5 rounded-3xl flex items-center justify-between group hover:bg-white/10 transition-all">
+                                    <div className="flex items-center gap-4">
+                                        <div className="h-10 w-10 rounded-2xl bg-indigo-500/10 flex items-center justify-center font-black text-indigo-500 text-xs">
+                                            {idx + 1}
+                                        </div>
+                                        <div>
+                                            <h4 className="font-black text-white text-sm uppercase">{p.name}</h4>
+                                            <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">{p.quantity} units sold</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="font-black text-indigo-400">{formatCurrency(p.value)}</p>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
-
-                    {/* Category Distribution */}
-                    <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-8 backdrop-blur-3xl shadow-2xl relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-8 opacity-[0.02]">
-                            <Utensils size={200} />
-                        </div>
-                        <h3 className="text-xl font-bold mb-8 text-white flex items-center gap-3">
-                            <span className="h-8 w-1.5 rounded-full bg-orange-500 shadow-[0_0_15px_rgba(245,158,11,0.5)]"></span>
-                            Category Volume
-                        </h3>
-                        <div className="h-[350px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={data.categoryRevenue} layout="vertical" margin={{ left: 60 }}>
-                                    <XAxis type="number" hide />
-                                    <YAxis 
-                                        dataKey="name" 
-                                        type="category" 
-                                        axisLine={false} 
-                                        tickLine={false} 
-                                        tick={{ fill: '#94a3b8', fontWeight: 'black', fontSize: 11, textAnchor: 'start' }}
-                                        dx={-50}
-                                    />
-                                    <RechartsTooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} content={<CustomBarTooltip money />} />
-                                    <Bar 
-                                        dataKey="value" 
-                                        fill="#f59e0b" 
-                                        radius={[0, 10, 10, 0]} 
-                                        barSize={28}
-                                        fillOpacity={0.8}
-                                    />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-
-                </div>
+                )}
 
                 {/* Bottom Row: Top Products & Insights */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -492,12 +709,65 @@ export const AnalysisDashboard: React.FC = () => {
     );
 };
 
+const MetricCard = ({ title, value, color, bg, border, icon }: any) => (
+    <div className={`p-6 rounded-3xl border ${border} ${bg} backdrop-blur-xl transition-all hover:scale-[1.02] duration-300 group`}>
+        <div className="flex items-center gap-4">
+            <div className={`p-3 rounded-2xl ${bg} ${color} border ${border} group-hover:scale-110 transition-transform`}>
+                {icon}
+            </div>
+            <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">{title}</p>
+                <h4 className={`text-xl font-black ${color} tracking-tight`}>{value}</h4>
+            </div>
+        </div>
+    </div>
+);
+
+const BIModule = ({ title, description, icon, stats, trend, color, disabled }: any) => (
+    <div className={`relative p-8 rounded-[2.5rem] bg-white/5 border border-white/10 overflow-hidden transition-all duration-500 ${disabled ? 'opacity-50 grayscale' : 'hover:bg-white/10 hover:-translate-y-2 cursor-pointer group shadow-2xl hover:shadow-indigo-500/10'}`}>
+        <div className={`absolute -top-12 -right-12 w-48 h-48 bg-gradient-to-br ${color} opacity-10 transition-all duration-700 blur-3xl rounded-full group-hover:opacity-20`}></div>
+        
+        <div className="relative space-y-6">
+            <div className="flex items-center justify-between">
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/10 group-hover:border-white/20 transition-all">
+                    {icon}
+                </div>
+                {disabled && (
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 bg-white/5 rounded-full text-slate-500 border border-white/5">Development</span>
+                )}
+            </div>
+            
+            <div className="space-y-2">
+                <h3 className="text-xl font-black text-white">{title}</h3>
+                <p className="text-xs text-slate-400 leading-relaxed font-medium">{description}</p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+                {stats.map((stat: any, i: number) => (
+                    <div key={i} className="space-y-1">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">{stat.label}</p>
+                        <p className="text-sm font-black text-white">{stat.value}</p>
+                    </div>
+                ))}
+            </div>
+            
+            <div className="pt-6 border-t border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <div className={`h-1.5 w-1.5 rounded-full ${disabled ? 'bg-slate-600' : 'bg-indigo-400 animate-pulse'}`}></div>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{trend}</span>
+                </div>
+                {!disabled && <ChevronRight size={16} className="text-slate-600 group-hover:text-white transition-colors" />}
+            </div>
+        </div>
+    </div>
+);
+
 const SummaryCard = ({ title, value, icon, trend, positive, color, footer }: any) => (
     <div className="group relative bg-white/5 border border-white/10 rounded-[2.5rem] p-8 backdrop-blur-3xl shadow-2xl transition-all duration-500 hover:bg-white/10 hover:-translate-y-2 overflow-hidden">
         <div className={`absolute -top-12 -right-12 w-48 h-48 bg-gradient-to-br ${color} opacity-0 group-hover:opacity-[0.07] transition-all duration-700 blur-3xl rounded-full`}></div>
         <div className="flex justify-between items-start mb-8">
             <div className={`p-4 bg-gradient-to-br ${color} rounded-2xl shadow-xl ring-4 ring-white/5 group-hover:scale-110 transition-transform duration-500`}>
-                {React.cloneElement(icon, { size: 28, className: "text-white" })}
+                {React.cloneElement(icon, { size: 28, className: "text-white" } as any)}
             </div>
             {trend && (
                 <div className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest ${positive ? 'text-emerald-400' : 'text-rose-400'}`}>

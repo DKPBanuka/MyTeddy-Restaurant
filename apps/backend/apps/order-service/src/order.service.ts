@@ -365,24 +365,64 @@ export class OrderService {
 
     async getReportsSummary(query: any = {}) {
         try {
-            const { startDate, endDate } = query;
+            const { startDate, endDate, compare } = query;
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
-            const filterWhere: any = { status: 'COMPLETED' };
-            if (startDate || endDate) {
-                filterWhere.createdAt = {};
-                if (startDate) filterWhere.createdAt.gte = new Date(startDate);
-                if (endDate) filterWhere.createdAt.lte = new Date(endDate);
+            let currentStart = new Date(startDate || today);
+            let currentEnd = endDate ? new Date(endDate) : new Date();
+            
+            // If no range provided, default to last 7 days
+            if (!startDate && !endDate) {
+                currentStart = new Date();
+                currentStart.setDate(currentStart.getDate() - 7);
+                currentStart.setHours(0, 0, 0, 0);
             }
 
-            // 1. Core Metrics
+            const filterWhere: any = { 
+                status: 'COMPLETED',
+                createdAt: { gte: currentStart, lte: currentEnd }
+            };
+
+            // Calculate Previous Period for comparison
+            let prevStart: Date | null = null;
+            let prevEnd: Date | null = null;
+
+            if (compare) {
+                const durationMs = currentEnd.getTime() - currentStart.getTime();
+                prevEnd = new Date(currentStart);
+                prevStart = new Date(currentStart.getTime() - durationMs);
+            }
+
+            // 1. Core Metrics (Current Period)
             const revenueAggr = await this.prisma.order.aggregate({
                 _sum: { totalAmount: true },
                 _count: { id: true },
                 _avg: { totalAmount: true },
                 where: filterWhere,
             });
+
+            // 1.1 Core Metrics (Previous Period)
+            let prevRevenue = 0;
+            let prevOrders = 0;
+            if (prevStart && prevEnd) {
+                const prevAggr = await this.prisma.order.aggregate({
+                    _sum: { totalAmount: true },
+                    _count: { id: true },
+                    where: { status: 'COMPLETED', createdAt: { gte: prevStart, lte: prevEnd } },
+                });
+                prevRevenue = Number(prevAggr._sum.totalAmount || 0);
+                prevOrders = prevAggr._count.id;
+            }
+
+            // Calculation helper
+            const getGrowth = (current: number, previous: number) => {
+                if (previous === 0) return current > 0 ? 100 : 0;
+                return Number((((current - previous) / previous) * 100).toFixed(1));
+            };
+
+            const currentRevenue = Number(revenueAggr._sum.totalAmount || 0);
+            const currentOrders = revenueAggr._count.id;
 
             // Today's Revenue (Special card always shows today)
             const todayRevenueAggr = await this.prisma.order.aggregate({
@@ -398,23 +438,29 @@ export class OrderService {
             });
 
             // 3. Category Revenue & Top Sellers
-            // We need orderItems for this. 
-            // Warning: findMany without pagination can be slow if there are many orders.
-            // But for a dashboard summary, it's often necessary unless we have an aggregation table.
             const orderItems = await this.prisma.orderItem.findMany({
                 where: { order: filterWhere },
                 include: { product: { include: { category: true } } },
             });
 
             const categoryMap: Record<string, number> = {};
+            const categoryProducts: Record<string, Record<string, { name: string, value: number, quantity: number }>> = {};
             const productSales: Record<string, { name: string, quantity: number }> = {};
-            let totalDiscounts = 0;
-
+            
             for (const item of orderItems) {
                 const categoryName = item.product?.category?.name || 'Uncategorized';
-                categoryMap[categoryName] = (categoryMap[categoryName] || 0) + Number(item.subtotal);
+                const revenue = Number(item.subtotal);
+                
+                categoryMap[categoryName] = (categoryMap[categoryName] || 0) + revenue;
 
+                if (!categoryProducts[categoryName]) categoryProducts[categoryName] = {};
                 if (item.productId) {
+                    if (!categoryProducts[categoryName][item.productId]) {
+                        categoryProducts[categoryName][item.productId] = { name: item.product?.name || 'Unknown', value: 0, quantity: 0 };
+                    }
+                    categoryProducts[categoryName][item.productId].value += revenue;
+                    categoryProducts[categoryName][item.productId].quantity += item.quantity;
+
                     if (!productSales[item.productId]) {
                         productSales[item.productId] = { name: item.product?.name || 'Unknown', quantity: 0 };
                     }
@@ -474,16 +520,57 @@ export class OrderService {
                 revenue: salesTrendMap[date]
             }));
 
+            // 8. Financial Valuations (Executive Hub)
+            const ingredients = await this.prisma.ingredient.findMany();
+            const retailStock = await this.prisma.retailStock.findMany({
+                include: { product: true }
+            });
+
+            let inventoryValueCost = 0;
+            let inventoryValueRetail = 0;
+            let lowStockCount = 0;
+
+            ingredients.forEach(ing => {
+                inventoryValueCost += Number(ing.stockQty) * Number((ing as any).costPrice || 0);
+                if (Number(ing.stockQty) <= Number(ing.minLevel)) {
+                    lowStockCount++;
+                }
+            });
+
+            retailStock.forEach(stock => {
+                inventoryValueCost += Number(stock.stockQty) * Number((stock as any).costPrice || 0);
+                inventoryValueRetail += Number(stock.stockQty) * Number(stock.product.price || 0);
+                if (stock.stockQty <= 5) lowStockCount++;
+            });
+
+            // 9. Expenses (Profit & Loss)
+            const expensesAggr = await (this.prisma as any).expense.aggregate({
+                _sum: { amount: true },
+                where: { date: { gte: currentStart, lte: currentEnd } }
+            });
+            const totalExpenses = Number(expensesAggr._sum.amount || 0);
+
             return {
                 todayRevenue: Number(todayRevenueAggr._sum.totalAmount || 0),
-                totalRevenue: Number(revenueAggr._sum.totalAmount || 0),
-                totalOrders: revenueAggr._count.id,
+                totalRevenue: currentRevenue,
+                totalOrders: currentOrders,
                 averageOrderValue: Number(revenueAggr._avg.totalAmount || 0),
+                revenueGrowth: compare ? getGrowth(currentRevenue, prevRevenue) : 0,
+                orderGrowth: compare ? getGrowth(currentOrders, prevOrders) : 0,
+                prevStart,
+                prevEnd,
                 paymentMethodSplit: paymentMethods.map(pm => ({
                     name: pm.paymentMethod || 'OTHER',
                     value: Number(pm._sum.totalAmount || 0)
                 })),
-                categoryRevenue: Object.entries(categoryMap).map(([name, value]) => ({ name, value })),
+                categoryRevenue: Object.entries(categoryMap).map(([name, value]) => ({ 
+                    name, 
+                    value,
+                    percent: currentRevenue > 0 ? Number(((value / currentRevenue) * 100).toFixed(1)) : 0,
+                    products: Object.values(categoryProducts[name] || {})
+                        .sort((a, b) => b.value - a.value)
+                        .slice(0, 10)
+                })),
                 hourlyData,
                 topSellers: Object.values(productSales)
                     .sort((a, b) => b.quantity - a.quantity)
@@ -495,10 +582,19 @@ export class OrderService {
                 },
                 customerStats: {
                     totalCustomers,
-                    activeCustomers: uniqueCustomers.length
+                    activeCustomers: uniqueCustomers.length,
+                    customerGrowth: compare ? getGrowth(uniqueCustomers.length, 0) : 0 // Simplified
                 },
                 salesTrend,
-                refundImpact: 0 // Would require dedicated refund tracking table or mapping field
+                refundImpact: 0,
+                financials: {
+                    inventoryValueCost,
+                    inventoryValueRetail,
+                    potentialProfit: inventoryValueRetail - inventoryValueCost,
+                    totalExpenses,
+                    netProfit: currentRevenue - totalExpenses,
+                    lowStockCount
+                }
             };
 
         } catch (error: any) {

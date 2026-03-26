@@ -38,7 +38,8 @@ export class InventoryService {
                 sizes: {
                     create: data.sizes?.map((s: any) => ({
                         name: s.name,
-                        price: s.price
+                        price: s.price,
+                        costPrice: s.costPrice || 0
                     })) || []
                 }
             },
@@ -66,7 +67,8 @@ export class InventoryService {
                 deleteMany: {},
                 create: data.sizes.map((s: any) => ({
                     name: s.name,
-                    price: s.price
+                    price: s.price,
+                    costPrice: s.costPrice || 0
                 }))
             };
         }
@@ -103,6 +105,7 @@ export class InventoryService {
                 data: {
                     productId: data.productId,
                     stockQty: data.stockQty,
+                    costPrice: data.costPrice || 0,
                     supplierDetails: data.supplierDetails
                 },
                 include: { product: true }
@@ -123,6 +126,7 @@ export class InventoryService {
                 data: {
                     productId: product.id,
                     stockQty: data.stockQty,
+                    costPrice: data.costPrice || 0,
                     supplierDetails: data.supplierDetails
                 },
                 include: { product: true }
@@ -137,6 +141,7 @@ export class InventoryService {
                 where: { id },
                 data: {
                     stockQty: data.stockQty,
+                    costPrice: data.costPrice,
                     supplierDetails: data.supplierDetails
                 }
             });
@@ -262,6 +267,7 @@ export class InventoryService {
                 stockQty: data.stockQty,
                 unitOfMeasure: data.unitOfMeasure,
                 minLevel: data.minLevel,
+                costPrice: data.costPrice || 0,
             }
         });
     }
@@ -274,6 +280,7 @@ export class InventoryService {
                 stockQty: data.stockQty,
                 unitOfMeasure: data.unitOfMeasure,
                 minLevel: data.minLevel,
+                costPrice: data.costPrice,
             }
         });
     }
@@ -480,5 +487,42 @@ export class InventoryService {
         return (this.prisma as any).package.delete({
             where: { id }
         });
+    }
+
+    // --- BI & Valuation ---
+
+    async getInventoryValuation() {
+        const ingredients = await this.prisma.ingredient.findMany();
+        const retailStock = await this.prisma.retailStock.findMany({
+            include: { product: true }
+        });
+
+        let totalCost = 0;
+        let totalRetail = 0;
+        let lowStockCount = 0;
+
+        ingredients.forEach(ing => {
+            totalCost += Number(ing.stockQty) * Number(ing.costPrice || 0);
+            if (Number(ing.stockQty) <= Number(ing.minLevel)) {
+                lowStockCount++;
+            }
+        });
+
+        retailStock.forEach(stock => {
+            totalCost += Number(stock.stockQty) * Number(stock.costPrice || 0);
+            totalRetail += Number(stock.stockQty) * Number(stock.product.price || 0);
+            // Low stock check for retail items (using minLevel if it were there, but let's use a hardcoded 5 for now or check if it's there)
+            // RetailStock doesn't have minLevel yet, let's assume 5
+            if (stock.stockQty <= 5) {
+                lowStockCount++;
+            }
+        });
+
+        return {
+            totalCost,
+            totalRetail,
+            potentialProfit: totalRetail - totalCost,
+            lowStockCount
+        };
     }
 }
