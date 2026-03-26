@@ -64,7 +64,7 @@ export class PartyBookingService {
         // 3. Create Record
         return this.prisma.partyBooking.create({
             data: {
-                customerId: data.customerId || 'WALK_IN',
+                customerId: (data.customerId && data.customerId !== 'WALK_IN') ? data.customerId : null,
                 customerName: data.customerName,
                 customerPhone: data.customerPhone,
                 eventDate: new Date(data.eventDate),
@@ -90,7 +90,18 @@ export class PartyBookingService {
         const whereClause: any = {};
 
         try {
-            if (filters.date) {
+            if (filters.startDate && filters.endDate) {
+                const start = new Date(filters.startDate);
+                const end = new Date(filters.endDate);
+                if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                    start.setHours(0, 0, 0, 0);
+                    end.setHours(23, 59, 59, 999);
+                    whereClause.eventDate = {
+                        gte: start,
+                        lte: end
+                    };
+                }
+            } else if (filters.date) {
                 const exactDate = new Date(filters.date);
                 if (!isNaN(exactDate.getTime())) {
                     exactDate.setHours(0, 0, 0, 0);
@@ -113,13 +124,34 @@ export class PartyBookingService {
                 }
             }
 
-            return await this.prisma.partyBooking.findMany({
+            let bookings = await this.prisma.partyBooking.findMany({
                 where: whereClause,
                 orderBy: [
                     { eventDate: 'asc' },
                     { startTime: 'asc' }
                 ]
             });
+
+            // Post-fetch filtering for payment status
+            if (filters.paymentStatus && filters.paymentStatus !== 'ALL') {
+                bookings = bookings.filter(b => {
+                    const total = Number(b.totalAmount || 0);
+                    const advance = Number(b.advancePaid || 0);
+
+                    if (filters.paymentStatus === 'SETTLED') {
+                        return advance >= total && total > 0;
+                    }
+                    if (filters.paymentStatus === 'PARTIAL') {
+                        return advance > 0 && advance < total;
+                    }
+                    if (filters.paymentStatus === 'PENDING') {
+                        return advance === 0;
+                    }
+                    return true;
+                });
+            }
+
+            return bookings;
         } catch (error) {
             console.error('Error in PartyBooking Microservice (getBookings):', error);
             // Return empty array to prevent total failure in UI
@@ -288,6 +320,7 @@ export class PartyBookingService {
 
         const updateData: any = {
             customerPhone,
+            customerId: (data.customerId && data.customerId !== 'WALK_IN') ? data.customerId : (data.customerId === 'WALK_IN' ? null : booking.customerId),
             eventDate: finalEventDate,
             startTime: reqStart,
             endTime: reqEnd,

@@ -8,9 +8,12 @@ import { OrderService } from './order.service';
 import { PartyBookingController } from './party-booking.controller';
 import { PartyBookingService } from './party-booking.service';
 
+import { CustomersModule } from './customers/customers.module';
+
 @Module({
   imports: [
     PrismaModule,
+    CustomersModule,
     ClientsModule.register([
       {
         name: 'INVENTORY_SERVICE',

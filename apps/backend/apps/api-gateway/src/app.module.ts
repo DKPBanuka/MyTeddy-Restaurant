@@ -12,6 +12,8 @@ import { CategoriesGatewayController } from './categories.controller';
 import { SettingsController } from './settings.controller';
 import { RolePermissionsController } from './role-permissions.controller';
 
+import { CustomersGatewayController } from './customers.controller';
+
 @Module({
     imports: [
         PrismaModule,
@@ -32,6 +34,7 @@ import { RolePermissionsController } from './role-permissions.controller';
         CategoriesGatewayController,
         SettingsController,
         RolePermissionsController,
+        CustomersGatewayController,
     ],
     providers: [],
 })

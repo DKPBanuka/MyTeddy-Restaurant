@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@app/prisma';
+import * as fs from 'fs';
 
 @Injectable()
 export class AuthService {
@@ -19,20 +20,50 @@ export class AuthService {
     }
 
     async login(pin: string) {
+        fs.appendFileSync('./auth_debug.log', `Login attempt for PIN: ${pin}\n`);
         const user = await this.validateUserByPin(pin);
         if (!user) {
+            fs.appendFileSync('./auth_debug.log', `Invalid PIN: ${pin}\n`);
             throw new RpcException({ message: 'Invalid PIN', status: 401 });
         }
+        fs.appendFileSync('./auth_debug.log', `User found: ${user.id}, Role: ${user.role}\n`);
 
-        const payload = { sub: user.id, name: user.name, role: user.role };
-        return {
-            access_token: this.jwtService.sign(payload),
-            user: {
-                id: user.id,
-                name: user.name,
-                role: user.role,
+        // Fetch permissions for the role using raw query to bypass stale generated client issues
+        let permissions: string[] = [];
+        try {
+            fs.appendFileSync('./auth_debug.log', `Fetching permissions for role: ${user.role}\n`);
+            const rolePerms: any[] = await this.prisma.$queryRawUnsafe(
+                `SELECT permissions FROM "RolePermission" WHERE role = $1`,
+                user.role
+            );
+            fs.appendFileSync('./auth_debug.log', `Raw query result: ${JSON.stringify(rolePerms)}\n`);
+            if (rolePerms && rolePerms.length > 0) {
+                permissions = rolePerms[0].permissions || [];
             }
-        };
+        } catch (e: any) {
+            fs.appendFileSync('./auth_debug.log', `Error fetching role permissions: ${e.message}\n`);
+            // Default to empty for now if table doesn't exist or query fails
+            permissions = [];
+        }
+
+        try {
+            fs.appendFileSync('./auth_debug.log', `Signing JWT payload\n`);
+            const payload = { sub: user.id, name: user.name, role: user.role, permissions };
+            const access_token = this.jwtService.sign(payload);
+            fs.appendFileSync('./auth_debug.log', `Login success for user: ${user.id}\n`);
+            return {
+                access_token,
+                user: {
+                    id: user.id,
+                    name: user.name,
+                    role: user.role,
+                    permissions: permissions
+                }
+            };
+        } catch (e: any) {
+            fs.appendFileSync('./auth_debug.log', `Error signing JWT or returning result: ${e.message}\n`);
+            throw new RpcException({ message: `Login failed internally: ${e.message}`, status: 500 });
+        }
     }
 
     async getStaff() {

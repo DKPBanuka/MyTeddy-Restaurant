@@ -363,109 +363,142 @@ export class OrderService {
         }
     }
 
-    async getReportsSummary() {
+    async getReportsSummary(query: any = {}) {
         try {
+            const { startDate, endDate } = query;
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
-            const sevenDaysAgo = new Date();
-            sevenDaysAgo.setDate(today.getDate() - 7);
-            sevenDaysAgo.setHours(0, 0, 0, 0);
+            const filterWhere: any = { status: 'COMPLETED' };
+            if (startDate || endDate) {
+                filterWhere.createdAt = {};
+                if (startDate) filterWhere.createdAt.gte = new Date(startDate);
+                if (endDate) filterWhere.createdAt.lte = new Date(endDate);
+            }
 
-            // 1. Total Revenue (Today) from COMPLETED orders
-            const todayRevenueAggr = await this.prisma.order.aggregate({
+            // 1. Core Metrics
+            const revenueAggr = await this.prisma.order.aggregate({
                 _sum: { totalAmount: true },
-                where: {
-                    status: 'COMPLETED',
-                    createdAt: { gte: today },
-                },
-            });
-            const todayRevenue = Number(todayRevenueAggr._sum.totalAmount || 0);
-
-            // 2. Total Orders & Average Order Value (All-Time COMPLETED)
-            const allTimeAggr = await this.prisma.order.aggregate({
                 _count: { id: true },
                 _avg: { totalAmount: true },
-                where: { status: 'COMPLETED' },
+                where: filterWhere,
             });
-            const totalOrders = allTimeAggr._count.id;
-            const averageOrderValue = Number(allTimeAggr._avg.totalAmount || 0);
 
-            // 3. Revenue Split (FOOD vs RETAIL) using orderItems from COMPLETED orders
+            // Today's Revenue (Special card always shows today)
+            const todayRevenueAggr = await this.prisma.order.aggregate({
+                _sum: { totalAmount: true },
+                where: { status: 'COMPLETED', createdAt: { gte: today } },
+            });
+
+            // 2. Payment Method Split
+            const paymentMethods = await this.prisma.order.groupBy({
+                by: ['paymentMethod'],
+                _sum: { totalAmount: true },
+                where: filterWhere,
+            });
+
+            // 3. Category Revenue & Top Sellers
+            // We need orderItems for this. 
+            // Warning: findMany without pagination can be slow if there are many orders.
+            // But for a dashboard summary, it's often necessary unless we have an aggregation table.
             const orderItems = await this.prisma.orderItem.findMany({
-                where: { order: { status: 'COMPLETED' } },
-                include: { product: true },
+                where: { order: filterWhere },
+                include: { product: { include: { category: true } } },
             });
 
-            let foodRevenue = 0;
-            let retailRevenue = 0;
-
-            // Map to aggregate top sellers
+            const categoryMap: Record<string, number> = {};
             const productSales: Record<string, { name: string, quantity: number }> = {};
+            let totalDiscounts = 0;
 
             for (const item of orderItems) {
-                if (!item.product || !item.productId) continue;
+                const categoryName = item.product?.category?.name || 'Uncategorized';
+                categoryMap[categoryName] = (categoryMap[categoryName] || 0) + Number(item.subtotal);
 
-                if (item.product.type === 'FOOD') {
-                    foodRevenue += Number(item.subtotal);
-                } else if (item.product.type === 'RETAIL') {
-                    retailRevenue += Number(item.subtotal);
+                if (item.productId) {
+                    if (!productSales[item.productId]) {
+                        productSales[item.productId] = { name: item.product?.name || 'Unknown', quantity: 0 };
+                    }
+                    productSales[item.productId].quantity += item.quantity;
                 }
-
-                // Aggregate top sellers 
-                if (!productSales[item.productId]) {
-                    productSales[item.productId] = { name: item.product.name, quantity: 0 };
-                }
-                productSales[item.productId].quantity += item.quantity;
             }
 
-            const revenueSplit = [
-                { name: 'FOOD', value: foodRevenue },
-                { name: 'RETAIL', value: retailRevenue },
-            ];
-
-            // 4. Top Sellers
-            const topSellers = Object.values(productSales)
-                .sort((a, b) => b.quantity - a.quantity)
-                .slice(0, 5);
-
-            // 5. Sales Trend (Last 7 Days)
-            const recentOrders = await this.prisma.order.findMany({
-                where: {
-                    status: 'COMPLETED',
-                    createdAt: { gte: sevenDaysAgo },
-                },
-                select: { createdAt: true, totalAmount: true },
+            // 4. Hourly Heatmap (Orders by hour)
+            const ordersForHeatmap = await this.prisma.order.findMany({
+                where: filterWhere,
+                select: { createdAt: true, totalAmount: true }
             });
 
-            const salesTrendMap: Record<string, number> = {};
-            // Initialize last 7 days with 0
-            for (let i = 6; i >= 0; i--) {
-                const date = new Date(today);
-                date.setDate(today.getDate() - i);
-                const dateStr = date.toISOString().split('T')[0];
-                salesTrendMap[dateStr] = 0;
-            }
+            const hourlyMap: Record<number, number> = {};
+            for (let i = 0; i < 24; i++) hourlyMap[i] = 0;
+            
+            ordersForHeatmap.forEach(o => {
+                const hour = new Date(o.createdAt).getHours();
+                hourlyMap[hour] += Number(o.totalAmount);
+            });
 
-            recentOrders.forEach(order => {
+            const hourlyData = Object.keys(hourlyMap).map(dayHour => ({
+                hour: `${dayHour}:00`,
+                revenue: hourlyMap[Number(dayHour)]
+            }));
+
+            // 5. Party Bookings Summary
+            const partyWhere: any = { status: { in: ['CONFIRMED', 'COMPLETED'] } };
+            if (startDate || endDate) {
+                partyWhere.eventDate = {};
+                if (startDate) partyWhere.eventDate.gte = new Date(startDate);
+                if (endDate) partyWhere.eventDate.lte = new Date(endDate);
+            }
+            const partyStats = await this.prisma.partyBooking.aggregate({
+                _count: { id: true },
+                _sum: { totalAmount: true, advancePaid: true },
+                where: partyWhere
+            });
+
+            // 6. Customer Insights (New vs Returning)
+            const uniqueCustomers = await this.prisma.order.groupBy({
+                by: ['customerId'],
+                where: { ...filterWhere, customerId: { not: null } },
+            });
+            // This is a simplification. Real new vs returning requires historical check.
+            const totalCustomers = await this.prisma.customer.count();
+
+            // 7. Average Order Value Trend (Daily)
+            const salesTrendMap: Record<string, number> = {};
+            ordersForHeatmap.forEach(order => {
                 const dateStr = order.createdAt.toISOString().split('T')[0];
-                if (salesTrendMap[dateStr] !== undefined) {
-                    salesTrendMap[dateStr] += Number(order.totalAmount);
-                }
+                salesTrendMap[dateStr] = (salesTrendMap[dateStr] || 0) + Number(order.totalAmount);
             });
 
             const salesTrend = Object.keys(salesTrendMap).sort().map(date => ({
-                date: date.substring(5), // Make it like "02-27"
+                date: date.substring(5),
                 revenue: salesTrendMap[date]
             }));
 
             return {
-                todayRevenue,
-                totalOrders,
-                averageOrderValue,
-                revenueSplit,
+                todayRevenue: Number(todayRevenueAggr._sum.totalAmount || 0),
+                totalRevenue: Number(revenueAggr._sum.totalAmount || 0),
+                totalOrders: revenueAggr._count.id,
+                averageOrderValue: Number(revenueAggr._avg.totalAmount || 0),
+                paymentMethodSplit: paymentMethods.map(pm => ({
+                    name: pm.paymentMethod || 'OTHER',
+                    value: Number(pm._sum.totalAmount || 0)
+                })),
+                categoryRevenue: Object.entries(categoryMap).map(([name, value]) => ({ name, value })),
+                hourlyData,
+                topSellers: Object.values(productSales)
+                    .sort((a, b) => b.quantity - a.quantity)
+                    .slice(0, 5),
+                partyStats: {
+                    count: partyStats._count.id,
+                    totalValue: Number(partyStats._sum.totalAmount || 0),
+                    advanceCollected: Number(partyStats._sum.advancePaid || 0)
+                },
+                customerStats: {
+                    totalCustomers,
+                    activeCustomers: uniqueCustomers.length
+                },
                 salesTrend,
-                topSellers,
+                refundImpact: 0 // Would require dedicated refund tracking table or mapping field
             };
 
         } catch (error: any) {

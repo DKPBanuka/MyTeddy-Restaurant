@@ -419,4 +419,156 @@ export class OrdersService {
             }
         }
     }
+    async getReportsSummary() {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        try {
+            // 1. Revenue Metrics
+            const todayOrders = await this.prisma.order.findMany({
+                where: {
+                    createdAt: { gte: today },
+                    status: 'COMPLETED',
+                },
+            });
+
+            const todayRevenue = todayOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+            const totalOrders = await this.prisma.order.count({ where: { status: 'COMPLETED' } });
+            const averageOrderValue = totalOrders > 0 ? (await this.prisma.order.aggregate({ _avg: { totalAmount: true }, where: { status: 'COMPLETED' } }))._avg.totalAmount || 0 : 0;
+
+            // 2. Revenue Split (Food vs Retail)
+            const revenueSplit = [
+                { name: 'Food', value: 0 },
+                { name: 'Retail', value: 0 },
+            ];
+
+            const completedOrders = await this.prisma.order.findMany({
+                where: { status: 'COMPLETED' },
+                include: { orderItems: { include: { product: true } } },
+            });
+
+            completedOrders.forEach((order) => {
+                order.orderItems.forEach((item) => {
+                    if (item.product?.type === 'FOOD') revenueSplit[0].value += Number(item.subtotal || 0);
+                    if (item.product?.type === 'RETAIL') revenueSplit[1].value += Number(item.subtotal || 0);
+                });
+            });
+
+            // 3. Sales Trend (Last 7 Days)
+            const weekAgo = new Date();
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            weekAgo.setHours(0, 0, 0, 0);
+
+            const lastWeekOrders = await this.prisma.order.findMany({
+                where: {
+                    createdAt: { gte: weekAgo },
+                    status: 'COMPLETED',
+                },
+                select: { createdAt: true, totalAmount: true },
+            });
+
+            const salesTrendMap: Record<string, number> = {};
+            for (let i = 0; i < 7; i++) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                salesTrendMap[d.toISOString().split('T')[0]] = 0;
+            }
+
+            lastWeekOrders.forEach((order) => {
+                const date = order.createdAt.toISOString().split('T')[0];
+                if (salesTrendMap[date] !== undefined) {
+                    salesTrendMap[date] += Number(order.totalAmount || 0);
+                }
+            });
+
+            const salesTrend = Object.keys(salesTrendMap).sort().map((date) => ({
+                date,
+                revenue: salesTrendMap[date],
+            }));
+
+            // 4. Top Sellers
+            const topSellersRaw = await this.prisma.orderItem.groupBy({
+                by: ['productId'],
+                _sum: { quantity: true },
+                where: { order: { status: 'COMPLETED' }, productId: { not: null } },
+                orderBy: { _sum: { quantity: 'desc' } },
+                take: 5,
+            });
+
+            const topSellers = await Promise.all(
+                topSellersRaw.map(async (item) => {
+                    const product = await this.prisma.product.findUnique({ where: { id: item.productId as string } });
+                    return {
+                        name: product?.name || 'Unknown',
+                        quantity: Number(item._sum?.quantity || 0),
+                    };
+                }),
+            );
+
+            // 6. Customer & Loyalty Stats
+            const totalCustomers = await this.prisma.customer.count();
+            const loyaltyAggr = await this.prisma.customer.aggregate({
+                _sum: { points: true }
+            });
+            const totalLoyaltyPoints = Number(loyaltyAggr._sum.points || 0);
+
+            // 7. Order Type Split
+            const orderTypes = await this.prisma.order.groupBy({
+                by: ['orderType'],
+                _count: { id: true },
+                where: { status: 'COMPLETED' }
+            });
+            const orderTypeSplit = orderTypes.map(ot => ({
+                name: ot.orderType,
+                value: ot._count.id
+            }));
+
+            // 8. Staff Performance (Today)
+            const staffSales = await this.prisma.order.groupBy({
+                by: ['userId'],
+                _sum: { totalAmount: true },
+                where: {
+                    status: 'COMPLETED',
+                    createdAt: { gte: today }
+                }
+            });
+            
+            const staffPerformance = await Promise.all(staffSales.map(async (ss) => {
+                const user = await this.prisma.user.findUnique({ where: { id: ss.userId }, select: { name: true } });
+                return {
+                    name: user?.name || 'Unknown',
+                    revenue: Number(ss._sum.totalAmount || 0)
+                };
+            }));
+
+            return {
+                todayRevenue,
+                totalOrders,
+                averageOrderValue: Number(averageOrderValue),
+                revenueSplit,
+                salesTrend,
+                topSellers,
+                customerStats: {
+                    totalCustomers,
+                    totalLoyaltyPoints
+                },
+                orderTypeSplit,
+                staffPerformance
+            };
+
+        } catch (error: any) {
+            console.error('Report Error:', error);
+            return {
+                todayRevenue: 0,
+                totalOrders: 0,
+                averageOrderValue: 0,
+                revenueSplit: [],
+                salesTrend: [],
+                topSellers: [],
+                customerStats: { totalCustomers: 0, totalLoyaltyPoints: 0 },
+                orderTypeSplit: [],
+                staffPerformance: []
+            };
+        }
+    }
 }

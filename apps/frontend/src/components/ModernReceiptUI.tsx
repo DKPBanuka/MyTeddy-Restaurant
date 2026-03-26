@@ -312,7 +312,7 @@ export default function ModernReceiptUI({
                   <div className="font-bold w-full">
                     {item.name}
                     {item.size && (
-                      <div className="receipt-text-sm font-black text-slate-900 mt-1">
+                      <div className="receipt-text-sm font-[1000] text-slate-950 mt-1">
                         ({item.size})
                       </div>
                     )}

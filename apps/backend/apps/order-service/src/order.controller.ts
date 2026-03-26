@@ -48,7 +48,7 @@ export class OrderController {
     }
 
     @MessagePattern({ cmd: 'get_reports_summary' })
-    async getReportsSummary() {
-        return this.orderService.getReportsSummary();
+    async getReportsSummary(@Payload() query: any) {
+        return this.orderService.getReportsSummary(query || {});
     }
 }

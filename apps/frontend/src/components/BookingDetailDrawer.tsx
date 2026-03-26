@@ -4,7 +4,7 @@ import { api, type PartyBookingDto } from '../api';
 import { toast } from 'sonner';
 import { MenuSelectionPopup } from './MenuSelectionPopup';
 import { useSettings } from '../context/SettingsContext';
-import { generateHTMLReceipt } from '../utils/htmlReceipt';
+import { generatePDFReceipt } from '../utils/pdfReceipt';
 import { ReceiptPreparationModal } from './ReceiptPreparationModal';
 
 interface BookingDetailDrawerProps {
@@ -102,7 +102,7 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
             
             // 3. Trigger receipt print with updated data
             const updatedBooking = { ...booking, ...data, totalAmount: (Number(booking.hallCharge || 0) + Number(booking.menuTotal || 0) + Number(booking.addonsTotal || 0) + data.serviceCharge) - data.discount };
-            generateHTMLReceipt(updatedBooking, settings, settings?.logoUrl, preparationModal.type);
+            generatePDFReceipt(updatedBooking, settings, settings?.logoUrl, preparationModal.type);
             
             // 4. Close modal
             setPreparationModal(prev => ({ ...prev, isOpen: false }));

@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Inject, HttpException, HttpStatus, Query } from '@nestjs/common';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { firstValueFrom, catchError, throwError } from 'rxjs';
 
@@ -7,10 +7,10 @@ export class ReportsGatewayController {
     constructor(@Inject('ORDER_SERVICE') private readonly orderClient: ClientProxy) { }
 
     @Get('summary')
-    async getReportsSummary() {
+    async getReportsSummary(@Query() query: any) {
         try {
             const result = await firstValueFrom(
-                this.orderClient.send({ cmd: 'get_reports_summary' }, {}).pipe(
+                this.orderClient.send({ cmd: 'get_reports_summary' }, query || {}).pipe(
                     catchError(error => throwError(() => new RpcException(error)))
                 )
             );

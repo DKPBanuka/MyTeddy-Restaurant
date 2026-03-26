@@ -27,9 +27,9 @@ export function Cart({
     onEdit
 }: CartProps) {
     const { settings } = useSettings();
-    const { 
-        items, orderType, orderMetadata, setOrderMetadata, 
-        removeItem, updateQty, clearCart, holdOrder, heldOrders 
+    const {
+        items, orderType, orderMetadata, setOrderMetadata,
+        removeItem, updateQty, clearCart, holdOrder, heldOrders
     } = useCart();
 
     const [customerResults, setCustomerResults] = useState<any[]>([]);
@@ -98,7 +98,8 @@ export function Cart({
         setOrderMetadata(prev => ({
             ...prev,
             customerName: customer.name,
-            customerPhone: customer.phone || ''
+            customerPhone: customer.phone || '',
+            customerId: customer.id
         }));
         setLinkedCustomer(customer);
         setCustomerResults([]);
@@ -107,7 +108,12 @@ export function Cart({
 
     const handleUnlinkCustomer = () => {
         setLinkedCustomer(null);
-        setOrderMetadata(prev => ({ ...prev, customerName: '', customerPhone: '' }));
+        setOrderMetadata(prev => ({ 
+            ...prev, 
+            customerName: '', 
+            customerPhone: '',
+            customerId: undefined 
+        }));
     };
 
     const CustomerNameInput = (inputClass: string) => (
@@ -192,7 +198,7 @@ export function Cart({
                             </div>
                         )}
                         {heldOrders.length > 0 && (
-                            <button 
+                            <button
                                 onClick={onViewHeldOrders}
                                 className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-600 border border-amber-100 rounded-lg text-[10px] font-black uppercase tracking-widest animate-pulse"
                             >
@@ -330,7 +336,7 @@ export function Cart({
                                                     </div>
                                                 )}
                                                 {!item.packageId && (
-                                                    <button 
+                                                    <button
                                                         onClick={() => onEdit(item)}
                                                         className="flex items-center gap-1 text-[10px] font-black text-blue-500 hover:text-blue-700 uppercase tracking-widest mt-2 bg-blue-50 px-2 py-1 rounded-md transition-colors"
                                                     >

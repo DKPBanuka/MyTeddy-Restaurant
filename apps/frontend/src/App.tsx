@@ -18,6 +18,7 @@ import { OrdersDashboard } from './pages/OrdersDashboard';
 import { Settings } from './pages/Settings';
 import ReceiptPreview from './pages/ReceiptPreview';
 import { Customers } from './pages/Customers';
+import { AnalysisDashboard } from './pages/AnalysisDashboard';
 
 function App() {
   const { isAuthenticated } = useAuth();
@@ -61,6 +62,7 @@ function App() {
               </Route>
 
               <Route path="/menu-management" element={<MenuManagement />} />
+              <Route path="/analysis" element={<AnalysisDashboard />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/receipt-preview" element={<ReceiptPreview />} />
 

@@ -185,8 +185,8 @@ export const api = {
     },
 
     // --- Reports & Analytics ---
-    getReportsSummary: async () => {
-        const res = await apiClient.get(`/reports/summary`);
+    getReportsSummary: async (params?: { startDate?: string; endDate?: string }) => {
+        const res = await apiClient.get(`/reports/summary`, { params });
         return res.data;
     },
 

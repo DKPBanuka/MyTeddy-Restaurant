@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Search, Calendar as CalendarIcon, Clock, Users, AlertCircle, Phone, Filter } from 'lucide-react';
+import { X, Search, Calendar as CalendarIcon, Clock, AlertCircle, Phone, Filter, CheckCircle2 } from 'lucide-react';
 import type { PartyBookingDto } from '../api';
 import { api } from '../api';
 import { toast } from 'sonner';
@@ -253,9 +253,14 @@ export function PartiesListModal({
                                                     className={`absolute left-20 right-4 rounded-xl p-3 shadow-sm border overflow-hidden transition-all cursor-grab hover:shadow-md hover:scale-[1.01] active:cursor-grabbing ${b.bookingType === 'EXCLUSIVE' ? 'bg-amber-500/20 border-amber-400/50 text-amber-950 shadow-[inset_0_0_20px_rgba(245,158,11,0.1)]' : 'bg-blue-50 border-blue-200/50 text-blue-900'}`}
                                                     style={{ top: `${top + 4}px`, height: `${height - 8}px`, zIndex: 10 }}
                                                 >
-                                                    <div className="font-bold text-xs truncate">{b.customerName}</div>
+                                                    <div className="flex items-center justify-between gap-1">
+                                                        <div className="font-bold text-xs truncate">{b.customerName}</div>
+                                                        {Number(b.advancePaid || 0) >= Number(b.totalAmount || 0) && Number(b.totalAmount || 0) > 0 && (
+                                                            <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
+                                                        )}
+                                                    </div>
                                                     <div className="text-[10px] opacity-70 flex items-center gap-1 mt-0.5">
-                                                        <Clock size={10} /> {formatTime(b.startTime)} - {formatTime(b.endTime)}
+                                                        <Clock size={10} /> {formatTime(b.startTime)}
                                                     </div>
                                                 </div>
                                             );
@@ -291,13 +296,20 @@ export function PartiesListModal({
                                         <tr className="text-[10px] uppercase tracking-widest font-black text-slate-400">
                                             <th className="px-4 pb-2">Customer Info</th>
                                             <th className="px-4 pb-2">Event Schedule</th>
-                                            <th className="px-4 pb-2 text-center">Guest Count</th>
+                                            <th className="px-4 pb-2">Payment Status</th>
                                             <th className="px-4 pb-2 text-center">Status</th>
                                             <th className="px-4 pb-2"></th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredBookings.map((b) => (
+                                        {filteredBookings.map((b) => {
+                                            const total = Number(b.totalAmount || 0);
+                                            const advance = Number(b.advancePaid || 0);
+                                            const balance = total - advance;
+                                            const progress = total > 0 ? Math.min((advance / total) * 100, 100) : 0;
+                                            const isSettled = advance >= total && total > 0;
+
+                                            return (
                                             <tr key={b.id} className="group">
                                                 <td className="bg-white group-hover:bg-blue-50/50 px-6 py-4 rounded-l-2xl border-y border-l border-slate-100 transition-colors">
                                                     <div className="font-black text-slate-700 text-sm">{b.customerName}</div>
@@ -313,13 +325,23 @@ export function PartiesListModal({
                                                     </div>
                                                     <div className="text-[10px] font-black text-slate-400 mt-1 flex items-center gap-1.5">
                                                         <Clock size={10} />
-                                                        {formatTime(b.startTime)} - {formatTime(b.endTime)}
+                                                        {formatTime(b.startTime)}
                                                     </div>
                                                 </td>
-                                                <td className="bg-white group-hover:bg-blue-50/50 px-6 py-4 border-y border-slate-100 text-center transition-colors">
-                                                    <div className="inline-flex items-center gap-1.5 bg-slate-50 px-3 py-1 rounded-lg border border-slate-100">
-                                                        <Users size={12} className="text-slate-400" />
-                                                        <span className="text-sm font-black text-slate-700">{b.guestCount}</span>
+                                                <td className="bg-white group-hover:bg-blue-50/50 px-6 py-4 border-y border-slate-100 transition-colors">
+                                                    <div className="w-full max-w-[150px]">
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <span className={`text-[9px] font-black ${isSettled ? 'text-emerald-600' : 'text-slate-500'}`}>
+                                                                {isSettled ? 'FULLY SETTLED' : `Rs. ${balance.toLocaleString()} DUE`}
+                                                            </span>
+                                                            <span className="text-[9px] font-bold text-slate-400">{Math.round(progress)}%</span>
+                                                        </div>
+                                                        <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                                            <div 
+                                                                className={`h-full transition-all duration-500 ${isSettled ? 'bg-emerald-500' : 'bg-blue-500'}`}
+                                                                style={{ width: `${progress}%` }}
+                                                            ></div>
+                                                        </div>
                                                     </div>
                                                 </td>
                                                 <td className="bg-white group-hover:bg-blue-50/50 px-6 py-4 border-y border-slate-100 text-center transition-colors">
@@ -336,7 +358,8 @@ export function PartiesListModal({
                                                     </button>
                                                 </td>
                                             </tr>
-                                        ))}
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>

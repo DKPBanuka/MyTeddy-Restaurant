@@ -17,7 +17,10 @@ export function EventsDashboard() {
     // --- Filter & Search State ---
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
     const [searchQuery, setSearchQuery] = useState('');
-    const [filter, setFilter] = useState<'ALL' | 'TODAY' | 'THIS_WEEK'>('ALL');
+    const [filter, setFilter] = useState<'ALL' | 'TODAY' | 'THIS_WEEK' | 'CUSTOM'>('ALL');
+    const [startDate, setStartDate] = useState<string>('');
+    const [endDate, setEndDate] = useState<string>('');
+    const [paymentStatus, setPaymentStatus] = useState<'ALL' | 'PENDING' | 'PARTIAL' | 'SETTLED'>('ALL');
 
     // --- UI State ---
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -31,10 +34,28 @@ export function EventsDashboard() {
     const fetchBookings = useCallback(async () => {
         setIsLoading(true);
         try {
-            const date = selectedDate;
-            const year = date.getFullYear();
-            const month = date.getMonth() + 1;
-            const bData = await api.getPartyBookings({ month, year });
+            const params: any = { paymentStatus };
+            
+            if (filter === 'CUSTOM' && startDate && endDate) {
+                params.startDate = startDate;
+                params.endDate = endDate;
+            } else if (filter === 'TODAY') {
+                const today = new Date().toISOString().split('T')[0];
+                params.startDate = today;
+                params.endDate = today;
+            } else if (filter === 'THIS_WEEK') {
+                const start = new Date().toISOString().split('T')[0];
+                const end = new Date();
+                end.setDate(end.getDate() + 7);
+                params.startDate = start;
+                params.endDate = end.toISOString().split('T')[0];
+            } else {
+                // Default to current month view
+                params.year = selectedDate.getFullYear();
+                params.month = selectedDate.getMonth() + 1;
+            }
+
+            const bData = await api.getPartyBookings(params);
             setBookings(bData);
             
             // If the drawer is currently open, we must swap its reference to the fresh one to trigger a UI render
@@ -50,7 +71,7 @@ export function EventsDashboard() {
         } finally {
             setIsLoading(false);
         }
-    }, [selectedDate]);
+    }, [selectedDate, filter, startDate, endDate, paymentStatus]);
 
     useEffect(() => {
         fetchBookings();
@@ -150,11 +171,46 @@ export function EventsDashboard() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <div className="hidden lg:flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                    <div className="flex flex-wrap items-center gap-4">
+                        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
                             <button onClick={() => setFilter('ALL')} className={`px-4 py-1.5 text-xs font-black rounded-lg transition-all ${filter === 'ALL' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>ALL</button>
                             <button onClick={() => setFilter('TODAY')} className={`px-4 py-1.5 text-xs font-black rounded-lg transition-all ${filter === 'TODAY' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>TODAY</button>
                             <button onClick={() => setFilter('THIS_WEEK')} className={`px-4 py-1.5 text-xs font-black rounded-lg transition-all ${filter === 'THIS_WEEK' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>WEEK</button>
+                            <button onClick={() => setFilter('CUSTOM')} className={`px-4 py-1.5 text-xs font-black rounded-lg transition-all ${filter === 'CUSTOM' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>RANGE</button>
                         </div>
+                        
+                        {filter === 'CUSTOM' && (
+                            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                                <input 
+                                    type="date" 
+                                    value={startDate} 
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-bold outline-none focus:border-blue-500"
+                                />
+                                <span className="text-slate-400 font-bold">to</span>
+                                <input 
+                                    type="date" 
+                                    value={endDate} 
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-bold outline-none focus:border-blue-500"
+                                />
+                            </div>
+                        )}
+
+                        <div className="h-6 w-px bg-slate-200"></div>
+
+                        <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
+                            {(['ALL', 'PENDING', 'PARTIAL', 'SETTLED'] as const).map((status) => (
+                                <button
+                                    key={status}
+                                    onClick={() => setPaymentStatus(status)}
+                                    className={`px-3 py-1 text-[10px] font-black rounded-lg transition-all ${paymentStatus === status ? 'bg-white text-blue-600 shadow-sm border border-blue-100' : 'text-slate-400 hover:text-slate-600'}`}
+                                >
+                                    {status}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                         <button
                             onClick={() => {
                                 setIsSelectingForNewParty(false);
@@ -258,7 +314,7 @@ export function EventsDashboard() {
                                         <div
                                             key={idx}
                                             onClick={() => { setViewedBooking(b); setIsDetailDrawerOpen(true); }}
-                                            className={`min-w-[280px] p-5 rounded-3xl border shadow-[0_8px_30px_rgb(0,0,0,0.05)] cursor-pointer transition-all hover:scale-[1.02] hover:shadow-[0_8px_30px_rgb(0,0,0,0.1)] group relative overflow-hidden ${b.bookingType === 'EXCLUSIVE' ? 'bg-gradient-to-br from-amber-500 to-amber-600 border-amber-400' : 'bg-white/90 backdrop-blur-md border-white'}`}
+                                            className={`min-w-[280px] p-5 rounded-3xl border shadow-[0_8px_30px_rgb(0,0,0,0.05)] cursor-pointer transition-all hover:scale-[1.02] hover:shadow-[0_8px_30px_rgb(0,0,0,0.1)] group relative overflow-hidden ${b.bookingType === 'EXCLUSIVE' ? 'bg-gradient-to-br from-amber-500 to-amber-600 border-amber-400' : 'bg-gradient-to-br from-blue-50/90 to-indigo-50/90 backdrop-blur-md border-blue-100/50'}`}
                                         >
                                             <div className="relative z-10">
                                                 <div className="flex justify-between items-start mb-4">
@@ -290,14 +346,43 @@ export function EventsDashboard() {
                             </div>
                         </section>
 
+                        {/* Summary Stats for Filtered Range */}
+                        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
+                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Events</div>
+                                <div className="text-2xl font-black text-slate-800">{filteredList.length}</div>
+                            </div>
+                            <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
+                                <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Expected Revenue</div>
+                                <div className="text-2xl font-black text-blue-600">
+                                    Rs. {filteredList.reduce((sum, b) => sum + Number(b.totalAmount || 0), 0).toLocaleString()}
+                                </div>
+                            </div>
+                            <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
+                                <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Advance Collected</div>
+                                <div className="text-2xl font-black text-emerald-600">
+                                    Rs. {filteredList.reduce((sum, b) => sum + Number(b.advancePaid || 0), 0).toLocaleString()}
+                                </div>
+                            </div>
+                            <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
+                                <div className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">Balance Due</div>
+                                <div className="text-2xl font-black text-red-600">
+                                    Rs. {filteredList.reduce((sum, b) => {
+                                        const bal = Number(b.totalAmount || 0) - Number(b.advancePaid || 0);
+                                        return sum + (bal > 0 ? bal : 0);
+                                    }, 0).toLocaleString()}
+                                </div>
+                            </div>
+                        </section>
+
                         {/* Recent & Upcoming Events Vertical List */}
                         <section className="space-y-4">
                             <h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
                                 <CalendarIcon className="text-blue-600" size={20} />
-                                Monthly Bookings Outlook
+                                Bookings List — {paymentStatus !== 'ALL' ? paymentStatus : 'Filter Outlook'}
                             </h2>
 
-                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto custom-scrollbar pr-3 pb-8">
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 max-h-[600px] overflow-y-auto custom-scrollbar pr-3 pb-8">
                                 {filteredList.length > 0 ? (
                                     filteredList.map((b, idx) => {
                                         const eventDate = new Date(b.eventDate);

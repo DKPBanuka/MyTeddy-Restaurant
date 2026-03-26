@@ -4,7 +4,9 @@ import {
     LayoutDashboard, 
     Calendar, 
     TrendingUp, 
-    Users, 
+    ShieldCheck, 
+    Contact, 
+    BarChart3,
     Settings, 
     LogOut, 
     Layers, 
@@ -97,14 +99,20 @@ export function SidebarLayout() {
                     )}
                     {hasPermission('STAFF') && (
                         <NavLink to="/staff" className={navLinkClass} title="Staff">
-                            <Users size={24} className="shrink-0" />
+                            <ShieldCheck size={24} className="shrink-0" />
                             {actualExpanded && <span className="whitespace-nowrap">Staff</span>}
                         </NavLink>
                     )}
                     {hasPermission('POS') && (
                         <NavLink to="/customers" className={navLinkClass} title="Customers">
-                            <Users size={24} className="shrink-0" />
+                            <Contact size={24} className="shrink-0" />
                             {actualExpanded && <span className="whitespace-nowrap">Customers</span>}
+                        </NavLink>
+                    )}
+                    {user?.role === 'ADMIN' && (
+                        <NavLink to="/analysis" className={navLinkClass} title="Analysis Dashboard">
+                            <BarChart3 size={24} className="shrink-0" />
+                            {actualExpanded && <span className="whitespace-nowrap">Analysis</span>}
                         </NavLink>
                     )}
                     {user?.role === 'ADMIN' && (
@@ -159,14 +167,14 @@ export function SidebarLayout() {
                 )}
                 {hasPermission('POS') && (
                     <NavLink to="/customers" className={({ isActive }) => `flex flex-col items-center gap-1 p-2 w-16 transition-all ${isActive ? 'text-white' : 'text-slate-500'}`}>
-                        <Users size={24} />
+                        <Contact size={24} />
                         <span className="text-[10px] font-bold">Cust.</span>
                     </NavLink>
                 )}
                 {user?.role === 'ADMIN' && (
-                    <NavLink to="/menu-management" className={({ isActive }) => `flex flex-col items-center gap-1 p-2 w-16 transition-all ${isActive ? 'text-white' : 'text-slate-500'}`}>
-                        <Settings size={24} />
-                        <span className="text-[10px] font-bold">Admin</span>
+                    <NavLink to="/analysis" className={({ isActive }) => `flex flex-col items-center gap-1 p-2 w-16 transition-all ${isActive ? 'text-white' : 'text-slate-500'}`}>
+                        <BarChart3 size={24} />
+                        <span className="text-[10px] font-bold">Analysis</span>
                     </NavLink>
                 )}
                 <button onClick={logout} className="flex flex-col items-center gap-1 p-2 w-16 text-slate-500 hover:text-red-400 transition-all">

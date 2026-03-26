@@ -2,98 +2,123 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { toTitleCase } from './format';
 
-export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?: string) => {
+export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?: string, receiptType: 'NORMAL' | 'PARTY_ADVANCE' | 'PARTY_FINAL' = 'NORMAL') => {
+    const isParty = receiptType === 'PARTY_ADVANCE' || receiptType === 'PARTY_FINAL';
+
     // 1. Create a hidden element for rendering the receipt
     const container = document.createElement('div');
-    container.style.position = 'fixed';
-    container.style.left = '0';
-    container.style.top = '0';
-    container.style.width = '1px';
-    container.style.height = '1px';
-    container.style.overflow = 'hidden';
-    container.style.visibility = 'hidden';
-    container.style.pointerEvents = 'none';
-    container.style.zIndex = '-9999';
-    container.style.background = 'white';
-    container.style.padding = '0';
-    container.style.margin = '0';
-    document.body.appendChild(container);
-
-    const items = (orderData.orderItems || orderData.items || []).map((item: any) => {
-        const rawName = item.productName || item.product?.name || item.name || 'Item';
-        const nameWithoutRetail = toTitleCase(rawName.replace(/\(RETAIL\)/gi, '').trim());
-        const qty = item.quantity || item.qty || 1;
+    // ... (rest of container setup stays same)
+    // ...
+    // I'll rewrite the item parsing logic to match htmlReceipt.ts's robustness for parties
+    
+    let items = [];
+    if (isParty) {
+        const rawItems = orderData.items;
+        const parsedItems = typeof rawItems === 'string' ? JSON.parse(rawItems) : (rawItems || []);
         
-        let unitPrice = 0;
-        const potentialPrices = [
-            item.price,
-            item.unitPrice,
-            item.priceAtTimeOfSale,
-            item.product?.price,
-            item.package?.price
-        ];
-        
-        for (const p of potentialPrices) {
-            const val = Number(p);
-            if (!isNaN(val) && val > 0) {
-                unitPrice = val;
-                break;
+        items = parsedItems.map((item: any) => {
+            let unitPrice = 0;
+            if (item.packageId) {
+                unitPrice = parseFloat(item.package?.price || '0');
+            } else if (item.productId) {
+                unitPrice = item.size ? parseFloat(item.size.price) : parseFloat(item.product?.price || '0');
+                if (item.selectedAddons) {
+                    unitPrice += item.selectedAddons.reduce((sum: number, a: any) => sum + parseFloat(a.price), 0);
+                }
+            } else if (item.addonIds && item.selectedAddons) {
+                unitPrice = parseFloat(item.selectedAddons[0]?.price || '0');
             }
-        }
-        
-        if (unitPrice === 0) {
-            const totalVal = Number(item.total || item.totalPrice || item.itemTotal || 0);
-            if (totalVal > 0) unitPrice = totalVal / qty;
-        }
 
-        const sizeName = item.sizeName || 
-                         item.productSize?.name || 
-                         (typeof item.size === 'string' ? item.size : item.size?.name) || 
-                         item.variantName || 
-                         null;
-        const finalSizeName = sizeName ? toTitleCase(sizeName as string) : null;
-        
-        const addons = (item.addons || item.selectedAddons || item.orderItemAddons || []).map((a: any) => 
-            a.addonName || a.addon?.name || a.name || (typeof a === 'string' ? a : 'Addon')
-        );
-
-        const itemTotal = Number(item.total || item.itemTotal || (unitPrice * qty));
-        return { 
-            name: nameWithoutRetail, 
-            size: finalSizeName, 
-            addons: addons.map((a: any) => toTitleCase(a)), 
-            qty, 
-            unitPrice, 
-            itemTotal,
-            type: item.type || item.product?.type || 'FOOD'
-        };
-    });
-
-    // Consolidate Addons
-    let grandAddonsTotal = 0;
-    (orderData.orderItems || orderData.items || []).forEach((item: any) => {
-        const itemAddons = (item.addons || item.selectedAddons || item.orderItemAddons || []);
-        const itemAddonTotal = itemAddons.reduce((sum: number, a: any) => {
-            const p = Number(a.price || a.addonPrice || a.unitPrice || 0);
-            return sum + p;
-        }, 0);
-        const qty = item.quantity || item.qty || 1;
-        grandAddonsTotal += (itemAddonTotal * qty);
-    });
-
-    if (grandAddonsTotal > 0) {
-        items.push({
-            name: 'Addition items',
-            size: null,
-            qty: 1,
-            unitPrice: grandAddonsTotal,
-            itemTotal: grandAddonsTotal,
-            type: 'FOOD'
+            const rawName = item.package?.name || item.product?.name || item.name || 'Item';
+            const sizeName = typeof item.size === 'string' ? item.size : (item.size?.name || item.sizeName || null);
+            
+            return {
+                name: toTitleCase(rawName.replace(/\(RETAIL\)/gi, '').trim()),
+                size: toTitleCase(sizeName),
+                qty: item.quantity || 1,
+                unitPrice,
+                itemTotal: unitPrice * (item.quantity || 1),
+                type: 'FOOD'
+            };
         });
+
+        if (Number(orderData.hallCharge) > 0) {
+            items.push({ name: 'Hall Charge (Exclusive)', qty: 1, unitPrice: Number(orderData.hallCharge), itemTotal: Number(orderData.hallCharge), type: 'SERVICE' });
+        }
+        if (Number(orderData.addonsTotal) > 0) {
+            items.push({ name: 'Additional Extras', qty: 1, unitPrice: Number(orderData.addonsTotal), itemTotal: Number(orderData.addonsTotal), type: 'SERVICE' });
+        }
+    } else {
+        items = (orderData.orderItems || orderData.items || []).map((item: any) => {
+            const rawName = item.productName || item.product?.name || item.name || 'Item';
+            const nameWithoutRetail = toTitleCase(rawName.replace(/\(RETAIL\)/gi, '').trim());
+            const qty = item.quantity || item.qty || 1;
+            
+            let unitPrice = 0;
+            const potentialPrices = [
+                item.price,
+                item.unitPrice,
+                item.priceAtTimeOfSale,
+                item.product?.price,
+                item.package?.price
+            ];
+            
+            for (const p of potentialPrices) {
+                const val = Number(p);
+                if (!isNaN(val) && val > 0) {
+                    unitPrice = val;
+                    break;
+                }
+            }
+            
+            if (unitPrice === 0) {
+                const totalVal = Number(item.total || item.totalPrice || item.itemTotal || 0);
+                if (totalVal > 0) unitPrice = totalVal / qty;
+            }
+
+            const sizeName = item.sizeName || 
+                             item.productSize?.name || 
+                             (typeof item.size === 'string' ? item.size : item.size?.name) || 
+                             item.variantName || 
+                             null;
+            const finalSizeName = sizeName ? toTitleCase(sizeName as string) : null;
+            
+            const itemTotal = Number(item.total || item.itemTotal || (unitPrice * qty));
+            return { 
+                name: nameWithoutRetail, 
+                size: finalSizeName, 
+                qty, 
+                unitPrice, 
+                itemTotal,
+                type: item.type || item.product?.type || 'FOOD'
+            };
+        });
+
+        // Consolidate Addons for Normal Receipts
+        let grandAddonsTotal = 0;
+        (orderData.orderItems || orderData.items || []).forEach((item: any) => {
+            const itemAddons = (item.addons || item.selectedAddons || item.orderItemAddons || []);
+            const itemAddonTotal = itemAddons.reduce((sum: number, a: any) => {
+                const p = Number(a.price || a.addonPrice || a.unitPrice || 0);
+                return sum + p;
+            }, 0);
+            const qty = item.quantity || item.qty || 1;
+            grandAddonsTotal += (itemAddonTotal * qty);
+        });
+
+        if (grandAddonsTotal > 0) {
+            items.push({
+                name: 'Addition items',
+                size: null,
+                qty: 1,
+                unitPrice: grandAddonsTotal,
+                itemTotal: grandAddonsTotal,
+                type: 'FOOD'
+            });
+        }
     }
 
-    const foodItems = items.filter((i: any) => i.type !== 'RETAIL');
-    const retailItems = items.filter((i: any) => i.type === 'RETAIL');
+    const foodItems = items;
 
     const renderItemRow = (item: any) => `
         <tr>
@@ -101,7 +126,7 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
                 <div style="word-wrap: break-word;">
                     ${item.name}
                     ${item.size ? `
-                        <div style="font-size: 13px; font-weight: 900; color: #000; margin-top: 2px;">
+                        <div style="font-size: 13px; font-weight: 950; color: #000; margin-top: 2px;">
                             (${item.size})
                         </div>
                     ` : ''}
@@ -113,19 +138,37 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
         </tr>
     `;
 
-    const subTotal = Number(orderData.subTotal || orderData.subtotal || 0);
+    const subTotal = isParty 
+        ? (Number(orderData.hallCharge || 0) + Number(orderData.menuTotal || 0) + Number(orderData.addonsTotal || 0))
+        : Number(orderData.subTotal || orderData.subtotal || 0);
+
     const discountAmt = Number(orderData.discount || 0);
-    const discountPercentage = subTotal > 0 ? Math.round((discountAmt / subTotal) * 100) : 0;
-    const total = Number(orderData.grandTotal || 0);
+    const serviceChargeAmt = Number(orderData.serviceCharge || 0);
+    const total = isParty ? Number(orderData.totalAmount || 0) : Number(orderData.grandTotal || 0);
+    const advancePaid = Number(orderData.advancePaid || 0);
+    const balanceDue = total - advancePaid;
+
+    const discountPercentage = isParty ? 0 : (subTotal > 0 ? Math.round((discountAmt / subTotal) * 100) : 0);
     const paymentMethod = orderData.paymentMethod || 'CASH';
 
-    const dateStr = orderData.date ? new Date(orderData.date).toLocaleString('en-GB', {
+    const getReceiptHeader = () => {
+        if (receiptType === 'PARTY_ADVANCE') return 'BOOKING CONFIRMATION - ADVANCE RECEIPT';
+        if (receiptType === 'PARTY_FINAL') return 'FINAL INVOICE - PARTY BOOKING';
+        return null;
+    };
+
+    const actualDate = isParty ? orderData.eventDate : (orderData.date || new Date());
+    const dateStr = actualDate ? new Date(actualDate).toLocaleString('en-GB', {
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
         timeZone: 'Asia/Colombo'
     }) : new Date().toLocaleString('en-GB', { timeZone: 'Asia/Colombo' });
 
     const formatCurrency = (amount: number) => Number(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+    const invoiceNo = isParty 
+        ? `PB-${(orderData.id || '0000').slice(0, 8).toUpperCase()}`
+        : (orderData.invoiceNumber || "INV-000");
 
     // Conditional Logo Logic - ZERO MARGIN for html2canvas gap fix
     const logoHtml = logoUrl 
@@ -201,20 +244,22 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
                 </div>
             </div>
 
+            ${getReceiptHeader() ? `<div style="background-color: #000; color: #fff; padding: 4px; text-align: center; font-weight: 900; margin: 10px 0; text-transform: uppercase; font-size: 11px;">${getReceiptHeader()}</div>` : ''}
+
             <div class="dashed-line"></div>
 
             <div class="flex justify-between" style="font-size: 13px; margin-bottom: 4px;">
                 <span style="color: #666;">Invoice:</span>
-                <span class="font-bold">${orderData.invoiceNumber || "INV-000"}</span>
+                <span class="font-bold">${invoiceNo}</span>
             </div>
             <div class="flex justify-between" style="font-size: 13px;">
-                <span style="color: #666;">Date:</span>
+                <span style="color: #666;">${isParty ? 'Event Date' : 'Date'}:</span>
                 <span class="font-bold">${dateStr}</span>
             </div>
 
             <div class="dashed-line"></div>
 
-            <table>
+            <table style="margin-bottom: 8px;">
                 <thead>
                     <tr>
                         <th class="col-item">ITEM</th>
@@ -225,39 +270,63 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
                 </thead>
                 <tbody>
                     ${foodItems.map((item: any) => renderItemRow(item)).join('')}
-                    ${(foodItems.length > 0 && retailItems.length > 0) ? `
-                        <tr>
-                            <td colspan="4" style="padding: 10px 0; border-bottom: 2px dashed #eee;"></td>
-                        </tr>
-                    ` : ''}
-                    ${retailItems.map((item: any) => renderItemRow(item)).join('')}
                 </tbody>
             </table>
 
             <div class="dashed-line"></div>
 
-            ${(discountAmt > 0 || subTotal !== total) ? `
-            <div class="flex justify-between font-bold" style="font-size: 14px; padding: 0 5px;">
-                <span>Subtotal</span>
-                <span>Rs. ${formatCurrency(subTotal)}</span>
-            </div>
-            ` : ''}
+            ${receiptType === 'NORMAL' ? `
+                <div class="flex justify-between font-bold" style="font-size: 14px; padding: 0 4px;">
+                    <span>Subtotal</span>
+                    <span>Rs. ${formatCurrency(subTotal)}</span>
+                </div>
 
-            ${discountAmt > 0 ? `
-            <div class="flex justify-between font-bold bg-gray" style="font-size: 14px;">
-                <span>Discount (${discountPercentage}%)</span>
-                <span>-Rs. ${formatCurrency(discountAmt)}</span>
-            </div>
-            ` : ''}
+                ${discountAmt > 0 ? `
+                <div class="flex justify-between font-bold bg-gray" style="font-size: 14px; margin-top: 4px;">
+                    <span>Discount (${discountPercentage}%)</span>
+                    <span>-Rs. ${formatCurrency(discountAmt)}</span>
+                </div>
+                ` : ''}
 
-            <div class="flex justify-between bg-gray" style="padding: 15px 10px; margin-top: 15px;">
-                <span class="font-black" style="font-size: 20px; text-transform: uppercase;">Total</span>
-                <span class="font-black" style="font-size: 22px;">Rs. ${formatCurrency(total)}</span>
-            </div>
+                <div class="flex justify-between mt-2 bg-gray" style="padding: 12px 10px; margin-top: 12px;">
+                    <span class="font-black" style="font-size: 19px; text-transform: uppercase;">Total</span>
+                    <span class="font-black" style="font-size: 21px;">Rs. ${formatCurrency(total)}</span>
+                </div>
+            ` : (receiptType === 'PARTY_ADVANCE' || receiptType === 'PARTY_FINAL') ? `
+                <div class="flex justify-between font-bold" style="font-size: 14px; padding: 0 4px;">
+                    <span>Base Total</span>
+                    <span>Rs. ${formatCurrency(subTotal)}</span>
+                </div>
+
+                ${serviceChargeAmt > 0 ? `
+                <div class="flex justify-between font-bold" style="font-size: 14px; padding: 0 4px; margin-top: 4px; color: #2563eb;">
+                    <span>Service Charge</span>
+                    <span>Rs. ${formatCurrency(serviceChargeAmt)}</span>
+                </div>
+                ` : ''}
+
+                ${discountAmt > 0 ? `
+                <div class="flex justify-between font-bold" style="font-size: 14px; padding: 0 4px; margin-top: 4px; color: #dc2626;">
+                    <span>Discount Applied</span>
+                    <span>-Rs. ${formatCurrency(discountAmt)}</span>
+                </div>
+                ` : ''}
+
+                <div class="flex justify-between font-bold" style="font-size: 14px; padding: 0 4px; margin-top: 4px; ${receiptType === 'PARTY_FINAL' ? 'font-style: italic;' : ''}">
+                    <span>${receiptType === 'PARTY_FINAL' ? 'Less: ' : ''}Advance Paid</span>
+                    <span>${receiptType === 'PARTY_FINAL' ? '-' : ''}Rs. ${formatCurrency(advancePaid)}</span>
+                </div>
+                
+                <div class="flex justify-between mt-2 bg-gray" style="padding: 12px 10px; margin-top: 12px; background-color: #000; color: #fff;">
+                    <span class="font-black" style="font-size: 15px; text-transform: uppercase;">${receiptType === 'PARTY_ADVANCE' ? 'Balance Due' : 'Net Amount Payable'}</span>
+                    <span class="font-black" style="font-size: 21px;">Rs. ${formatCurrency(balanceDue)}</span>
+                </div>
+            ` : ''}
 
             <div class="text-center" style="margin-top: 30px; padding-bottom: 20px; width: 100%;">
-                <div class="font-black" style="font-size: 16px; margin-bottom: 5px;">PAID VIA ${paymentMethod.replace('PAID VIA ', '').toUpperCase()}</div>
+                ${receiptType === 'NORMAL' ? `<div class="font-black" style="font-size: 16px; margin-bottom: 5px;">PAID VIA ${paymentMethod.replace('PAID VIA ', '').toUpperCase()}</div>` : ''}
                 <div class="signature">Thank You!</div>
+                <div style="font-size: 14px; font-weight: 800; margin-top: 8px; letter-spacing: 1px;">THANK YOU! COME AGAIN</div>
             </div>
         </div>
     `;
