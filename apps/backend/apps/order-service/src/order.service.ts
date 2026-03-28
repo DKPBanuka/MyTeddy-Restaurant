@@ -110,6 +110,9 @@ export class OrderService {
                         customerName: customerName || null,
                         customerPhone: customerPhone || null,
                         deliveryAddress: deliveryAddress || null,
+                        subTotal: createOrderDto.subTotal || totalAmount,
+                        discount: createOrderDto.discount || 0,
+                        grandTotal: createOrderDto.grandTotal || totalAmount,
                         tokenId,
                         userId: cashier.id,
                         orderItems: {

@@ -18,9 +18,9 @@ import { CustomersGatewayController } from './customers.controller';
     imports: [
         PrismaModule,
         ClientsModule.register([
-            { name: 'AUTH_SERVICE', transport: Transport.TCP, options: { host: process.env.AUTH_SERVICE_HOST || 'localhost', port: 3001 } },
-            { name: 'INVENTORY_SERVICE', transport: Transport.TCP, options: { host: process.env.INVENTORY_SERVICE_HOST || 'localhost', port: 3002 } },
-            { name: 'ORDER_SERVICE', transport: Transport.TCP, options: { host: process.env.ORDER_SERVICE_HOST || 'localhost', port: 3003 } },
+            { name: 'AUTH_SERVICE', transport: Transport.TCP, options: { host: process.env.AUTH_SERVICE_HOST || 'auth-service', port: 3001 } },
+            { name: 'INVENTORY_SERVICE', transport: Transport.TCP, options: { host: process.env.INVENTORY_SERVICE_HOST || 'inventory-service', port: 3002 } },
+            { name: 'ORDER_SERVICE', transport: Transport.TCP, options: { host: process.env.ORDER_SERVICE_HOST || 'order-service', port: 3003 } },
         ]),
     ],
     controllers: [

@@ -21,5 +21,6 @@ async function bootstrap() {
   );
   await app.listen();
   console.log('Order Microservice is listening on TCP port 3003');
+  console.log('DIAGNOSTIC: INVENTORY_SERVICE_HOST =', process.env.INVENTORY_SERVICE_HOST || 'NOT_SET');
 }
 bootstrap();

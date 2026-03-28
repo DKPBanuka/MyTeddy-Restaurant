@@ -18,7 +18,7 @@ import { CustomersModule } from './customers/customers.module';
       {
         name: 'INVENTORY_SERVICE',
         transport: Transport.TCP,
-        options: { host: 'localhost', port: 3002 }, // Changed from 3001 to 3002
+        options: { host: process.env.INVENTORY_SERVICE_HOST || 'inventory-service', port: 3002 },
       },
     ]),
   ],

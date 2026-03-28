@@ -45,6 +45,7 @@ export function InventoryDashboard() {
     const [retailStock, setRetailStock] = useState<RetailStock[]>([]);
     const [boms, setBoms] = useState<RecipeBOM[]>([]);
     const [foodProducts, setFoodProducts] = useState<Product[]>([]);
+    const [categories, setCategories] = useState<any[]>([]);
 
     // UI States
     const [isLoading, setIsLoading] = useState(true);
@@ -61,8 +62,12 @@ export function InventoryDashboard() {
                 const data = await api.getIngredients();
                 setIngredients(data);
             } else if (activeTab === 'RETAIL') {
-                const data = await api.getRetailStock();
-                setRetailStock(data);
+                const [stockData, catData] = await Promise.all([
+                    api.getRetailStock(),
+                    api.getCategories()
+                ]);
+                setRetailStock(stockData);
+                setCategories(catData);
             } else if (activeTab === 'BOM') {
                 const [bomData, prodData] = await Promise.all([
                     api.getRecipeBOMs(),
@@ -135,6 +140,7 @@ export function InventoryDashboard() {
                         {activeTab === 'RETAIL' && (
                             <RetailView
                                 data={retailStock}
+                                categories={categories}
                                 onRefresh={fetchData}
                                 searchQuery={searchQuery}
                                 setSearchQuery={setSearchQuery}
@@ -354,7 +360,7 @@ function IngredientModal({ initialData, onClose, onSave }: any) {
 // -------------------------------------------------------------------------
 // Retail View
 // -------------------------------------------------------------------------
-function RetailView({ data, onRefresh, searchQuery, setSearchQuery }: any) {
+function RetailView({ data, categories, onRefresh, searchQuery, setSearchQuery }: any) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<RetailStock | null>(null);
 
@@ -483,6 +489,7 @@ function RetailView({ data, onRefresh, searchQuery, setSearchQuery }: any) {
             {isModalOpen && (
                 <RetailModal
                     initialData={editingItem}
+                    categories={categories}
                     onClose={() => setIsModalOpen(false)}
                     onSave={handleSave}
                 />
@@ -491,13 +498,14 @@ function RetailView({ data, onRefresh, searchQuery, setSearchQuery }: any) {
     );
 }
 
-function RetailModal({ initialData, onClose, onSave }: any) {
+function RetailModal({ initialData, categories, onClose, onSave }: any) {
     const [formData, setFormData] = useState({
         name: initialData?.product?.name || '',
         price: initialData?.product ? Number(initialData.product.price) : 0,
         stockQty: initialData ? initialData.stockQty : 0,
         supplierDetails: initialData?.supplierDetails || '',
         imageUrl: initialData?.product?.imageUrl || null,
+        categoryId: initialData?.product?.categoryId || '',
     });
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
@@ -555,6 +563,19 @@ function RetailModal({ initialData, onClose, onSave }: any) {
                                 value={formData.stockQty} onChange={e => setFormData({ ...formData, stockQty: Number(e.target.value) })}
                             />
                         </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1.5">Category</label>
+                        <select
+                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-500 font-medium"
+                            value={formData.categoryId}
+                            onChange={e => setFormData({ ...formData, categoryId: e.target.value })}
+                        >
+                            <option value="">No Category</option>
+                            {categories?.map((cat: any) => (
+                                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                            ))}
+                        </select>
                     </div>
                     <div>
                         <label className="block text-sm font-bold text-slate-700 mb-1.5">Supplier Details (Optional)</label>

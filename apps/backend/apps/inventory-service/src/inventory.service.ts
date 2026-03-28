@@ -122,6 +122,7 @@ export class InventoryService {
                     price: data.price,
                     type: 'RETAIL',
                     imageUrl: data.imageUrl || null,
+                    categoryId: data.categoryId || null,
                 }
             });
             return tx.retailStock.create({
@@ -148,11 +149,12 @@ export class InventoryService {
                 }
             });
 
-            if (data.name || data.price || data.imageUrl !== undefined) {
+            if (data.name || data.price || data.imageUrl !== undefined || data.categoryId !== undefined) {
                 const updateData: any = {};
                 if (data.name) updateData.name = data.name;
                 if (data.price) updateData.price = data.price;
                 if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl; // can be set to null explicitly
+                if (data.categoryId !== undefined) updateData.categoryId = data.categoryId || null;
 
                 await tx.product.update({
                     where: { id: stock.productId },
