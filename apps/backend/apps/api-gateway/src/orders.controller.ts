@@ -16,9 +16,11 @@ export class OrdersGatewayController {
             );
             return result;
         } catch (error: any) {
+            console.error('OrdersGatewayController.createOrder FAILED:', JSON.stringify(error));
+            const errorMessage = error.message || (error.error && typeof error.error === 'object' ? error.error.message : error.error) || 'Microservice error';
             throw new HttpException({
                 status: HttpStatus.BAD_REQUEST,
-                error: error.message || 'Microservice error',
+                error: errorMessage,
             }, HttpStatus.BAD_REQUEST);
         }
     }

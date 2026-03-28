@@ -7,16 +7,13 @@ import { OrdersModule } from './orders/orders.module';
 import { AuthModule } from './auth/auth.module';
 import { PartyBookingsModule } from './party-bookings/party-bookings.module';
 import { InventoryModule } from './inventory/inventory.module';
-import { StaffModule } from './staff/staff.module';
-import { RolePermissionsModule } from './role-permissions/role-permissions.module';
-
 import { CategoriesModule } from './categories/categories.module';
 import { SettingsModule } from './settings/settings.module';
 import { CustomersModule } from './customers/customers.module';
 import { ReportsModule } from './reports/reports.module';
 
 @Module({
-  imports: [PrismaModule, ProductsModule, OrdersModule, AuthModule, PartyBookingsModule, InventoryModule, StaffModule, RolePermissionsModule, CategoriesModule, SettingsModule, CustomersModule, ReportsModule],
+  imports: [PrismaModule, ProductsModule, OrdersModule, AuthModule, PartyBookingsModule, InventoryModule, CategoriesModule, SettingsModule, CustomersModule, ReportsModule],
   controllers: [AppController],
   providers: [AppService],
 })

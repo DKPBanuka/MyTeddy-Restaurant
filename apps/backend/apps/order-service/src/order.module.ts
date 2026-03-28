@@ -8,7 +8,7 @@ import { PrismaModule } from '@app/prisma';
     imports: [
         PrismaModule,
         ClientsModule.register([
-            { name: 'INVENTORY_SERVICE', transport: Transport.TCP, options: { host: 'localhost', port: 3002 } },
+            { name: 'INVENTORY_SERVICE', transport: Transport.TCP, options: { host: process.env.INVENTORY_SERVICE_HOST || 'DEBUGLABEL_FIX_APPLIED', port: 3002 } },
         ]),
     ],
     controllers: [OrderController],

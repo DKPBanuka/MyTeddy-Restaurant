@@ -6,7 +6,8 @@ import { ProductType } from '../types';
 import { ProductCard } from '../components/ProductCard';
 import { Cart } from '../components/Cart';
 import { toast } from 'sonner';
-import { Store, PackageSearch, Coffee, Search, ShoppingBag, X, Printer } from 'lucide-react';
+import { Store, PackageSearch, Coffee, Search, ShoppingBag, X, Printer, Bell, Info, Clock } from 'lucide-react';
+import { PartiesListModal } from '../components/PartiesListModal';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { CheckoutModal } from '../components/CheckoutModal';
@@ -46,6 +47,9 @@ export function POSDashboard() {
     const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
     const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
     const [lastOrder, setLastOrder] = useState<any>(null);
+    const [upcomingParties, setUpcomingParties] = useState<any[]>([]);
+    const [showNotifications, setShowNotifications] = useState(false);
+    const [isPartiesModalOpen, setIsPartiesModalOpen] = useState(false);
     const queryClient = useQueryClient();
 
     const { data: products = [], isLoading: productsLoading } = useQuery({
@@ -67,6 +71,34 @@ export function POSDashboard() {
         queryKey: ['packages'],
         queryFn: () => api.getPackages(),
     });
+
+    const { data: allParties = [] } = useQuery({
+        queryKey: ['parties-alert'],
+        queryFn: async () => {
+            const parties = await api.getPartyBookings();
+            return parties || [];
+        },
+        refetchInterval: 60000, // Check every minute
+    });
+
+    useEffect(() => {
+        if (allParties.length > 0) {
+            const now = new Date();
+            const oneHourLater = new Date(now.getTime() + 3600000);
+            
+            const imminent = allParties.filter((p: any) => {
+                const partyTime = new Date(p.eventDate);
+                // Check if party is today and within 1 hour from now
+                return partyTime > now && partyTime <= oneHourLater && p.status !== 'CANCELLED';
+            });
+            
+            setUpcomingParties(imminent);
+            
+            if (imminent.length > 0 && upcomingParties.length < imminent.length) {
+                toast.info(`Upcoming Party: ${imminent[0].customerName} at ${new Date(imminent[0].eventDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+            }
+        }
+    }, [allParties]);
 
     const isLoading = productsLoading;
 
@@ -511,6 +543,66 @@ export function POSDashboard() {
                                 REPRINT LAST BILL
                             </button>
                         )}
+                        {/* Notifications */}
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowNotifications(!showNotifications)}
+                                className={`p-3 rounded-2xl transition-all relative group ${upcomingParties.length > 0 ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                            >
+                                <Bell size={22} className={upcomingParties.length > 0 ? 'animate-bounce' : ''} />
+                                {upcomingParties.length > 0 && (
+                                    <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 border-2 border-white rounded-full animate-blink shadow-sm"></span>
+                                )}
+                            </button>
+
+                            {showNotifications && (
+                                <div className="absolute top-full right-0 mt-4 w-80 bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden z-[100] animate-in slide-in-from-top-4 duration-300">
+                                    <div className="p-5 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
+                                        <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider">Party Alerts</h3>
+                                        <span className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">{upcomingParties.length}</span>
+                                    </div>
+                                    <div className="max-h-[400px] overflow-y-auto">
+                                        {upcomingParties.length === 0 ? (
+                                            <div className="p-10 text-center">
+                                                <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
+                                                    <Bell size={24} />
+                                                </div>
+                                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No upcoming parties</p>
+                                            </div>
+                                        ) : (
+                                            <div className="divide-y divide-slate-50">
+                                                {upcomingParties.map((p: any) => (
+                                                    <div key={p.id} className="p-4 hover:bg-slate-50 transition-colors group">
+                                                        <div className="flex items-start gap-3">
+                                                            <div className="p-2 bg-amber-100 text-amber-600 rounded-xl group-hover:scale-110 transition-transform">
+                                                                <Info size={16} />
+                                                            </div>
+                                                            <div>
+                                                                <div className="font-bold text-slate-800 text-sm">{p.customerName}</div>
+                                                                <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-600 uppercase mt-1">
+                                                                    <Clock size={12} />
+                                                                    Starting at {new Date(p.eventDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                </div>
+                                                                <div className="text-[10px] text-slate-400 font-bold mt-0.5 italic">{p.phone}</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
+                                        <button 
+                                            onClick={() => { setShowNotifications(false); setIsPartiesModalOpen(true); }}
+                                            className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:text-blue-700"
+                                        >
+                                            View Full Schedule
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold overflow-hidden border border-slate-200 shadow-sm">
                                 {user?.name?.charAt(0).toUpperCase()}
@@ -701,6 +793,10 @@ export function POSDashboard() {
                     onConfirm={handleSelectionConfirm}
                 />
             )}
+            <PartiesListModal 
+                isOpen={isPartiesModalOpen}
+                onClose={() => setIsPartiesModalOpen(false)}
+            />
         </div>
     );
 }

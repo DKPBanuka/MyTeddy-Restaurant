@@ -88,6 +88,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://myteddy_user:myteddy_password@postgres:5432/pos_db
       - DIRECT_URL=postgresql://myteddy_user:myteddy_password@postgres:5432/pos_db
+      - INVENTORY_SERVICE_HOST=inventory-service
 
 volumes:
   postgres_data:

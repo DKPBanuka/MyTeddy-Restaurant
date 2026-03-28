@@ -10,4 +10,9 @@ export class AuthGatewayController {
     async login(@Body('pin') pin: string) {
         return firstValueFrom(this.authClient.send({ cmd: 'validate_pin' }, pin));
     }
+
+    @Post('login-password')
+    async loginPassword(@Body() data: { emailOrName: string; password: string }) {
+        return firstValueFrom(this.authClient.send({ cmd: 'login_password' }, data));
+    }
 }

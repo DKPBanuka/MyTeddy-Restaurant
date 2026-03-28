@@ -3,32 +3,56 @@ import { X, Search, Calendar as CalendarIcon, Clock, AlertCircle, Phone, Filter,
 import type { PartyBookingDto } from '../api';
 import { api } from '../api';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
 
 interface PartiesListModalProps {
     isOpen: boolean;
     onClose: () => void;
-    bookings: PartyBookingDto[];
-    selectedDate: Date;
-    setSelectedDate: (date: Date) => void;
-    isLoading: boolean;
-    onBookingClick: (booking: PartyBookingDto) => void;
+    bookings?: PartyBookingDto[];
+    selectedDate?: Date;
+    setSelectedDate?: (date: Date) => void;
+    isLoading?: boolean;
+    onBookingClick?: (booking: PartyBookingDto) => void;
     onSlotSelect?: (decimalTime: number) => void;
 }
 
 export function PartiesListModal({
     isOpen,
     onClose,
-    bookings,
-    selectedDate,
-    setSelectedDate,
-    onBookingClick,
+    bookings: externalBookings,
+    selectedDate: externalSelectedDate,
+    setSelectedDate: externalSetSelectedDate,
+    onBookingClick: externalOnBookingClick,
     onSlotSelect,
 }: PartiesListModalProps) {
     const [viewMode, setViewMode] = useState<'TIMELINE' | 'GRID'>('TIMELINE');
     const [searchQuery, setSearchQuery] = useState('');
     const [draggingBookingMap, setDraggingBookingMap] = useState<Record<string, { duration: number, startYOffset: number }>>({});
+    
+    // Internal state if props not provided
+    const [internalSelectedDate, setInternalSelectedDate] = useState(new Date());
+    
+    // Internal fetching if bookings not provided
+    const { data: internalBookings = [] } = useQuery({
+        queryKey: ['parties-fetch-modal'],
+        queryFn: async () => {
+            const res = await api.getPartyBookings();
+            return res || [];
+        },
+        enabled: isOpen && !externalBookings
+    });
 
     if (!isOpen) return null;
+
+    // Resolve which data to use
+    const bookings = externalBookings || internalBookings;
+    const selectedDate = externalSelectedDate || internalSelectedDate;
+    const setSelectedDate = externalSetSelectedDate || setInternalSelectedDate;
+    
+    const onBookingClick = externalOnBookingClick || ((b) => {
+        // Default behavior: show toast or just alert if no handler
+        console.log('Booking clicked:', b);
+    });
 
     // Helper: Convert "HH:mm" or ISO to decimal hours
     const timeToHours = (timeStr: string) => {

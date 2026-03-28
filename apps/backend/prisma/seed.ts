@@ -1,4 +1,5 @@
 import { PrismaClient, Role, ProductType } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -8,23 +9,13 @@ async function main() {
     // 1. Users
     const admin = await prisma.user.upsert({
         where: { email: 'admin@myteddy.com' },
-        update: {},
+        update: { role: Role.ADMIN },
         create: {
             name: 'Super Admin',
             email: 'admin@myteddy.com',
             pin: '1234',
+            password: await bcrypt.hash('admin123', 10), // Added password for admin
             role: Role.ADMIN,
-        },
-    });
-
-    const cashier = await prisma.user.upsert({
-        where: { email: 'cashier@myteddy.com' },
-        update: {},
-        create: {
-            name: 'Main Cashier',
-            email: 'cashier@myteddy.com',
-            pin: '5678',
-            role: Role.CASHIER,
         },
     });
 
@@ -34,7 +25,7 @@ async function main() {
         data: [
             {
                 role: Role.ADMIN,
-                permissions: ['POS', 'REPORTS', 'EVENTS', 'INVENTORY', 'STAFF', 'SETTINGS'],
+                permissions: ['POS', 'REPORTS', 'EVENTS', 'INVENTORY', 'STAFF', 'SETTINGS', 'CUSTOMERS', 'ANALYSIS', 'MENU_MANAGEMENT', 'DASHBOARD'],
             },
             {
                 role: Role.CASHIER,
@@ -86,7 +77,21 @@ async function main() {
                       });
 
     console.log({ bearLarge, bearSmall });
-    console.log('Seeding completed.');
+    // Create Cashier
+    const hashedCashierPassword = await bcrypt.hash('cashier123', 10);
+    const cashier = await prisma.user.upsert({
+        where: { email: 'cashier@myteddy.com' },
+        update: {},
+        create: {
+            email: 'cashier@myteddy.com',
+            name: 'Cashier User',
+            password: hashedCashierPassword,
+            pin: '1234',
+            role: 'CASHIER',
+        },
+    });
+
+    console.log('Seeding finished.');
 }
 
 main()

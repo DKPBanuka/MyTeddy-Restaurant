@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { RpcException } from '@nestjs/microservices';
 import { PrismaService } from '@app/prisma';
-import * as fs from 'fs';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class AuthService {
@@ -19,38 +19,59 @@ export class AuthService {
         return user;
     }
 
+    async validateUserByPassword(emailOrName: string, pass: string) {
+        const user = await this.prisma.user.findFirst({
+            where: {
+                OR: [
+                    { email: emailOrName },
+                    { name: emailOrName }
+                ]
+            }
+        });
+
+        if (user && user.password && await bcrypt.compare(pass, user.password)) {
+            return user;
+        }
+        return null;
+    }
+
+    async loginByPassword(data: { emailOrName: string; password: string }) {
+        const user = await this.validateUserByPassword(data.emailOrName, data.password);
+        if (!user) {
+            throw new RpcException({ message: 'Invalid credentials', status: 401 });
+        }
+        return this.generateToken(user);
+    }
+
     async login(pin: string) {
-        fs.appendFileSync('./auth_debug.log', `Login attempt for PIN: ${pin}\n`);
         const user = await this.validateUserByPin(pin);
         if (!user) {
-            fs.appendFileSync('./auth_debug.log', `Invalid PIN: ${pin}\n`);
             throw new RpcException({ message: 'Invalid PIN', status: 401 });
         }
-        fs.appendFileSync('./auth_debug.log', `User found: ${user.id}, Role: ${user.role}\n`);
+        return this.generateToken(user);
+    }
 
-        // Fetch permissions for the role using raw query to bypass stale generated client issues
+    private async generateToken(user: any) {
+
+        // Fetch permissions for the role
         let permissions: string[] = [];
         try {
-            fs.appendFileSync('./auth_debug.log', `Fetching permissions for role: ${user.role}\n`);
-            const rolePerms: any[] = await this.prisma.$queryRawUnsafe(
-                `SELECT permissions FROM "RolePermission" WHERE role = $1`,
-                user.role
-            );
-            fs.appendFileSync('./auth_debug.log', `Raw query result: ${JSON.stringify(rolePerms)}\n`);
-            if (rolePerms && rolePerms.length > 0) {
-                permissions = rolePerms[0].permissions || [];
+            console.log(`AuthService: Fetching permissions for role: ${user.role}`);
+            const rolePerm = await this.prisma.rolePermission.findUnique({
+                where: { role: user.role }
+            });
+            console.log(`AuthService: Found permissions: ${JSON.stringify(rolePerm?.permissions || [])}`);
+            if (rolePerm) {
+                permissions = rolePerm.permissions || [];
             }
         } catch (e: any) {
-            fs.appendFileSync('./auth_debug.log', `Error fetching role permissions: ${e.message}\n`);
-            // Default to empty for now if table doesn't exist or query fails
+            console.error(`AuthService: Error fetching role permissions: ${e.message}`);
             permissions = [];
         }
 
         try {
-            fs.appendFileSync('./auth_debug.log', `Signing JWT payload\n`);
             const payload = { sub: user.id, name: user.name, role: user.role, permissions };
             const access_token = this.jwtService.sign(payload);
-            fs.appendFileSync('./auth_debug.log', `Login success for user: ${user.id}\n`);
             return {
                 access_token,
                 user: {
@@ -61,7 +82,6 @@ export class AuthService {
                 }
             };
         } catch (e: any) {
-            fs.appendFileSync('./auth_debug.log', `Error signing JWT or returning result: ${e.message}\n`);
             throw new RpcException({ message: `Login failed internally: ${e.message}`, status: 500 });
         }
     }
@@ -83,7 +103,7 @@ export class AuthService {
         }
     }
 
-    async createStaff(data: { name: string; role: any; pin: string }) {
+    async createStaff(data: { name: string; role: any; pin: string; password?: string; email?: string }) {
         try {
             // Check for existing PIN
             const existing = await this.prisma.user.findUnique({ where: { pin: data.pin } });
@@ -91,11 +111,15 @@ export class AuthService {
                 throw new Error('PIN is already in use by another user');
             }
 
+            const hashedPassword = data.password ? await bcrypt.hash(data.password, 10) : null;
+
             const newUser = await this.prisma.user.create({
                 data: {
                     name: data.name,
                     role: data.role,
                     pin: data.pin,
+                    password: hashedPassword,
+                    email: data.email
                 },
                 select: { id: true, name: true, role: true }
             });

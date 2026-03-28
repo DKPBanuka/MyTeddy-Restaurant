@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+const fs = require('fs');
+const LOG_FILE = './debug_manual.log';
 import { PrismaService } from '@app/prisma';
 import { RpcException } from '@nestjs/microservices';
 
@@ -243,12 +245,19 @@ export class InventoryService {
                                 data: { stockQty: Number(ingredient.stockQty) - requiredQty },
                             });
                         }
+                    } else {
+                        console.log(`InventoryService.deductStock: Skipping item type '${item.type}' (Product ID: ${item.productId || item.packageId})`);
                     }
                 }
             });
             return { success: true };
         } catch (error: any) {
-            throw new RpcException({ message: error.message, status: 400 });
+            const msg = `[INVENTORY] deductStock FAILED: ${error.message || error}\n`;
+            fs.appendFileSync(LOG_FILE, msg);
+            throw new RpcException({ 
+                message: error.message || 'Internal Stock Deduction Error', 
+                status: 400 
+            });
         }
     }
 

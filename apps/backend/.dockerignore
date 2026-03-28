@@ -1,0 +1,9 @@
+node_modules
+dist
+npm-debug.log
+.env
+auth_debug.log
+gateway_debug.log
+inventory_debug.log
+order_debug.log
+*.log

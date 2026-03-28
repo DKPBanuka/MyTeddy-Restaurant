@@ -9,7 +9,7 @@ RUN npm install
 COPY . .
 RUN npx prisma generate
 ARG APP_NAME
-RUN npx nest build ${APP_NAME}
+RUN rm -rf dist && npx nest build ${APP_NAME}
 
 FROM node:20-alpine
 WORKDIR /app

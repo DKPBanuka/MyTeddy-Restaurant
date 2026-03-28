@@ -1,7 +1,9 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { PrismaService } from '@app/prisma';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { firstValueFrom, catchError, throwError } from 'rxjs';
+import { firstValueFrom, lastValueFrom, catchError, throwError } from 'rxjs';
+const fs = require('fs');
+const LOG_FILE = './debug_manual.log';
 
 @Injectable()
 export class OrderService {
@@ -34,22 +36,40 @@ export class OrderService {
         }
 
         // SAGA Step 1: Deduct Stock via Inventory Microservice
+        console.log('OrderService: [STEP 1] Deducting stock for items:', JSON.stringify(items));
         try {
-            await firstValueFrom(
+            await lastValueFrom(
                 this.inventoryClient.send({ cmd: 'deduct_stock' }, items).pipe(
-                    catchError((error) => throwError(() => new RpcException(error)))
+                    catchError((error) => {
+                        console.error('OrderService: [STEP 1 ERROR] from inventory-service:', error);
+                        return throwError(() => new RpcException(error));
+                    })
                 )
             );
+            console.log('OrderService: [STEP 1 SUCCESS] Stock deducted.');
         } catch (error: any) {
+            const msg = `[ORDER] Step 1 FAILED: ${JSON.stringify(error)}\n`;
+            fs.appendFileSync(LOG_FILE, msg);
             const errPayload = error.getError && typeof error.getError === 'function' ? error.getError() : error;
             throw new RpcException(errPayload);
         }
 
         // SAGA Step 2: Create Order Locally
+        console.log('OrderService: [STEP 2] Creating order locally...');
         try {
             return await this.prisma.$transaction(async (tx) => {
-                const cashier = await tx.user.findFirst({ where: { role: 'CASHIER' } });
-                if (!cashier) throw new Error('No cashier found to process order');
+                console.log('OrderService: [STEP 2] Finding cashier...');
+                let cashier = await tx.user.findFirst({ where: { role: 'CASHIER' } });
+                if (!cashier) {
+                    console.warn('OrderService: [STEP 2 WARNING] No user with role CASHIER found. Falling back to the first available user.');
+                    cashier = await tx.user.findFirst();
+                }
+                
+                if (!cashier) {
+                    console.error('OrderService: [STEP 2 ERROR] No users found in database!');
+                    throw new Error('No user found to process order');
+                }
+                console.log(`OrderService: [STEP 2] Using user ID: ${cashier.id} (${cashier.role})`);
 
                 // Daily Sequential Numbering: INV-YYYYMMDD-XXXX
                 const now = new Date();
@@ -72,6 +92,8 @@ export class OrderService {
                 const sequence = String(todayCount + 1).padStart(4, '0');
                 const invoiceNumber = `INV-${dateStr}-${sequence}`;
                 const orderNumber = `ORD-${dateStr}-${sequence}`;
+
+                console.log(`OrderService: [STEP 2] Generated Invoice: ${invoiceNumber}`);
 
                 const order = await tx.order.create({
                     data: {
@@ -118,10 +140,13 @@ export class OrderService {
                     },
                 });
 
+                console.log(`OrderService: [STEP 2 SUCCESS] Order created with ID: ${order.id}`);
                 return order;
             });
         } catch (error: any) {
-            throw new RpcException({ message: error.message, status: 500 });
+            const msg = `[ORDER] Step 2 FAILED: ${error.message}\n`;
+            fs.appendFileSync(LOG_FILE, msg);
+            throw new RpcException({ message: error.message || 'Database Transaction Error', status: 500 });
         }
     }
 

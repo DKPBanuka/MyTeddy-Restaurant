@@ -4,6 +4,8 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { PrismaModule } from '@app/prisma';
+import { StaffModule } from './staff/staff.module';
+import { RolePermissionsModule } from './role-permissions/role-permissions.module';
 
 export const JWT_SECRET = 'your-super-secret-key-change-in-prod';
 
@@ -15,6 +17,8 @@ export const JWT_SECRET = 'your-super-secret-key-change-in-prod';
             secret: JWT_SECRET,
             signOptions: { expiresIn: '1d' },
         }),
+        StaffModule,
+        RolePermissionsModule,
     ],
     providers: [AuthService],
     controllers: [AuthController],

@@ -1,12 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { PrismaService } from '@app/prisma';
 import { Role } from '@prisma/client';
 
 @Injectable()
-export class RolePermissionsService {
+export class RolePermissionsService implements OnModuleInit {
     constructor(private prisma: PrismaService) { }
 
-    // Run this to ensure all roles have default permissions at start
+    async onModuleInit() {
+        await this.initializeDefaultPermissions();
+    }
+
     async initializeDefaultPermissions() {
         const defaultPermissions: Record<Role, string[]> = {
             [Role.ADMIN]: ['POS', 'INVENTORY', 'REPORTS', 'EVENTS', 'STAFF', 'KDS'],
@@ -19,7 +22,7 @@ export class RolePermissionsService {
         for (const [role, permissions] of Object.entries(defaultPermissions)) {
             await this.prisma.rolePermission.upsert({
                 where: { role: role as Role },
-                update: {}, // Don't override existing permissions if they exist
+                update: {},
                 create: {
                     role: role as Role,
                     permissions: permissions,

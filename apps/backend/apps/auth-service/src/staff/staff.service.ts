@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '@app/prisma';
 import { Role } from '@prisma/client';
 
 @Injectable()
@@ -14,7 +14,6 @@ export class StaffService {
     }
 
     async create(data: { name: string; role: Role; pin: string; email?: string }) {
-        // Basic validation
         if (!data.pin || data.pin.length < 4) {
             throw new BadRequestException('PIN must be at least 4 digits');
         }
@@ -57,7 +56,6 @@ export class StaffService {
         const user = await this.prisma.user.findUnique({ where: { id } });
         if (!user) throw new NotFoundException('User not found');
 
-        // Ensure you can't delete the only ADMIN
         if (user.role === 'ADMIN') {
             const adminCount = await this.prisma.user.count({ where: { role: 'ADMIN' } });
             if (adminCount <= 1) {

@@ -84,6 +84,10 @@ export const api = {
         const res = await apiClient.post(`/auth/login`, { pin });
         return res.data;
     },
+    loginWithPassword: async (data: { emailOrName: string; password: string }) => {
+        const res = await apiClient.post(`/auth/login-password`, data);
+        return res.data;
+    },
     getProducts: async (categoryId?: string): Promise<Product[]> => {
         const res = await apiClient.get(`/products`, { params: { categoryId } });
         return res.data;

@@ -11,6 +11,11 @@ export class AuthController {
         return this.authService.login(pin);
     }
 
+    @MessagePattern({ cmd: 'login_password' })
+    async loginPassword(data: { emailOrName: string; password: string }) {
+        return this.authService.loginByPassword(data);
+    }
+
     @MessagePattern({ cmd: 'get_staff' })
     async getStaff() {
         return this.authService.getStaff();

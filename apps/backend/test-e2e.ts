@@ -13,34 +13,32 @@ async function testAll() {
     const prodsRes = await axios.get(`${API}/products`);
     console.log('Products Loaded:', prodsRes.data.length);
 
-    // 3. Create an Order
-    const firstProduct = prodsRes.data.find((p: any) => p.type === 'RETAIL');
-    if (!firstProduct) {
-      console.warn('Skipping Order creation: No retail product in DB to test with');
-    } else {
-      console.log('Placing simulated user transaction order for:', firstProduct.name);
+    // 3. Test every Product for Order Creation
+    console.log(`Testing all ${prodsRes.data.length} products...`);
+    for (const prod of prodsRes.data) {
       const orderPayload = {
         items: [
           {
-            productId: firstProduct.id,
+            productId: prod.id,
             quantity: 1,
-            notes: 'Test runner automated note'
+            type: prod.type,
+            notes: 'Automated brute-force test'
           }
         ],
-        totalAmount: firstProduct.price,
+        totalAmount: Number(prod.price),
         paymentMethod: 'CASH',
-        amountReceived: firstProduct.price,
+        amountReceived: Number(prod.price),
         change: 0,
         paymentStatus: 'PAID',
         orderType: 'TAKEAWAY',
-        customerName: 'Automated Tester'
+        customerName: 'Brute-Force Tester'
       };
 
       try {
-        const orderRes = await axios.post(`${API}/orders`, orderPayload);
-        console.log('✅ Order created successfully! Invoice:', orderRes.data.invoiceNumber);
+        await axios.post(`${API}/orders`, orderPayload);
+        console.log(`Testing product: ${prod.name} (${prod.type})... ✅ SUCCESS`);
       } catch (e: any) {
-        console.warn('Order creation failed (skipping for now):', e.message);
+        console.log(`Testing product: ${prod.name} (${prod.type})... ❌ FAILED: ${JSON.stringify(e?.response?.data || e.message)}`);
       }
     }
 
