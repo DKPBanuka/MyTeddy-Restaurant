@@ -9,7 +9,7 @@ interface ReceiptPreparationModalProps {
     booking: PartyBookingDto;
     settings: any;
     receiptType: 'PARTY_ADVANCE' | 'PARTY_FINAL';
-    onConfirm: (data: { discount: number; serviceCharge: number; paymentMethod: string }) => Promise<void>;
+    onConfirm: (data: { discount: number; serviceCharge: number; paymentMethod: string; addonsTotal: number }) => Promise<void>;
     isSubmitting: boolean;
 }
 
@@ -27,15 +27,17 @@ export function ReceiptPreparationModal({
     const [discountType, setDiscountType] = useState<'FIXED' | 'PERCENT'>('FIXED');
     const [discountPercent, setDiscountPercent] = useState<number>(0);
     const [paymentMethod, setPaymentMethod] = useState<string>(booking.paymentMethod || 'CASH');
+    const [extraAdjustments, setExtraAdjustments] = useState<number>(Number(booking.addonsTotal || 0));
 
-    const baseTotal = Number(booking.hallCharge || 0) + Number(booking.menuTotal || 0) + Number(booking.addonsTotal || 0);
+    const baseTotal = Number(booking.hallCharge || 0) + Number(booking.menuTotal || 0);
+    const grossTotalWithExtras = baseTotal + extraAdjustments;
 
     useEffect(() => {
         if (discountType === 'PERCENT') {
-            const calculated = (baseTotal + serviceCharge) * (discountPercent / 100);
+            const calculated = (grossTotalWithExtras + serviceCharge) * (discountPercent / 100);
             setDiscountAmount(Math.round(calculated));
         }
-    }, [discountPercent, discountType, baseTotal, serviceCharge]);
+    }, [discountPercent, discountType, grossTotalWithExtras, serviceCharge]);
 
     if (!isOpen) return null;
 
@@ -45,7 +47,8 @@ export function ReceiptPreparationModal({
         serviceCharge,
         discount: discountAmount,
         paymentMethod,
-        totalAmount: (baseTotal + serviceCharge) - discountAmount,
+        addonsTotal: extraAdjustments,
+        totalAmount: (grossTotalWithExtras + serviceCharge) - discountAmount,
     };
 
     return (
@@ -95,6 +98,22 @@ export function ReceiptPreparationModal({
                                 <Calculator size={14} className="text-slate-300" />
                             </div>
                             <div className="text-xl font-black text-slate-800">Rs. {baseTotal.toLocaleString()}</div>
+                        </div>
+
+                        {/* Extra Adjustments - Moved below Base Amount */}
+                        <div className="space-y-2">
+                             <label className="text-[10px] font-black uppercase tracking-widest text-blue-500 pl-1">Extra / Adjustments (Rs.)</label>
+                             <div className="relative">
+                                <Calculator className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-400" size={18} />
+                                <input
+                                    type="number"
+                                    value={extraAdjustments === 0 ? '' : extraAdjustments}
+                                    onChange={(e) => setExtraAdjustments(Number(e.target.value) || 0)}
+                                    className="w-full pl-12 pr-4 py-4 bg-blue-50/50 border border-blue-100 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 font-bold transition-all text-blue-900"
+                                    placeholder="0"
+                                />
+                             </div>
+                             <p className="text-[9px] font-bold text-slate-400 pl-1 italic">Damage, extra hours, or additional services</p>
                         </div>
 
                         {/* Service Charge */}
@@ -187,7 +206,7 @@ export function ReceiptPreparationModal({
                         </div>
 
                         <button
-                            onClick={() => onConfirm({ discount: discountAmount, serviceCharge, paymentMethod })}
+                            onClick={() => onConfirm({ discount: discountAmount, serviceCharge, paymentMethod, addonsTotal: extraAdjustments })}
                             disabled={isSubmitting}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-2xl font-black transition-all shadow-xl shadow-blue-200 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3"
                         >

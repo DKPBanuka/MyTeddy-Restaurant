@@ -7,10 +7,13 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
 
     // 1. Create a hidden element for rendering the receipt
     const container = document.createElement('div');
-    // ... (rest of container setup stays same)
-    // ...
-    // I'll rewrite the item parsing logic to match htmlReceipt.ts's robustness for parties
-    
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    container.style.width = '80mm';
+    container.style.visibility = 'hidden';
+    document.body.appendChild(container);
+
     let items = [];
     if (isParty) {
         const rawItems = orderData.items;
@@ -45,9 +48,8 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
         if (Number(orderData.hallCharge) > 0) {
             items.push({ name: 'Hall Charge (Exclusive)', qty: 1, unitPrice: Number(orderData.hallCharge), itemTotal: Number(orderData.hallCharge), type: 'SERVICE' });
         }
-        if (Number(orderData.addonsTotal) > 0) {
-            items.push({ name: 'Additional Extras', qty: 1, unitPrice: Number(orderData.addonsTotal), itemTotal: Number(orderData.addonsTotal), type: 'SERVICE' });
-        }
+
+        // Additional Extras moved to summary section
     } else {
         items = (orderData.orderItems || orderData.items || []).map((item: any) => {
             const rawName = item.productName || item.product?.name || item.name || 'Item';
@@ -139,8 +141,10 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
     `;
 
     const subTotal = isParty 
-        ? (Number(orderData.hallCharge || 0) + Number(orderData.menuTotal || 0) + Number(orderData.addonsTotal || 0))
+        ? (Number(orderData.hallCharge || 0) + Number(orderData.menuTotal || 0))
         : Number(orderData.subTotal || orderData.subtotal || 0);
+
+    const addonsTotal = isParty ? Number(orderData.addonsTotal || 0) : 0;
 
     const discountAmt = Number(orderData.discount || 0);
     const serviceChargeAmt = Number(orderData.serviceCharge || 0);
@@ -167,7 +171,7 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
     const formatCurrency = (amount: number) => Number(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
     const invoiceNo = isParty 
-        ? `PB-${(orderData.id || '0000').slice(0, 8).toUpperCase()}`
+        ? `PB-${(orderData.id || '0000').slice(-6).toUpperCase()}`
         : (orderData.invoiceNumber || "INV-000");
 
     // Conditional Logo Logic - ZERO MARGIN for html2canvas gap fix
@@ -298,15 +302,22 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
                     <span>Rs. ${formatCurrency(subTotal)}</span>
                 </div>
 
+                ${addonsTotal > 0 ? `
+                <div class="flex justify-between font-bold" style="font-size: 14px; padding: 0 4px; margin-top: 4px;">
+                    <span>Additional Extras</span>
+                    <span>Rs. ${formatCurrency(addonsTotal)}</span>
+                </div>
+                ` : ''}
+
                 ${serviceChargeAmt > 0 ? `
-                <div class="flex justify-between font-bold" style="font-size: 14px; padding: 0 4px; margin-top: 4px; color: #2563eb;">
+                <div class="flex justify-between font-bold" style="font-size: 14px; padding: 0 4px; margin-top: 4px;">
                     <span>Service Charge</span>
                     <span>Rs. ${formatCurrency(serviceChargeAmt)}</span>
                 </div>
                 ` : ''}
 
                 ${discountAmt > 0 ? `
-                <div class="flex justify-between font-bold" style="font-size: 14px; padding: 0 4px; margin-top: 4px; color: #dc2626;">
+                <div class="flex justify-between font-bold" style="font-size: 14px; padding: 0 4px; margin-top: 4px;">
                     <span>Discount Applied</span>
                     <span>-Rs. ${formatCurrency(discountAmt)}</span>
                 </div>
@@ -368,9 +379,10 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
         });
 
         pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-        pdf.save(`Receipt-${orderData.invoiceNumber || 'INV'}.pdf`);
+        pdf.save(`${invoiceNo}.pdf`);
     } catch (error) {
         console.error('Failed to generate PDF receipt', error);
+        throw error; // Re-throw to show error in UI if needed
     } finally {
         // Restore body overflow and state
         document.body.style.overflow = originalOverflow;

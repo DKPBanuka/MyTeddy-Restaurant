@@ -122,10 +122,15 @@ export class PartyBookingService {
                         lt: endOfMonth
                     };
                 }
+            } else if (filters.customerId) {
+                whereClause.customerId = filters.customerId;
             }
 
             let bookings = await this.prisma.partyBooking.findMany({
                 where: whereClause,
+                include: {
+                    customer: true,
+                },
                 orderBy: [
                     { eventDate: 'asc' },
                     { startTime: 'asc' }

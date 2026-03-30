@@ -45,6 +45,21 @@ export function NewPartyModal({
     const [isMenuPickerOpen, setIsMenuPickerOpen] = useState(false);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [customerId, setCustomerId] = useState<string | null>(null);
+    const [customers, setCustomers] = useState<any[]>([]);
+    const [filteredCustomers, setFilteredCustomers] = useState<any[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [saveToCRM, setSaveToCRM] = useState(false);
+
+    useEffect(() => {
+        const fetchCustomers = async () => {
+            try {
+                const data = await api.getCustomers();
+                setCustomers(data);
+            } catch (e) { console.error('Failed to fetch customers', e); }
+        };
+        fetchCustomers();
+    }, []);
 
     useEffect(() => {
         if (isOpen) {
@@ -89,9 +104,31 @@ export function NewPartyModal({
                 setBookingType('PARTIAL');
                 setManualAdvance(null);
                 setSelectedMenuItems([]);
+                setCustomerId(null);
+                setSaveToCRM(false);
             }
         }
     }, [isOpen, initialData, initialDuration, initialDate, initialStartTime]);
+
+    useEffect(() => {
+        if (name.length > 1 && !customerId) {
+            const filtered = customers.filter(c => 
+                c.name.toLowerCase().includes(name.toLowerCase()) || 
+                c.phone?.includes(name)
+            );
+            setFilteredCustomers(filtered);
+            setShowSuggestions(filtered.length > 0);
+        } else {
+            setShowSuggestions(false);
+        }
+    }, [name, customers, customerId]);
+
+    const handleSelectCustomer = (c: any) => {
+        setCustomerId(c.id);
+        setName(c.name);
+        setPhone(c.phone || '');
+        setShowSuggestions(false);
+    };
 
 
 
@@ -134,10 +171,9 @@ export function NewPartyModal({
     const hallCharge = bookingType === 'EXCLUSIVE' ? partyExclusiveCharge : 0;
     const estimatedTotal = menuTotal + hallCharge;
     const requiredAdvance = estimatedTotal * (partyAdvancePercentage / 100);
-    const finalAdvance = manualAdvance !== null ? manualAdvance : requiredAdvance;
+    const finalAdvance = manualAdvance !== null ? manualAdvance : 0;
 
     const isFormValid = name.trim() !== '' && phone.trim() !== '' && eventDate !== null && startTime !== null;
-
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -148,6 +184,19 @@ export function NewPartyModal({
 
         setIsSubmitting(true);
         try {
+            let finalCustomerId = customerId;
+
+            // Optional: Auto-create customer if requested
+            if (!finalCustomerId && saveToCRM) {
+                try {
+                    const newCust = await api.createCustomer({ name, phone });
+                    finalCustomerId = newCust.id;
+                    toast.success('Customer added to CRM! 👤');
+                } catch (e) {
+                    console.error('Failed to auto-create customer', e);
+                }
+            }
+
             const dateObj = new Date(eventDate!);
             const [h, m] = startTime!.split(':').map(Number);
 
@@ -169,6 +218,7 @@ export function NewPartyModal({
                 advancePaid: finalAdvance,
                 items: selectedMenuItems,
                 bookingType,
+                customerId: finalCustomerId || undefined,
             };
 
             if (initialData && initialData.id) {
@@ -219,12 +269,51 @@ export function NewPartyModal({
                                         type="text"
                                         placeholder="Enter customer name"
                                         value={name}
-                                        onChange={(e) => setName(e.target.value)}
+                                        onChange={(e) => {
+                                            if (customerId) setCustomerId(null);
+                                            setName(e.target.value);
+                                        }}
                                         required
                                         disabled={!!initialData}
                                         className={`w-full pl-12 pr-4 py-4.5 bg-white border-2 border-slate-100 focus:border-blue-500 rounded-2xl outline-none transition-all font-bold text-slate-700 shadow-sm focus:shadow-blue-500/10 ${initialData ? 'opacity-60 cursor-not-allowed bg-slate-50' : ''}`}
                                     />
+                                    {showSuggestions && (
+                                        <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 z-[120] overflow-hidden animate-in fade-in slide-in-from-top-2">
+                                            {filteredCustomers.map((c, i) => (
+                                                <button
+                                                    key={i}
+                                                    type="button"
+                                                    onClick={() => handleSelectCustomer(c)}
+                                                    className="w-full text-left px-5 py-3 hover:bg-slate-50 transition-colors flex items-center justify-between border-b border-slate-50 last:border-0"
+                                                >
+                                                    <div>
+                                                        <p className="font-black text-slate-800 text-sm">{c.name}</p>
+                                                        <p className="text-[10px] font-bold text-slate-400">{c.phone}</p>
+                                                    </div>
+                                                    <ChevronRight size={16} className="text-slate-300" />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
+                                {!customerId && !initialData && name.length > 1 && (
+                                    <div className="flex items-center gap-2 mt-2 px-1 animate-in fade-in slide-in-from-left-2">
+                                        <input 
+                                            type="checkbox" 
+                                            id="saveToCRM" 
+                                            checked={saveToCRM}
+                                            onChange={(e) => setSaveToCRM(e.target.checked)}
+                                            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <label htmlFor="saveToCRM" className="text-[10px] font-black text-slate-500 uppercase tracking-widest cursor-pointer">Save as new customer</label>
+                                    </div>
+                                )}
+                                {customerId && (
+                                    <div className="flex items-center gap-2 mt-2 px-1 text-emerald-600 animate-in fade-in slide-in-from-left-2">
+                                        <CheckCircle2 size={12} />
+                                        <span className="text-[10px] font-black uppercase tracking-widest">Linked to CRM Profile</span>
+                                    </div>
+                                )}
                             </div>
                             <div className="space-y-2.5">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">Phone <span className="text-red-500">*</span></label>
@@ -491,21 +580,31 @@ export function NewPartyModal({
                                     <span className="text-slate-400 font-bold text-xs">Rs.</span>
                                     <input 
                                         type="number"
-                                        value={finalAdvance}
-                                        onChange={(e) => setManualAdvance(parseFloat(e.target.value) || 0)}
-                                        className="w-24 bg-white/10 text-blue-300 font-black text-right rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-blue-500 transition-all border border-blue-500/30"
+                                        value={manualAdvance === null ? '' : (manualAdvance === 0 ? '' : manualAdvance)}
+                                        onChange={(e) => setManualAdvance(e.target.value === '' ? null : parseFloat(e.target.value))}
+                                        placeholder={requiredAdvance.toLocaleString()}
+                                        className="w-24 bg-white/10 text-blue-300 font-black text-right rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-blue-500 transition-all border border-blue-500/30 placeholder:text-blue-300/40"
                                     />
                                 </div>
                             </div>
                             <div className="flex justify-between items-center">
-                                <p className="text-[9px] text-blue-500/80 font-bold">Standard {partyAdvancePercentage}% advance: Rs. {requiredAdvance.toLocaleString()}</p>
-                                <button
-                                    type="button"
-                                    onClick={() => setManualAdvance(estimatedTotal)}
-                                    className="text-[9px] bg-blue-500 text-white font-black uppercase tracking-wider px-2 py-1 rounded-md hover:bg-blue-400 transition-all"
-                                >
-                                    Pay Full
-                                </button>
+                                <p className="text-[9px] text-blue-500/80 font-bold">Recommended: Rs. {requiredAdvance.toLocaleString()}</p>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setManualAdvance(requiredAdvance)}
+                                        className="text-[9px] text-blue-400 hover:text-white font-black uppercase tracking-wider transition-all"
+                                    >
+                                        Standard
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setManualAdvance(estimatedTotal)}
+                                        className="text-[9px] bg-blue-500 text-white font-black uppercase tracking-wider px-2 py-1 rounded-md hover:bg-blue-400 transition-all"
+                                    >
+                                        Full
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

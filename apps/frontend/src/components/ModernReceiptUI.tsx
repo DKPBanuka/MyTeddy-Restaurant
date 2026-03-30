@@ -35,8 +35,8 @@ export default function ModernReceiptUI({
   const isParty = receiptType === 'PARTY_ADVANCE' || receiptType === 'PARTY_FINAL';
   
   const invoiceNo = isParty 
-    ? `PB-${(orderData?.id || '0000').slice(0, 8).toUpperCase()}`
-    : (orderData?.invoiceNumber || "INV-000000000000-0000");
+    ? `PB-${(orderData?.id || '0000').slice(-6).toUpperCase()}`
+    : (orderData?.invoiceNumber || "INV-0000");
 
   const actualDate = isParty ? orderData?.eventDate : (orderData?.date || new Date());
   const dateStr = actualDate ? new Date(actualDate).toLocaleString('en-GB', {
@@ -99,16 +99,7 @@ export default function ModernReceiptUI({
       });
     }
 
-    // Add Addons Total if applicable
-    const addonsTotal = Number(orderData?.addonsTotal || 0);
-    if (addonsTotal > 0) {
-      displayItems.push({
-        name: 'Additional Extras',
-        qty: 1,
-        price: addonsTotal,
-        total: addonsTotal
-      });
-    }
+    // Note: Additional Extras moved to summary section as requested
   } else {
     // NORMAL RECEIPT PATH
     const rawItems = orderData?.items || orderData?.orderItems || [];
@@ -187,8 +178,10 @@ export default function ModernReceiptUI({
   }
 
   const subtotal = isParty 
-    ? (Number(orderData?.hallCharge || 0) + Number(orderData?.menuTotal || 0) + Number(orderData?.addonsTotal || 0))
+    ? (Number(orderData?.hallCharge || 0) + Number(orderData?.menuTotal || 0))
     : Number(orderData?.subTotal || orderData?.subtotal || 0);
+
+  const addonsTotal = isParty ? Number(orderData?.addonsTotal || 0) : 0;
     
   const discountAmt = Number(orderData?.discount || 0);
   const serviceChargeAmt = Number(orderData?.serviceCharge || 0);
@@ -359,14 +352,20 @@ export default function ModernReceiptUI({
               <span>Base Total</span>
               <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(subtotal)}</span>
             </div>
+            {addonsTotal > 0 && (
+              <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em] font-bold">
+                <span>Additional Extras</span>
+                <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(addonsTotal)}</span>
+              </div>
+            )}
             {serviceChargeAmt > 0 && (
-              <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em] text-blue-600">
+              <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em]">
                 <span>Service Charge</span>
                 <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(serviceChargeAmt)}</span>
               </div>
             )}
             {discountAmt > 0 && (
-              <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em] text-red-600">
+              <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em]">
                 <span>Discount Applied</span>
                 <span>-<span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(discountAmt)}</span>
               </div>
@@ -386,14 +385,20 @@ export default function ModernReceiptUI({
               <span>Base Total</span>
               <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(subtotal)}</span>
             </div>
+            {addonsTotal > 0 && (
+              <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em] font-bold">
+                <span>Additional Extras</span>
+                <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(addonsTotal)}</span>
+              </div>
+            )}
             {serviceChargeAmt > 0 && (
-              <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em] text-blue-600">
+              <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em]">
                 <span>Service Charge</span>
                 <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(serviceChargeAmt)}</span>
               </div>
             )}
             {discountAmt > 0 && (
-              <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em] text-red-600">
+              <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em]">
                 <span>Discount Applied</span>
                 <span>-<span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(discountAmt)}</span>
               </div>

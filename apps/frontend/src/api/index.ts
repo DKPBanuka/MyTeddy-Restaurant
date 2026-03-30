@@ -213,7 +213,7 @@ export const api = {
     },
 
     // --- Party Bookings ---
-    getPartyBookings: async (params?: { month?: number; year?: number; date?: string }): Promise<PartyBookingDto[]> => {
+    getPartyBookings: async (params?: { month?: number; year?: number; date?: string; customerId?: string }): Promise<PartyBookingDto[]> => {
         const res = await apiClient.get(`/party-bookings`, { params });
         return res.data;
     },

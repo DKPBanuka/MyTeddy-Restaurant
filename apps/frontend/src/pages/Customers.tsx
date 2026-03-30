@@ -10,9 +10,12 @@ import {
     MapPin, 
     Star,
     ArrowRight,
-    Loader2,
     CheckCircle2,
-    X
+    X,
+    Clock,
+    Calendar as CalendarIcon,
+    ChevronRight,
+    Loader2 as Spinner
 } from 'lucide-react';
 import { api } from '../api';
 import type { Customer } from '../types';
@@ -31,6 +34,9 @@ export function Customers() {
         email: '',
         address: ''
     });
+    const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+    const [selectedCustomerBookings, setSelectedCustomerBookings] = useState<any[]>([]);
+    const [isFetchingHistory, setIsFetchingHistory] = useState(false);
 
     const fetchCustomers = async () => {
         setLoading(true);
@@ -89,6 +95,20 @@ export function Customers() {
             address: customer.address || ''
         });
         setIsEditModalOpen(true);
+    };
+
+    const handleViewHistory = async (customer: Customer) => {
+        setIsFetchingHistory(true);
+        setSelectedCustomer(customer);
+        setIsHistoryModalOpen(true);
+        try {
+            const data = await api.getPartyBookings({ customerId: customer.id });
+            setSelectedCustomerBookings(data);
+        } catch (error) {
+            toast.error('Failed to fetch booking history');
+        } finally {
+            setIsFetchingHistory(false);
+        }
     };
 
     return (
@@ -163,7 +183,7 @@ export function Customers() {
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 {loading ? (
                     <div className="h-96 flex flex-col items-center justify-center gap-4">
-                        <Loader2 className="animate-spin text-indigo-600" size={40} />
+                        <Spinner className="animate-spin text-indigo-600" size={40} />
                         <span className="text-slate-500 font-bold">Fetching Customer Profiles...</span>
                     </div>
                 ) : filteredCustomers.length > 0 ? (
@@ -213,6 +233,13 @@ export function Customers() {
                                     <td className="px-6 py-5 text-right">
                                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <button 
+                                                onClick={() => handleViewHistory(customer)}
+                                                className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                                                title="View Booking History"
+                                            >
+                                                <Clock size={18} />
+                                            </button>
+                                            <button 
                                                 onClick={() => openEditModal(customer)}
                                                 className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
                                                 title="Edit Profile"
@@ -238,6 +265,71 @@ export function Customers() {
                     </div>
                 )}
             </div>
+
+            {/* History Modal */}
+            {isHistoryModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsHistoryModalOpen(false)} />
+                    <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[80vh] animate-in fade-in zoom-in duration-200">
+                        <div className="bg-indigo-600 px-8 py-6 flex items-center justify-between text-white">
+                            <div>
+                                <h3 className="text-xl font-black tracking-tight">{selectedCustomer?.name}'s History</h3>
+                                <p className="text-indigo-100 text-xs font-bold uppercase tracking-widest mt-1">Party Bookings & Events</p>
+                            </div>
+                            <button onClick={() => setIsHistoryModalOpen(false)} className="p-2 hover:bg-white/10 rounded-xl transition-all">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto p-8 bg-slate-50/50">
+                            {isFetchingHistory ? (
+                                <div className="py-20 flex flex-col items-center justify-center gap-4">
+                                    <Spinner className="animate-spin text-indigo-600" size={32} />
+                                    <p className="text-slate-500 font-bold">Loading records...</p>
+                                </div>
+                            ) : selectedCustomerBookings.length > 0 ? (
+                                <div className="space-y-4">
+                                    {selectedCustomerBookings.map((booking, idx) => (
+                                        <div key={idx} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group hover:border-indigo-200 transition-all">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 bg-slate-50 rounded-xl flex flex-col items-center justify-center border border-slate-100 group-hover:bg-indigo-50 group-hover:border-indigo-100 transition-all">
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{new Date(booking.eventDate).toLocaleDateString('en-US', { month: 'short' })}</span>
+                                                    <span className="text-lg font-black text-slate-800">{new Date(booking.eventDate).toLocaleDateString('en-US', { day: 'numeric' })}</span>
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-widest ${booking.status === 'CONFIRMED' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+                                                            {booking.status}
+                                                        </span>
+                                                        <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
+                                                            <Clock size={12} /> {new Date(booking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
+                                                    </div>
+                                                    <p className="font-black text-slate-800 mt-1">
+                                                        {booking.guestCount} PAX • {booking.bookingType}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total Amount</p>
+                                                <p className="text-lg font-black text-indigo-600">Rs. {Number(booking.totalAmount).toLocaleString()}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="py-20 flex flex-col items-center justify-center text-center gap-4">
+                                    <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center"><CalendarIcon size={32} className="text-slate-300" /></div>
+                                    <div>
+                                        <p className="text-slate-800 font-black">No party bookings yet</p>
+                                        <p className="text-slate-400 text-sm font-bold mt-1">This customer hasn't reserved any events yet.</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Create/Edit Modal */}
             {(isAddModalOpen || isEditModalOpen) && (
