@@ -143,4 +143,21 @@ export class OrdersGatewayController {
             }, HttpStatus.BAD_REQUEST);
         }
     }
+
+    @Patch(':id/split-pay')
+    async splitPayOrder(@Param('id') id: string, @Body() splitDetails: any) {
+        try {
+            const result = await firstValueFrom(
+                this.orderClient.send({ cmd: 'split_pay_order' }, { id, splitDetails }).pipe(
+                    catchError(error => throwError(() => new RpcException(error)))
+                )
+            );
+            return result;
+        } catch (error: any) {
+            throw new HttpException({
+                status: HttpStatus.BAD_REQUEST,
+                error: error.message || 'Microservice error processing split payment',
+            }, HttpStatus.BAD_REQUEST);
+        }
+    }
 }

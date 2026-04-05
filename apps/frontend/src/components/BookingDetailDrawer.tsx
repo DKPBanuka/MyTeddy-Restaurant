@@ -90,19 +90,31 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
     const handlePreparationConfirm = async (data: { discount: number; serviceCharge: number; paymentMethod: string; addonsTotal: number }) => {
         setIsSubmitting(true);
         try {
+            const isFinalSettlement = preparationModal.type === 'PARTY_FINAL';
+            const finalTotal = (Number(booking.hallCharge || 0) + Number(booking.menuTotal || 0) + data.addonsTotal + data.serviceCharge) - data.discount;
+
             // 1. Save to backend
             await api.updatePartyBooking(booking.id!, {
                 discount: data.discount,
                 serviceCharge: data.serviceCharge,
                 paymentMethod: data.paymentMethod,
-                addonsTotal: data.addonsTotal
+                addonsTotal: data.addonsTotal,
+                // Automate settlement for Final Invoice
+                advancePaid: isFinalSettlement ? finalTotal : booking.advancePaid,
+                status: isFinalSettlement ? 'COMPLETED' : booking.status
             });
             
             // 2. Refresh local state/parent
             onSuccess();
             
             // 3. Trigger receipt print with updated data
-            const updatedBooking = { ...booking, ...data, totalAmount: (Number(booking.hallCharge || 0) + Number(booking.menuTotal || 0) + data.addonsTotal + data.serviceCharge) - data.discount };
+            const updatedBooking = { 
+                ...booking, 
+                ...data, 
+                totalAmount: finalTotal,
+                advancePaid: isFinalSettlement ? finalTotal : booking.advancePaid,
+                status: isFinalSettlement ? 'COMPLETED' : booking.status
+            };
             generatePDFReceipt(updatedBooking, settings, settings?.logoUrl, preparationModal.type);
             
             // 4. Close modal

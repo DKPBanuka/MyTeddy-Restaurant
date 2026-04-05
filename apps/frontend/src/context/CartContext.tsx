@@ -13,6 +13,7 @@ interface HeldOrder {
         customerName: string;
         customerPhone: string;
         deliveryAddress: string;
+        customerId?: string;
     };
 }
 
@@ -24,6 +25,7 @@ interface CartContextType {
         customerName: string;
         customerPhone: string;
         deliveryAddress: string;
+        customerId?: string;
     };
     heldOrders: HeldOrder[];
     setItems: React.Dispatch<React.SetStateAction<OrderItemDto[]>>;
@@ -33,6 +35,7 @@ interface CartContextType {
         customerName: string;
         customerPhone: string;
         deliveryAddress: string;
+        customerId?: string;
     }>>;
     addItem: (item: any) => void;
     removeItem: (index: number) => void;
@@ -48,11 +51,18 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [items, setItems] = useState<OrderItemDto[]>([]);
     const [orderType, setOrderType] = useState<OrderType>('DINE_IN');
-    const [orderMetadata, setOrderMetadata] = useState({
+    const [orderMetadata, setOrderMetadata] = useState<{
+        tableNo: string;
+        customerName: string;
+        customerPhone: string;
+        deliveryAddress: string;
+        customerId?: string;
+    }>({
         tableNo: '',
         customerName: '',
         customerPhone: '',
-        deliveryAddress: ''
+        deliveryAddress: '',
+        customerId: undefined
     });
     const [heldOrders, setHeldOrders] = useState<HeldOrder[]>([]);
 
@@ -79,7 +89,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             tableNo: '',
             customerName: '',
             customerPhone: '',
-            deliveryAddress: ''
+            deliveryAddress: '',
+            customerId: undefined
         });
     };
 

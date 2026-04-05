@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Product } from '../types';
 import { ProductType } from '../types';
 import { Package, Utensils, Plus, Minus } from 'lucide-react';
@@ -12,6 +12,8 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, qtyInCart, onAdd, onUpdateQty, isComplex }: ProductCardProps) {
+    const [imgError, setImgError] = useState(false);
+
     const laabaya = useMemo(() => {
         if (!product.isPackage || !(product as any).items) return 0;
         const individualTotal = (product as any).items.reduce((sum: number, pkgItem: any) => {
@@ -45,11 +47,12 @@ export function ProductCard({ product, qtyInCart, onAdd, onUpdateQty, isComplex 
         <div className={`flex flex-col bg-white rounded-2xl p-3 border border-slate-100/60 shadow-[0_2px_12px_rgba(0,0,0,0.03)] transition-all hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] relative ${isDisabled ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}>
 
             {/* Top Image Placeholder */}
-            {product.imageUrl ? (
+            {(product.imageUrl && !imgError) ? (
                 <div className="h-32 rounded-xl mb-4 relative overflow-hidden bg-slate-100 flex items-center justify-center">
                     <img
                         src={product.imageUrl}
                         alt={product.name}
+                        onError={() => setImgError(true)}
                         className="w-full h-full object-cover rounded-xl transition-transform hover:scale-105 duration-300"
                     />
                     {/* Category Badge */}

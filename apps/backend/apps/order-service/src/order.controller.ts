@@ -47,6 +47,11 @@ export class OrderController {
         return this.orderService.payOrder(data.id, data.paymentDetails);
     }
 
+    @MessagePattern({ cmd: 'split_pay_order' })
+    async splitPayOrder(@Payload() data: { id: string, splitDetails: any }) {
+        return this.orderService.splitPayOrder(data.id, data.splitDetails);
+    }
+
     @MessagePattern({ cmd: 'get_reports_summary' })
     async getReportsSummary(@Payload() query: any) {
         return this.orderService.getReportsSummary(query || {});

@@ -5,6 +5,22 @@ import { PrismaService } from '../prisma/prisma.service';
 export class PartyBookingsService {
     constructor(private readonly prisma: PrismaService) { }
 
+    private async incrementPoints(customerId: string | null, amount: number) {
+        if (!customerId || amount <= 0) return;
+        try {
+            const pointsToAdd = Math.floor(amount / 100);
+            if (pointsToAdd > 0) {
+                await this.prisma.customer.update({
+                    where: { id: customerId },
+                    data: { points: { increment: pointsToAdd } }
+                });
+                console.log(`Awarded ${pointsToAdd} points to customer ${customerId} (Party)`);
+            }
+        } catch (error) {
+            console.error(`Failed to award points to party customer ${customerId}:`, error);
+        }
+    }
+
     async createBooking(data: any) {
         if (!data.customerName || !data.customerPhone || !data.eventDate) {
             throw new BadRequestException('customerName, customerPhone, and eventDate are required');
@@ -50,7 +66,7 @@ export class PartyBookingsService {
         const totalAmount = hallCharge + menuTotal + addonsTotal;
         const advancePaid = Number(data.advancePaid) || 0;
 
-        return this.prisma.partyBooking.create({
+        const booking = await this.prisma.partyBooking.create({
             data: {
                 customerId: data.customerId || null,
                 customerName: data.customerName,
@@ -69,6 +85,13 @@ export class PartyBookingsService {
                 status: (advancePaid > 0 ? 'CONFIRMED' : 'PENDING') as any,
             },
         });
+
+        // Award points for initial advance
+        if (booking.customerId && advancePaid > 0) {
+            await this.incrementPoints(booking.customerId, advancePaid);
+        }
+
+        return booking;
     }
 
     async getBookings(filters: { date?: string; month?: string; year?: string }) {
@@ -112,10 +135,17 @@ export class PartyBookingsService {
         const newAdvance = Number(booking.advancePaid) + Number(amount);
         const newStatus = newAdvance > 0 && booking.status === 'PENDING' ? 'CONFIRMED' : booking.status;
 
-        return this.prisma.partyBooking.update({
+        const updatedBooking = await this.prisma.partyBooking.update({
             where: { id },
             data: { advancePaid: newAdvance, status: newStatus as any },
         });
+
+        // Award points for the additional payment amount
+        if (updatedBooking.customerId && Number(amount) > 0) {
+            await this.incrementPoints(updatedBooking.customerId, Number(amount));
+        }
+
+        return updatedBooking;
     }
 
     async updateBookingTime(id: string, eventDate: string, startTime: string, endTime: string) {

@@ -1,7 +1,9 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { PrismaService } from '@app/prisma';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
+import { PaymentStatus, OrderStatus } from '@prisma/client';
 import { firstValueFrom, lastValueFrom, catchError, throwError } from 'rxjs';
+import { SplitCalculationUtil } from './utils/split-calculation.util';
 const fs = require('fs');
 const LOG_FILE = './debug_manual.log';
 
@@ -12,7 +14,32 @@ export class OrderService {
         @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientProxy,
     ) { }
 
+    private async incrementPoints(customerId: string | null, amount: number, prismaInstance: any = this.prisma) {
+        console.log(`[LOYALTY] incrementPoints called for customer: ${customerId}, amount: ${amount}`);
+        if (!customerId || amount <= 0) {
+            console.log(`[LOYALTY] Skipping points award. Reason: ${!customerId ? 'No customerId' : 'Amount <= 0'}`);
+            return;
+        }
+        try {
+            const pointsToAdd = Math.floor(amount / 100);
+            if (pointsToAdd > 0) {
+                console.log(`[LOYALTY] Attempting to award ${pointsToAdd} points to customer: ${customerId}`);
+                const updated = await prismaInstance.customer.update({
+                    where: { id: customerId },
+                    data: { points: { increment: pointsToAdd } }
+                });
+                console.log(`[LOYALTY] SUCCESS: Awarded ${pointsToAdd} points to ${updated.name}. New Total: ${updated.points}`);
+            } else {
+                console.log(`[LOYALTY] Amount ${amount} is less than 100. No points awarded.`);
+            }
+        } catch (error) {
+            console.error(`[LOYALTY] ERROR: Failed to award points to customer ${customerId}:`, error);
+            // We catch but don't re-throw to prevent failing the entire order if loyalty award fails
+        }
+    }
+
     async createOrder(createOrderDto: any) {
+        console.log('OrderService.createOrder payload received:', JSON.stringify(createOrderDto, null, 2));
         const {
             items,
             totalAmount,
@@ -24,7 +51,8 @@ export class OrderService {
             tableNo,
             customerName,
             customerPhone,
-            deliveryAddress
+            deliveryAddress,
+            customerId
         } = createOrderDto;
 
         // Generate short, readable TokenID based on Order Type
@@ -103,8 +131,8 @@ export class OrderService {
                         paymentMethod: paymentMethod || null,
                         amountReceived: amountReceived || null,
                         change: change || null,
-                        status: paymentStatus === 'PAID' ? 'COMPLETED' : 'PENDING',
-                        paymentStatus: paymentStatus || 'UNPAID',
+                        status: paymentStatus === 'PAID' ? OrderStatus.COMPLETED : (paymentStatus === 'PARTIAL' ? OrderStatus.PARTIALLY_PAID : OrderStatus.PENDING),
+                        paymentStatus: (paymentStatus as PaymentStatus) || PaymentStatus.UNPAID,
                         orderType: orderType || 'DINE_IN',
                         tableNumber: tableNo || null,
                         customerName: customerName || null,
@@ -115,6 +143,7 @@ export class OrderService {
                         grandTotal: createOrderDto.grandTotal || totalAmount,
                         tokenId,
                         userId: cashier.id,
+                        customerId: customerId || null,
                         orderItems: {
                             create: items.map((item: any) => {
                                 const basePrice = Number(item.unitPrice || 0);
@@ -143,10 +172,16 @@ export class OrderService {
                     },
                 });
 
+                // Award points if paid immediately
+                if (paymentStatus === 'PAID') {
+                    await this.incrementPoints(customerId, Number(totalAmount), tx);
+                }
+
                 console.log(`OrderService: [STEP 2 SUCCESS] Order created with ID: ${order.id}`);
                 return order;
             });
         } catch (error: any) {
+            console.error('OrderService: [STEP 2 ERROR] Prisma create order FAILED:', error);
             const msg = `[ORDER] Step 2 FAILED: ${error.message}\n`;
             fs.appendFileSync(LOG_FILE, msg);
             throw new RpcException({ message: error.message || 'Database Transaction Error', status: 500 });
@@ -219,10 +254,98 @@ export class OrderService {
                             package: true,
                             size: true
                         }
-                    } 
+                    },
+                    payments: true
                 },
             });
+
+            // Award points for full payment
+            if (order.customerId) {
+                await this.incrementPoints(order.customerId, Number(order.grandTotal));
+            }
+
             return order;
+        } catch (error: any) {
+            throw new RpcException({ message: error.message, status: 500 });
+        }
+    }
+
+    async splitPayOrder(id: string, data: { paymentMethod: string; amount: number; paidItemIds: string[]; mode?: 'EQUAL' | 'ITEMS' | 'CUSTOM' }) {
+        try {
+            return await this.prisma.$transaction(async (tx) => {
+                const order = await tx.order.findUnique({
+                    where: { id },
+                    include: { orderItems: true }
+                });
+
+                if (!order) throw new Error('Order not found');
+
+                let splitCalculations: any = null;
+                const safePaidItemIds = Array.isArray(data.paidItemIds) ? data.paidItemIds : [];
+
+                if (data.mode === 'ITEMS' || (safePaidItemIds && safePaidItemIds.length > 0)) {
+                    const selectedItems = order.orderItems.filter(item => safePaidItemIds.includes(item.id));
+                    
+                    if (selectedItems.length > 0) {
+                        splitCalculations = SplitCalculationUtil.calculateItemSplit(
+                            selectedItems.map(i => ({ subtotal: Number(i.subtotal || 0), quantity: Number(i.quantity || 1) })),
+                            {
+                                subtotal: Number(order.subTotal || 0),
+                                grandTotal: Number(order.grandTotal || 0),
+                                tax: (Number(order.grandTotal || 0) - Number(order.subTotal || 0) + Number(order.discount || 0)), 
+                                serviceCharge: 0,
+                                discount: Number(order.discount || 0)
+                            }
+                        );
+                    }
+                }
+
+                // 1. Create the payment record
+                await tx.orderPayment.create({
+                    data: {
+                        orderId: id,
+                        paymentMethod: data.paymentMethod as any,
+                        amount: data.amount,
+                        paidItemIds: safePaidItemIds as any,
+                        isSplit: true,
+                        splitDetails: splitCalculations as any,
+                    } as any
+                });
+
+                // 2. Aggregate all payments
+                const payments = await tx.orderPayment.findMany({
+                    where: { orderId: id }
+                });
+
+                const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+                const isFullyPaid = totalPaid >= Number(order.grandTotal) - 0.01; // Allow 1 cent rounding tolerance
+
+                // 4. Update the order status
+                const updatedOrder = await tx.order.update({
+                    where: { id },
+                    data: {
+                        status: isFullyPaid ? 'COMPLETED' : 'PARTIALLY_PAID',
+                        paymentStatus: isFullyPaid ? 'PAID' : 'PARTIAL',
+                        paymentMethod: data.paymentMethod as any,
+                    },
+                    include: {
+                        orderItems: {
+                            include: {
+                                product: true,
+                                package: true,
+                                size: true
+                            }
+                        }
+                    }
+                });
+
+                // Award points for partial paid amount
+                if (order.customerId) {
+                    await this.incrementPoints(order.customerId, Number(data.amount));
+                }
+
+                return updatedOrder;
+            });
         } catch (error: any) {
             throw new RpcException({ message: error.message, status: 500 });
         }
@@ -295,15 +418,16 @@ export class OrderService {
         try {
             const orders = await this.prisma.order.findMany({
                 where: {
-                    status: 'PENDING',
-                    paymentStatus: 'UNPAID'
+                    status: { in: ['PENDING', 'PARTIALLY_PAID'] as any },
+                    paymentStatus: { in: ['UNPAID', 'PARTIAL'] as any }
                 },
                 include: {
                     orderItems: {
                         include: {
                             product: true
                         }
-                    }
+                    },
+                    payments: true
                 },
                 orderBy: { createdAt: 'desc' }
             });
@@ -370,6 +494,7 @@ export class OrderService {
                                 size: true
                             }
                         },
+                        payments: true,
                         user: { select: { name: true, role: true } }
                     },
                     orderBy: { createdAt: 'desc' },
@@ -522,11 +647,51 @@ export class OrderService {
                 if (startDate) partyWhere.eventDate.gte = new Date(startDate);
                 if (endDate) partyWhere.eventDate.lte = new Date(endDate);
             }
-            const partyStats = await this.prisma.partyBooking.aggregate({
+            const partyAgg = await this.prisma.partyBooking.aggregate({
                 _count: { id: true },
-                _sum: { totalAmount: true, advancePaid: true },
+                _sum: { 
+                    totalAmount: true, 
+                    advancePaid: true, 
+                    guestCount: true,
+                    menuTotal: true,
+                    hallCharge: true,
+                    addonsTotal: true
+                },
                 where: partyWhere
             });
+
+            // Group by status for breakdown
+            const partyStatusGroups = await this.prisma.partyBooking.groupBy({
+                by: ['status'],
+                _count: { id: true },
+                where: startDate || endDate ? { eventDate: partyWhere.eventDate } : {}
+            });
+
+            // Forecast (Confirmed future bookings)
+            const forecastAgg = await this.prisma.partyBooking.aggregate({
+                _sum: { totalAmount: true },
+                where: { 
+                    status: 'CONFIRMED',
+                    eventDate: { gt: new Date() }
+                }
+            });
+
+            const partyStats = {
+                count: partyAgg._count.id,
+                totalValue: Number(partyAgg._sum.totalAmount || 0),
+                advanceCollected: Number(partyAgg._sum.advancePaid || 0),
+                guestCount: Number(partyAgg._sum.guestCount || 0),
+                revenueSplit: {
+                    menu: Number(partyAgg._sum.menuTotal || 0),
+                    hall: Number(partyAgg._sum.hallCharge || 0),
+                    addons: Number(partyAgg._sum.addonsTotal || 0)
+                },
+                forecastedRevenue: Number(forecastAgg._sum.totalAmount || 0),
+                statusBreakdown: partyStatusGroups.map(g => ({
+                    status: g.status,
+                    count: g._count.id
+                }))
+            };
 
             // 6. Customer Insights (New vs Returning)
             const uniqueCustomers = await this.prisma.order.groupBy({
@@ -603,11 +768,7 @@ export class OrderService {
                 topSellers: Object.values(productSales)
                     .sort((a, b) => b.quantity - a.quantity)
                     .slice(0, 5),
-                partyStats: {
-                    count: partyStats._count.id,
-                    totalValue: Number(partyStats._sum.totalAmount || 0),
-                    advanceCollected: Number(partyStats._sum.advancePaid || 0)
-                },
+                partyStats,
                 customerStats: {
                     totalCustomers,
                     activeCustomers: uniqueCustomers.length,

@@ -15,6 +15,10 @@ interface CartProps {
     discountPercentage?: number;
     onViewHeldOrders: () => void;
     onEdit: (item: OrderItemDto) => void;
+    alreadyPaidIds?: Set<string>;
+    totalPaid?: number | string;
+    remainingBalance?: number | string;
+    orderTotal?: number | string;
 }
 
 export function Cart({
@@ -24,7 +28,11 @@ export function Cart({
     discount = 0,
     discountPercentage,
     onViewHeldOrders,
-    onEdit
+    onEdit,
+    alreadyPaidIds = new Set(),
+    totalPaid = 0,
+    remainingBalance = 0,
+    orderTotal
 }: CartProps) {
     const { settings } = useSettings();
     const {
@@ -47,7 +55,8 @@ export function Cart({
 
     const taxRate = settings?.taxRate || 0;
     const tax = subTotal * (taxRate / 100);
-    const totalAmount = Math.max(0, subTotal + tax - discount);
+    const calculatedTotal = Math.max(0, subTotal + tax - discount);
+    const displayTotal = orderTotal !== undefined && orderTotal !== null ? Number(orderTotal) : calculatedTotal;
 
     const handleHoldClick = () => {
         const ref = window.prompt("Enter a reference name for this order (e.g., 'Guy in red shirt')", `Order ${heldOrders.length + 1}`);
@@ -100,7 +109,7 @@ export function Cart({
             customerName: customer.name,
             customerPhone: customer.phone || '',
             customerId: customer.id
-        }));
+		}));
         setLinkedCustomer(customer);
         setCustomerResults([]);
         setShowDropdown(false);
@@ -297,75 +306,94 @@ export function Cart({
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        {items.map((item, index) => (
-                            <div key={`${item.productId || item.packageId}-${index}`} className="flex items-start justify-between group">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border border-slate-100 shadow-sm overflow-hidden ${item.packageId ? 'bg-blue-50 text-blue-200' : item.product?.type === ProductType.RETAIL ? 'bg-indigo-50 text-indigo-200' : 'bg-orange-50 text-orange-200'}`}>
-                                        <div className="w-10 h-10 bg-white rounded-lg shadow-sm border border-slate-50 flex items-center justify-center">
-                                            {item.packageId ? (
-                                                <Layers size={16} className="text-blue-500" />
-                                            ) : (
-                                                <div className="w-6 h-6 rounded-full bg-slate-200"></div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className="flex flex-col flex-1 pl-1">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <h4 className="font-bold text-slate-800 text-sm leading-tight line-clamp-1 pt-1">{item.product?.name || item.package?.name}</h4>
-                                                {item.package && item.package.items && (
-                                                    <div className="text-[10px] font-bold text-slate-500 mt-1 leading-relaxed bg-slate-50 p-1.5 rounded-lg border border-slate-100 italic">
-                                                        Includes: {item.package.items.map((it: any) => `${it.quantity}x ${it.product?.name}${it.size ? ` (${it.size.name})` : ''}`).join(', ')}
-                                                    </div>
-                                                )}
-                                                {item.size && (
-                                                    <div className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-0.5">
-                                                        Size: {item.size.name}
-                                                    </div>
-                                                )}
-                                                {item.selectedAddons && item.selectedAddons.length > 0 && (
-                                                    <div className="text-[10px] font-bold text-emerald-600 mt-0.5 ml-1">
-                                                        {Object.values(item.selectedAddons.reduce((acc: any, addon: any) => {
-                                                            if (!acc[addon.id]) acc[addon.id] = { name: addon.name, count: 0 };
-                                                            acc[addon.id].count++;
-                                                            return acc;
-                                                        }, {})).map((a: any) => (
-                                                            <div key={a.name}>+ {a.count > 1 ? `${a.count}x ` : ''}{a.name}</div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                                {!item.packageId && (
-                                                    <button
-                                                        onClick={() => onEdit(item)}
-                                                        className="flex items-center gap-1 text-[10px] font-black text-blue-500 hover:text-blue-700 uppercase tracking-widest mt-2 bg-blue-50 px-2 py-1 rounded-md transition-colors"
-                                                    >
-                                                        <Plus size={10} strokeWidth={3} />
-                                                        Add-ons / Sizes
-                                                    </button>
+                        {items.map((item, index) => {
+                            const isPaid = item.id && alreadyPaidIds.has(item.id);
+                            return (
+                                <div key={`${item.productId || item.packageId}-${index}`} className={`flex items-start justify-between group transition-all ${isPaid ? 'opacity-80' : ''}`}>
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border border-slate-100 shadow-sm overflow-hidden relative ${item.packageId ? 'bg-blue-50 text-blue-200' : item.product?.type === ProductType.RETAIL ? 'bg-indigo-50 text-indigo-200' : 'bg-orange-50 text-orange-200'}`}>
+                                            <div className="w-10 h-10 bg-white rounded-lg shadow-sm border border-slate-50 flex items-center justify-center">
+                                                {item.packageId ? (
+                                                    <Layers size={16} className="text-blue-500" />
+                                                ) : (
+                                                    <div className="w-6 h-6 rounded-full bg-slate-200"></div>
                                                 )}
                                             </div>
-                                            <span className="text-sm font-black text-slate-800 tracking-tight shrink-0 ml-2">
-                                                {formatCurrency(((item.size ? Number(item.size.price) : Number(item.product?.price || item.package?.price || 0)) + (item.selectedAddons?.reduce((s: number, a: any) => s + Number(a.price), 0) || 0)) * item.quantity, settings?.currencySymbol || 'Rs.')}
-                                            </span>
+                                            {isPaid && (
+                                                <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
+                                                    <div className="bg-emerald-500 text-white rounded-full p-0.5 shadow-sm">
+                                                        <Plus size={10} className="rotate-45" strokeWidth={4} />
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md">
-                                                {item.quantity}x
-                                            </span>
-                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
-                                                <button onClick={() => updateQty(index, -1)} className="w-6 h-6 rounded bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300 font-bold leading-none">-</button>
-                                                <button onClick={() => updateQty(index, 1)} className="w-6 h-6 rounded bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300 font-bold leading-none">+</button>
-                                                <button onClick={() => removeItem(index)} className="w-6 h-6 rounded bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-200 ml-1">
-                                                    <Trash2 size={12} />
-                                                </button>
+                                        <div className="flex flex-col flex-1 pl-1">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <h4 className={`font-bold text-sm leading-tight line-clamp-1 pt-1 ${isPaid ? 'text-slate-400' : 'text-slate-800'}`}>
+                                                            {item.product?.name || item.package?.name}
+                                                        </h4>
+                                                        {isPaid && (
+                                                            <span className="bg-emerald-100 text-emerald-700 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">PAID</span>
+                                                        )}
+                                                    </div>
+                                                    {item.package && item.package.items && (
+                                                        <div className="text-[10px] font-bold text-slate-500 mt-1 leading-relaxed bg-slate-50 p-1.5 rounded-lg border border-slate-100 italic">
+                                                            Includes: {item.package.items.map((it: any) => `${it.quantity}x ${it.product?.name}${it.size ? ` (${it.size.name})` : ''}`).join(', ')}
+                                                        </div>
+                                                    )}
+                                                    {item.size && (
+                                                        <div className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-0.5">
+                                                            Size: {item.size.name}
+                                                        </div>
+                                                    )}
+                                                    {item.selectedAddons && item.selectedAddons.length > 0 && (
+                                                        <div className="text-[10px] font-bold text-emerald-600 mt-0.5 ml-1">
+                                                            {Object.values(item.selectedAddons.reduce((acc: any, addon: any) => {
+                                                                if (!acc[addon.id]) acc[addon.id] = { name: addon.name, count: 0 };
+                                                                acc[addon.id].count++;
+                                                                return acc;
+                                                            }, {})).map((a: any) => (
+                                                                <div key={a.name}>+ {a.count > 1 ? `${a.count}x ` : ''}{a.name}</div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    {!item.packageId && !isPaid && (
+                                                        <button
+                                                            onClick={() => onEdit(item)}
+                                                            className="flex items-center gap-1 text-[10px] font-black text-blue-500 hover:text-blue-700 uppercase tracking-widest mt-2 bg-blue-50 px-2 py-1 rounded-md transition-colors"
+                                                        >
+                                                            <Plus size={10} strokeWidth={3} />
+                                                            Add-ons / Sizes
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <span className={`text-sm font-black tracking-tight shrink-0 ml-2 ${isPaid ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                                                    {formatCurrency(((item.size ? Number(item.size.price) : Number(item.product?.price || item.package?.price || 0)) + (item.selectedAddons?.reduce((s: number, a: any) => s + Number(a.price), 0) || 0)) * item.quantity, settings?.currencySymbol || 'Rs.')}
+                                                </span>
+                                            </div>
+
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${isPaid ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+                                                    {item.quantity}x
+                                                </span>
+                                                {!isPaid && (
+                                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
+                                                        <button onClick={() => updateQty(index, -1)} className="w-6 h-6 rounded bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300 font-bold leading-none">-</button>
+                                                        <button onClick={() => updateQty(index, 1)} className="w-6 h-6 rounded bg-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-300 font-bold leading-none">+</button>
+                                                        <button onClick={() => removeItem(index)} className="w-6 h-6 rounded bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-200 ml-1">
+                                                            <Trash2 size={12} />
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
@@ -406,10 +434,25 @@ export function Cart({
 
                     {taxRate > 0 && <div className="h-px w-full border-t border-dashed border-slate-200 my-4"></div>}
 
-                    <div className="flex justify-between items-center mb-6">
+                    <div className="flex justify-between items-center mb-2">
                         <span className="text-slate-500 font-medium">{taxRate > 0 ? 'Grand Total' : 'TOTAL'}</span>
-                        <span className="text-lg font-black text-slate-800">{formatCurrency(totalAmount, settings?.currencySymbol || 'Rs.')}</span>
+                        <span className={`text-lg font-black ${totalPaid > 0 ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-800'}`}>
+                            {formatCurrency(displayTotal, settings?.currencySymbol || 'Rs.')}
+                        </span>
                     </div>
+
+                    {totalPaid > 0 && (
+                        <div className="space-y-2 pt-2 border-t border-slate-100 mt-2">
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-emerald-600 font-bold uppercase tracking-wider text-[10px]">Total Paid</span>
+                                <span className="font-black text-emerald-600">{formatCurrency(totalPaid, settings?.currencySymbol || 'Rs.')}</span>
+                            </div>
+                            <div className="flex justify-between items-center bg-blue-600 text-white p-3 rounded-xl shadow-md animate-pulse">
+                                <span className="font-black uppercase tracking-[0.2em] text-[10px]">Balance Due</span>
+                                <span className="text-xl font-black">{formatCurrency(remainingBalance, settings?.currencySymbol || 'Rs.')}</span>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="mt-6">
                         <button

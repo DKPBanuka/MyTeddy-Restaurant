@@ -338,6 +338,7 @@ export class PartyBookingService {
             totalAmount,
             advancePaid,
             items,
+            status: data.status || booking.status,
             bookingType: bookingType as any,
             paymentMethod: paymentMethod || 'CASH',
         };

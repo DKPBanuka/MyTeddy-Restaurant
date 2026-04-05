@@ -1,19 +1,32 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-
 async function main() {
-  try {
-    console.log('Testing Prisma Customer model...');
-    console.log('Prisma keys:', Object.keys(prisma));
-    const count = await prisma.customer.count();
-    console.log('Customer count:', count);
-    const customers = await prisma.customer.findMany();
-    console.log('Customers found:', customers.length);
-  } catch (err) {
-    console.error('Prisma test failed:', err);
-  } finally {
-    await prisma.$disconnect();
-  }
+    try {
+        const user = await prisma.user.findFirst();
+        if (!user) throw new Error('No user found in DB');
+        
+        console.log('Using user ID:', user.id);
+        const order = await prisma.order.create({
+            data: {
+                orderNumber: 'TEST-' + Date.now(),
+                invoiceNumber: 'INV-' + Date.now(),
+                totalAmount: 100,
+                userId: user.id,
+                paymentStatus: 'PARTIAL',
+                status: 'PARTIALLY_PAID',
+                subTotal: 100,
+                grandTotal: 100,
+                orderItems: {
+                    create: []
+                }
+            }
+        });
+        console.log('SUCCESS: Generated order ID:', order.id);
+        await prisma.order.delete({ where: { id: order.id } });
+    } catch(e) {
+        console.error('FAILED to create order:', e.message);
+    } finally {
+        await prisma.$disconnect();
+    }
 }
-
 main();

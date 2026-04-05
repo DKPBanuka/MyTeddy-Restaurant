@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
-    Search, Calendar, FileText, Download,
+    Search, FileText, Download,
     Printer, RotateCcw, ChevronRight, X, User,
     CreditCard, Banknote, AlertCircle,
     Clock, CheckCircle2, LayoutGrid, Filter,
@@ -11,27 +11,27 @@ import { format, startOfDay, endOfDay, isToday } from 'date-fns';
 import { toast } from 'sonner';
 import { generatePDFReceipt } from '../utils/pdfReceipt';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 
 export function OrdersDashboard() {
     const { settings } = useSettings();
+    const { user } = useAuth();
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('ALL');
-    const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+    const [startDate, setStartDate] = useState(format(startOfDay(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)), 'yyyy-MM-dd'));
+    const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 
     const fetchOrders = async () => {
         try {
             setLoading(true);
-            const start = startOfDay(new Date(selectedDate)).toISOString();
-            const end = endOfDay(new Date(selectedDate)).toISOString();
-            
             const data = await api.getOrders({
-                startDate: start,
-                endDate: end,
+                startDate: startDate ? startOfDay(new Date(startDate)).toISOString() : undefined,
+                endDate: endDate ? endOfDay(new Date(endDate)).toISOString() : undefined,
                 status: statusFilter === 'ALL' ? undefined : statusFilter,
                 search: searchQuery || undefined,
                 limit: 100
@@ -44,14 +44,38 @@ export function OrdersDashboard() {
         }
     };
 
+    const setPreset = (preset: 'TODAY' | '7D' | '30D' | 'ALL') => {
+        const today = new Date();
+        switch (preset) {
+            case 'TODAY':
+                setStartDate(format(today, 'yyyy-MM-dd'));
+                setEndDate(format(today, 'yyyy-MM-dd'));
+                break;
+            case '7D':
+                setStartDate(format(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'));
+                setEndDate(format(today, 'yyyy-MM-dd'));
+                break;
+            case '30D':
+                setStartDate(format(new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'));
+                setEndDate(format(today, 'yyyy-MM-dd'));
+                break;
+            case 'ALL':
+                setStartDate('');
+                setEndDate('');
+                break;
+        }
+    };
+
     useEffect(() => {
         fetchOrders();
-    }, [selectedDate, statusFilter, searchQuery]);
+    }, [startDate, endDate, statusFilter, searchQuery]);
 
     const stats = useMemo(() => {
         const count = orders.length;
-        const revenue = orders.filter(o => o.paymentStatus === 'PAID').reduce((sum, o) => sum + Number(o.grandTotal), 0);
-        const pending = orders.filter(o => o.status === 'PENDING' || o.status === 'PREPARING').length;
+        const revenue = orders
+            .filter((o: any) => o.paymentStatus === 'PAID')
+            .reduce((sum: number, o: any) => sum + Number(o.grandTotal || 0), 0);
+        const pending = orders.filter((o: any) => o.status === 'PENDING' || o.status === 'PREPARING').length;
         return { count, revenue, pending };
     }, [orders]);
 
@@ -96,10 +120,12 @@ export function OrdersDashboard() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <button className="flex items-center gap-2.5 px-6 py-3 bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 active:scale-95 group">
-                            <Download size={18} className="group-hover:-translate-y-0.5 transition-transform" />
-                            Export Data
-                        </button>
+                        {user?.role !== 'CASHIER' && (
+                            <button className="flex items-center gap-2.5 px-6 py-3 bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 active:scale-95 group">
+                                <Download size={18} className="group-hover:-translate-y-0.5 transition-transform" />
+                                Export Data
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -110,20 +136,24 @@ export function OrdersDashboard() {
                             <ShoppingCart size={28} />
                         </div>
                         <div>
-                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Orders for {isToday(new Date(selectedDate)) ? 'Today' : format(new Date(selectedDate), 'MMM dd')}</p>
+                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">
+                                {!startDate ? 'All Time Orders' : (startDate === endDate ? `Orders for ${isToday(new Date(startDate)) ? 'Today' : format(new Date(startDate), 'MMM dd')}` : 'Orders in Period')}
+                            </p>
                             <h2 className="text-2xl font-black text-slate-900 tracking-tighter">{stats.count}</h2>
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex items-center gap-5 hover:border-emerald-200 transition-all group">
-                        <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300">
-                            <TrendingUp size={28} />
+                    {user?.role !== 'CASHIER' && (
+                        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex items-center gap-5 hover:border-emerald-200 transition-all group">
+                            <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300">
+                                <TrendingUp size={28} />
+                            </div>
+                            <div>
+                                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Total Revenue</p>
+                                <h2 className="text-2xl font-black text-slate-900 tracking-tighter">Rs. {stats.revenue.toLocaleString()}</h2>
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Total Revenue</p>
-                            <h2 className="text-2xl font-black text-slate-900 tracking-tighter">Rs. {stats.revenue.toLocaleString()}</h2>
-                        </div>
-                    </div>
+                    )}
 
                     <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex items-center gap-5 hover:border-amber-200 transition-all group">
                         <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition-all duration-300">
@@ -153,14 +183,47 @@ export function OrdersDashboard() {
                             />
                         </div>
                         
-                        <div className="flex items-center gap-4 w-full lg:w-auto">
-                            <div className="relative w-full lg:w-64 flex items-center gap-2 bg-white border border-gray-200 rounded-2xl px-4 py-2 group-focus-within:border-indigo-500 transition-all">
-                                <Calendar size={18} className="text-slate-400" />
+                        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                            {/* Preset Buttons */}
+                            <div className="flex bg-gray-100 p-1 rounded-2xl border border-gray-200 shadow-inner">
+                                {[
+                                    { label: 'Today', id: 'TODAY' as const },
+                                    { label: '7D', id: '7D' as const },
+                                    { label: '30D', id: '30D' as const },
+                                    { label: 'All', id: 'ALL' as const }
+                                ].map((p) => (
+                                    <button
+                                        key={p.id}
+                                        onClick={() => setPreset(p.id)}
+                                        className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 ${
+                                            (p.id === 'ALL' && !startDate) || 
+                                            (p.id === 'TODAY' && startDate === format(new Date(), 'yyyy-MM-dd') && endDate === format(new Date(), 'yyyy-MM-dd'))
+                                            ? 'bg-white text-indigo-600 shadow-sm' 
+                                            : 'text-slate-500 hover:text-slate-700'
+                                        }`}
+                                    >
+                                        {p.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-2xl px-4 py-2 shadow-sm">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">From</span>
                                 <input
                                     type="date"
-                                    value={selectedDate}
-                                    onChange={(e) => setSelectedDate(e.target.value)}
-                                    className="w-full py-2 bg-transparent outline-none font-black text-[11px] text-slate-700 uppercase tracking-widest cursor-pointer"
+                                    value={startDate}
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    className="bg-transparent outline-none font-black text-[11px] text-slate-700 uppercase tracking-widest cursor-pointer w-28"
+                                />
+                            </div>
+
+                            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-2xl px-4 py-2 shadow-sm">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">To</span>
+                                <input
+                                    type="date"
+                                    value={endDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    className="bg-transparent outline-none font-black text-[11px] text-slate-700 uppercase tracking-widest cursor-pointer w-28"
                                 />
                             </div>
 

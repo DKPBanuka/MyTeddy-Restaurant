@@ -124,6 +124,10 @@ export const api = {
         const res = await apiClient.patch(`/orders/${id}/pay`, paymentDetails);
         return res.data;
     },
+    splitPayOrder: async (id: string, splitDetails: { paymentMethod: string, amount: number, paidItemIds: string[] }) => {
+        const res = await apiClient.patch(`/orders/${id}/split-pay`, splitDetails);
+        return res.data;
+    },
 
     getTableStatus: async () => {
         const res = await apiClient.get(`/orders/tables/status`);

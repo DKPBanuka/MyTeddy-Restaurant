@@ -49,7 +49,15 @@ interface AnalysisData {
     categoryRevenue: { name: string, value: number, percent: number, products: { name: string, quantity: number, value: number }[] }[];
     paymentMethodSplit: { name: string, value: number }[];
     hourlyData: { hour: string, revenue: number }[];
-    partyStats: { count: number, totalValue: number, advanceCollected: number };
+    partyStats: { 
+        count: number, 
+        totalValue: number, 
+        advanceCollected: number,
+        guestCount: number,
+        forecastedRevenue: number,
+        revenueSplit: { menu: number, hall: number, addons: number },
+        statusBreakdown: { status: string, count: number }[]
+    };
     customerStats: { totalCustomers: number, activeCustomers: number, customerGrowth: number };
 }
 
@@ -145,7 +153,23 @@ export const AnalysisDashboard: React.FC = () => {
             vol_sold: "Volume Sold",
             audit_log: "Audit Log",
             refund_impact: "Refund/Discount Impact",
-            est_5: "Est. 5%"
+            est_5: "Est. 5%",
+
+            // New Party Hub Strings
+            party_hub: "Event Intelligence Hub",
+            upcoming_forecast: "Revenue Forecast",
+            receivables: "Total Receivables",
+            advance_rate: "Advance Rate",
+            booked_value: "Booked Value",
+            guest_volume: "Guest Volume",
+            guests: "Guests",
+            status_split: "Booking Status Distribution",
+            revenue_mix: "Revenue Category Split",
+            hall: "Hall",
+            menu: "Menu",
+            addons: "Addons",
+            due_amount: "Amount Due",
+            forecast_desc: "Confirmed future bookings"
         },
         SI: {
             title_main: "ව්‍යාපාරික",
@@ -225,7 +249,23 @@ export const AnalysisDashboard: React.FC = () => {
             vol_sold: "විකුණුම් ප්‍රමාණය",
             audit_log: "විගණන සටහන",
             refund_impact: "මුදල් ආපසු ගෙවීම්/වට්ටම් බලපෑම",
-            est_5: "අනුමාන 5%"
+            est_5: "අනුමාන 5%",
+
+            // New Party Hub Strings
+            party_hub: "සාද සහ උත්සව බුද්ධි කේන්ද්‍රය",
+            upcoming_forecast: "ආදායම් පුරෝකථනය",
+            receivables: "හිඟ මුදල් එකතුව",
+            advance_rate: "පූර්ව ගෙවීම් අනුපාතය",
+            booked_value: "වෙන්කළ වටිනාකම",
+            guest_volume: "අමුත්තන්ගේ සංඛ්‍යාව",
+            guests: "අමුත්තන්",
+            status_split: "සාද වෙන්කිරීම් බෙදී ඇති ආකාරය",
+            revenue_mix: "ආදායම් කාණ්ඩ අනුව බෙදීම",
+            hall: "ශාලා ගාස්තු",
+            menu: "ආහාර මෙනුව",
+            addons: "අතිරේක",
+            due_amount: "ගෙවිය යුතු ඉතිරිය",
+            forecast_desc: "සම්පූර්ණ කරන ලද සහ ඉදිරි වෙන්කිරීම්"
         }
     };
 
@@ -605,6 +645,55 @@ export const AnalysisDashboard: React.FC = () => {
                             />
                         </div>
 
+                        {/* Party Intelligence Hub - New Header */}
+                        <div className="flex items-center gap-4 py-4 px-2 bg-gradient-to-r from-indigo-500/10 to-transparent rounded-3xl border-l-4 border-indigo-500">
+                            <Briefcase className="text-indigo-400" size={24} />
+                            <div>
+                                <h3 className="text-lg font-black text-white uppercase tracking-widest">{strings.party_hub}</h3>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">{strings.forecast_desc}</p>
+                            </div>
+                        </div>
+
+                        {/* Party KPI Micro-Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <SummaryCard 
+                                title={strings.upcoming_forecast} 
+                                value={formatCurrency(data.partyStats.forecastedRevenue)} 
+                                icon={<TrendingUp />} 
+                                trend={strings.today} 
+                                positive={true}
+                                color="from-cyan-600 to-blue-600"
+                                footer={strings.forecast_desc}
+                            />
+                            <SummaryCard 
+                                title={strings.receivables} 
+                                value={formatCurrency(data.partyStats.totalValue - data.partyStats.advanceCollected)} 
+                                icon={<Clock />} 
+                                trend={strings.due_amount} 
+                                positive={false}
+                                color="from-rose-600 to-orange-600"
+                                footer={`${strings.out_of} ${formatCurrency(data.partyStats.totalValue)} ${strings.booked_value}`}
+                            />
+                             <SummaryCard 
+                                title={strings.advance_rate} 
+                                value={`${(data.partyStats?.totalValue || 0) > 0 ? Math.round(((data.partyStats?.advanceCollected || 0) / (data.partyStats?.totalValue || 0)) * 100) : 0}%`} 
+                                icon={<Award />} 
+                                trend="Health Score" 
+                                positive={(data.partyStats?.totalValue || 0) > 0 && ((data.partyStats?.advanceCollected || 0) / (data.partyStats?.totalValue || 0)) >= 0.3}
+                                color="from-emerald-600 to-teal-600"
+                                footer={`${formatCurrency(data.partyStats?.advanceCollected || 0)} ${strings.collected}`}
+                            />
+                            <SummaryCard 
+                                title={strings.guest_volume} 
+                                value={(data.partyStats?.guestCount || 0).toLocaleString()} 
+                                icon={<Users />} 
+                                trend={strings.guests} 
+                                positive={true}
+                                color="from-indigo-600 to-purple-600"
+                                footer={`${data.partyStats?.count || 0} ${strings.events} ${strings.confirmed}`}
+                            />
+                        </div>
+
                         {/* Charts Area (Standard) */}
                         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
                             <div className="xl:col-span-2 bg-white/5 border border-white/10 rounded-[2.5rem] p-8 backdrop-blur-3xl shadow-2xl relative group overflow-hidden">
@@ -770,6 +859,70 @@ export const AnalysisDashboard: React.FC = () => {
                                                 onClick={(entry) => setSelectedCategory(entry.name || null)}
                                                 className="cursor-pointer hover:fill-orange-400 transition-colors"
                                             />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Row 4: Party Hub Visuals */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div className="bg-white/5 border border-indigo-500/10 rounded-[2.5rem] p-8 backdrop-blur-3xl shadow-2xl">
+                                <h3 className="text-xl font-bold mb-8 text-white flex items-center gap-3">
+                                    <span className="h-8 w-1.5 rounded-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]"></span>
+                                    {strings.status_split}
+                                </h3>
+                                <div className="h-[300px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie
+                                                data={data.partyStats?.statusBreakdown || []}
+                                                cx="50%"
+                                                cy="50%"
+                                                innerRadius={70}
+                                                outerRadius={100}
+                                                paddingAngle={8}
+                                                dataKey="count"
+                                                nameKey="status"
+                                                stroke="none"
+                                            >
+                                                {(data.partyStats?.statusBreakdown || []).map((_entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                ))}
+                                            </Pie>
+                                            <RechartsTooltip content={<CustomPieTooltip />} />
+                                            <Legend 
+                                                verticalAlign="bottom" 
+                                                iconType="circle"
+                                                formatter={(value) => <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest ml-2">{value}</span>}
+                                            />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            <div className="bg-white/5 border border-indigo-500/10 rounded-[2.5rem] p-8 backdrop-blur-3xl shadow-2xl">
+                                <h3 className="text-xl font-bold mb-8 text-white flex items-center gap-3">
+                                    <span className="h-8 w-1.5 rounded-full bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]"></span>
+                                    {strings.revenue_mix}
+                                </h3>
+                                <div className="h-[300px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={[
+                                            { name: strings.menu, value: data.partyStats?.revenueSplit?.menu || 0 },
+                                            { name: strings.hall, value: data.partyStats?.revenueSplit?.hall || 0 },
+                                            { name: strings.addons, value: data.partyStats?.revenueSplit?.addons || 0 }
+                                        ]}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
+                                            <XAxis 
+                                                dataKey="name" 
+                                                axisLine={false} 
+                                                tickLine={false} 
+                                                tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} 
+                                            />
+                                            <YAxis hide />
+                                            <RechartsTooltip content={<CustomBarTooltip money />} />
+                                            <Bar dataKey="value" fill="#6366f1" radius={[10, 10, 0, 0]} barSize={40} />
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>

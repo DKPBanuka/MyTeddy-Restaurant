@@ -1,9 +1,43 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { createClient } from '@supabase/supabase-js';
 
 @Injectable()
 export class ProductsService {
-    constructor(private readonly prisma: PrismaService) { }
+    private readonly logger = new Logger(ProductsService.name);
+    private supabase;
+
+    constructor(private readonly prisma: PrismaService) {
+        const supabaseUrl = process.env.SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_ANON_KEY;
+        if (supabaseUrl && supabaseKey) {
+            this.supabase = createClient(supabaseUrl, supabaseKey);
+        }
+    }
+
+    private async deleteSupabaseFile(imageUrl: string | null) {
+        if (!imageUrl || !this.supabase || !imageUrl.includes('supabase.co')) return;
+
+        try {
+            // Extract filename from URL (e.g. .../product-images/1712345-pizza.png -> 1712345-pizza.png)
+            const parts = imageUrl.split('/');
+            const fileName = parts[parts.length - 1];
+
+            if (fileName) {
+                const { error } = await this.supabase.storage
+                    .from('product-images')
+                    .remove([fileName]);
+
+                if (error) {
+                    this.logger.error(`Failed to delete file from Supabase: ${fileName}`, error.message);
+                } else {
+                    this.logger.log(`Successfully deleted file from Supabase: ${fileName}`);
+                }
+            }
+        } catch (error) {
+            this.logger.error('Error during Supabase file deletion:', error);
+        }
+    }
 
     async findAll(categoryId?: string) {
         return this.prisma.product.findMany({
@@ -46,6 +80,9 @@ export class ProductsService {
     }
 
     async update(id: string, data: any) {
+        // Fetch current product to check if image is being replaced
+        const currentProduct = await this.prisma.product.findUnique({ where: { id } });
+
         const updateData: any = {
             name: data.name,
             price: data.price,
@@ -69,20 +106,37 @@ export class ProductsService {
             };
         }
 
-        return this.prisma.product.update({
+        const updated = await this.prisma.product.update({
             where: { id },
             data: updateData,
             include: { category: true, sizes: true }
         });
+
+        // Cleanup Supabase if image was changed or removed
+        if (currentProduct?.imageUrl && currentProduct.imageUrl !== data.imageUrl) {
+            await this.deleteSupabaseFile(currentProduct.imageUrl);
+        }
+
+        return updated;
     }
 
     async remove(id: string) {
+        // Fetch product before deletion to get image URL
+        const product = await this.prisma.product.findUnique({ where: { id } });
+
         try {
-            return await this.prisma.product.delete({
+            const deleted = await this.prisma.product.delete({
                 where: { id }
             });
+            
+            // Delete from Supabase if deletion from DB was successful
+            if (product?.imageUrl) {
+                await this.deleteSupabaseFile(product.imageUrl);
+            }
+            
+            return deleted;
         } catch (error) {
-            // Fallback to soft delete if there are foreign key constraints (e.g. order items)
+            // Fallback to soft delete if there are foreign key constraints
             return await this.prisma.product.update({
                 where: { id },
                 data: { isActive: false }

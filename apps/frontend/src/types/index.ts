@@ -88,6 +88,7 @@ export interface Product {
 }
 
 export interface OrderItemDto {
+    id?: string;
     productId?: string;
     packageId?: string;
     quantity: number;
@@ -100,6 +101,8 @@ export interface OrderItemDto {
     selectedAddons?: GlobalAddon[];
     notes?: string;
     priceAtTimeOfSale?: number | string;
+    unitPrice?: number | string;
+    subtotal?: number | string;
 }
 
 export interface CreateOrderDto {
@@ -111,12 +114,13 @@ export interface CreateOrderDto {
     paymentMethod?: 'CASH' | 'CARD' | 'ONLINE';
     amountReceived?: number;
     change?: number;
-    paymentStatus?: 'UNPAID' | 'PAID' | 'REFUNDED';
+    paymentStatus?: 'UNPAID' | 'PAID' | 'PARTIAL' | 'REFUNDED';
     orderType?: OrderType;
     tableNo?: string;
     customerName?: string;
     customerPhone?: string;
     deliveryAddress?: string;
+    customerId?: string;
 }
 
 export interface UpdateOrderDto {
@@ -128,6 +132,15 @@ export interface PayOrderDto {
     method: string;
     amountReceived?: number;
     change?: number;
+}
+
+export interface OrderPayment {
+    id: string;
+    orderId: string;
+    paymentMethod: string;
+    amount: number | string;
+    paidItemIds: string[];
+    createdAt: string;
 }
 
 export interface Order {
@@ -150,6 +163,7 @@ export interface Order {
     updatedAt: string;
     refundReason?: string | null;
     orderItems?: any[];
+    payments?: OrderPayment[];
 }
 
 export interface Customer {

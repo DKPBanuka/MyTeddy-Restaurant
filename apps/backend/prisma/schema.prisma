@@ -199,6 +199,19 @@ model Order {
   customer        Customer?      @relation(fields: [customerId], references: [id])
   user            User           @relation(fields: [userId], references: [id])
   orderItems      OrderItem[]
+  payments        OrderPayment[]
+}
+
+model OrderPayment {
+  id            String        @id @default(uuid())
+  orderId       String
+  paymentMethod PaymentMethod
+  amount        Decimal       @db.Decimal(10, 2)
+  paidItemIds   Json?         @default("[]")
+  isSplit       Boolean       @default(false)
+  splitDetails  Json?         // To store proportional tax, service charge, etc.
+  createdAt     DateTime      @default(now())
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
 
 model OrderItem {
@@ -281,6 +294,7 @@ enum ProductType {
 enum PaymentStatus {
   UNPAID
   PAID
+  PARTIAL
   REFUNDED
   VOID
 }
@@ -296,6 +310,7 @@ enum OrderStatus {
   PREPARING
   READY
   COMPLETED
+  PARTIALLY_PAID
   CANCELLED
 }
 

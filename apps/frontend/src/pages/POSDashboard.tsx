@@ -47,6 +47,7 @@ export function POSDashboard() {
     const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
     const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
     const [lastOrder, setLastOrder] = useState<any>(null);
+    const [lastSplitResult, setLastSplitResult] = useState<any>(null);
     const [upcomingParties, setUpcomingParties] = useState<any[]>([]);
     const [showNotifications, setShowNotifications] = useState(false);
     const [isPartiesModalOpen, setIsPartiesModalOpen] = useState(false);
@@ -85,15 +86,15 @@ export function POSDashboard() {
         if (allParties.length > 0) {
             const now = new Date();
             const oneHourLater = new Date(now.getTime() + 3600000);
-            
+
             const imminent = allParties.filter((p: any) => {
                 const partyTime = new Date(p.eventDate);
                 // Check if party is today and within 1 hour from now
                 return partyTime > now && partyTime <= oneHourLater && p.status !== 'CANCELLED';
             });
-            
+
             setUpcomingParties(imminent);
-            
+
             if (imminent.length > 0 && upcomingParties.length < imminent.length) {
                 toast.info(`Upcoming Party: ${imminent[0].customerName} at ${new Date(imminent[0].eventDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
             }
@@ -110,12 +111,14 @@ export function POSDashboard() {
             tableNo: order.tableNumber || '',
             customerName: order.customerName || '',
             customerPhone: order.customerPhone || '',
-            deliveryAddress: order.deliveryAddress || ''
+            deliveryAddress: order.deliveryAddress || '',
+            customerId: order.customerId || undefined
         });
         setCartItems(order.orderItems?.map((item: any) => ({
+            id: item.id, // Important for split bill tracking
             productId: item.productId,
             packageId: item.packageId,
-            quantity: item.quantity,
+            quantity: Number(item.quantity || 1),
             type: (item.product?.type || (item.package ? 'PACKAGE' : ProductType.FOOD)) as any,
             product: item.product,
             package: item.package,
@@ -123,8 +126,13 @@ export function POSDashboard() {
             size: item.size,
             addonIds: item.addonIds,
             selectedAddons: item.selectedAddons,
-            notes: item.notes || ''
+            notes: item.notes || '',
+            unitPrice: Number(item.unitPrice || item.priceAtTimeOfSale || 0),
+            subtotal: Number(item.subtotal || (Number(item.unitPrice || 0) * Number(item.quantity || 1)))
         })) || []);
+
+        // Also ensure lastOrder is synced for split payments
+        setLastOrder(order);
     };
 
     useEffect(() => {
@@ -177,14 +185,24 @@ export function POSDashboard() {
             setCartItems((prev) => {
                 const existing = prev.find(i => i.packageId === item.id);
                 if (existing) {
-                    return prev.map(i => i.packageId === item.id ? { ...i, quantity: i.quantity + 1 } : i);
+                    return prev.map(i => {
+                        if (i.packageId === item.id) {
+                            const newQty = i.quantity + 1;
+                            return { ...i, quantity: newQty, subtotal: Number(i.unitPrice || 0) * newQty };
+                        }
+                        return i;
+                    });
                 }
+                const unitPrice = Number(item.price || 0);
                 return [...prev, {
+                    id: `local-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
                     packageId: item.id,
                     quantity: 1,
                     type: 'PACKAGE',
                     package: item,
-                    addonIds: []
+                    addonIds: [],
+                    unitPrice: unitPrice,
+                    subtotal: unitPrice
                 }];
             });
             toast.success(`Added bundle ${item.name} to order`);
@@ -212,20 +230,26 @@ export function POSDashboard() {
                 (!item.addonIds || item.addonIds.length === 0)
             );
             if (existing) {
-                return prev.map((item) =>
-                    (item.productId === product.id && item.sizeId === selectedSize?.id && (!item.addonIds || item.addonIds.length === 0))
-                        ? { ...item, quantity: item.quantity + 1 }
-                        : item
-                );
+                return prev.map((item) => {
+                    if (item.productId === product.id && item.sizeId === selectedSize?.id && (!item.addonIds || item.addonIds.length === 0)) {
+                        const newQty = item.quantity + 1;
+                        return { ...item, quantity: newQty, subtotal: Number(item.unitPrice || 0) * newQty };
+                    }
+                    return item;
+                });
             }
+            const unitPrice = Number(selectedSize?.price || product.price || 0);
             return [...prev, {
+                id: `local-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
                 productId: product.id,
                 quantity: 1,
                 type: product.type,
                 product,
                 sizeId: selectedSize?.id,
                 size: selectedSize,
-                addonIds: []
+                addonIds: [],
+                unitPrice: unitPrice,
+                subtotal: unitPrice
             }];
         });
         toast.success(`Added ${product.name} to order`);
@@ -237,15 +261,22 @@ export function POSDashboard() {
         const product = selectedProductForModal;
         const sortedAddonIds = selectedAddons?.map(a => a.id).sort() || [];
 
+        const basePrice = size ? Number(size.price) : Number(product.price || 0);
+        const addonsPrice = selectedAddons?.reduce((sum, a) => sum + Number(a.price), 0) || 0;
+        const finalUnitPrice = basePrice + addonsPrice;
+
         setCartItems((prev) => {
             if (editingItemIndex !== null) {
                 const newItems = [...prev];
+                const existingItem = newItems[editingItemIndex];
                 newItems[editingItemIndex] = {
-                    ...newItems[editingItemIndex],
+                    ...existingItem,
                     sizeId: size?.id,
                     size: size,
                     addonIds: sortedAddonIds,
-                    selectedAddons: selectedAddons
+                    selectedAddons: selectedAddons,
+                    unitPrice: finalUnitPrice,
+                    subtotal: finalUnitPrice * existingItem.quantity
                 };
                 return newItems;
             }
@@ -258,14 +289,18 @@ export function POSDashboard() {
 
             if (existingIndex !== -1) {
                 const newItems = [...prev];
+                const existingItem = newItems[existingIndex];
+                const newQty = existingItem.quantity + 1;
                 newItems[existingIndex] = {
-                    ...newItems[existingIndex],
-                    quantity: newItems[existingIndex].quantity + 1
+                    ...existingItem,
+                    quantity: newQty,
+                    subtotal: finalUnitPrice * newQty
                 };
                 return newItems;
             }
 
             return [...prev, {
+                id: `local-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
                 productId: product.id,
                 quantity: 1,
                 type: product.type,
@@ -273,7 +308,9 @@ export function POSDashboard() {
                 sizeId: size?.id,
                 size: size,
                 addonIds: sortedAddonIds,
-                selectedAddons: selectedAddons
+                selectedAddons: selectedAddons,
+                unitPrice: finalUnitPrice,
+                subtotal: finalUnitPrice
             }];
         });
 
@@ -295,9 +332,11 @@ export function POSDashboard() {
             if (index === -1) return prev;
 
             const newItems = [...prev];
+            const newQty = Math.max(0, newItems[index].quantity + delta);
             newItems[index] = {
                 ...newItems[index],
-                quantity: Math.max(0, newItems[index].quantity + delta)
+                quantity: newQty,
+                subtotal: newQty * Number(newItems[index].unitPrice || 0)
             };
             return newItems.filter(item => item.quantity > 0);
         });
@@ -319,6 +358,23 @@ export function POSDashboard() {
     const taxRate = settings?.taxRate || 0;
     const cartGrandTotal = cartTotalPrice + (cartTotalPrice * taxRate / 100);
 
+    const alreadyPaidIds = useMemo(() => {
+        const ids = new Set<string>();
+        lastOrder?.payments?.forEach((p: any) => {
+            p.paidItemIds?.forEach((id: string) => ids.add(id));
+        });
+        return ids;
+    }, [lastOrder]);
+
+    const totalPaidInSession = useMemo(() => {
+        return lastOrder?.payments?.reduce((s: number, p: any) => s + Number(p.amount), 0) || 0;
+    }, [lastOrder]);
+
+    const remainingBalance = useMemo(() => {
+        if (!lastOrder) return cartGrandTotal;
+        return Math.max(0, Number(lastOrder.grandTotal) - totalPaidInSession);
+    }, [lastOrder, totalPaidInSession, cartGrandTotal]);
+
     const handleOpenCheckout = () => {
         if (cartItems.length === 0) return;
         setIsCheckoutModalOpen(true);
@@ -332,6 +388,7 @@ export function POSDashboard() {
         discount?: number;
         grandTotal?: number;
         discountPercentage?: number;
+        customerId?: string;
     }) => {
         try {
             setIsSubmitting(true);
@@ -345,7 +402,7 @@ export function POSDashboard() {
             const payloadItems: any[] = cartItems.map((item) => {
                 const basePrice = item.size ? Number(item.size.price) : Number(item.product?.price || item.package?.price || 0);
                 const addonsPrice = item.selectedAddons?.reduce((s, a) => s + Number(a.price), 0) || 0;
-                
+
                 return {
                     productId: item.productId,
                     packageId: item.packageId || undefined,
@@ -371,6 +428,7 @@ export function POSDashboard() {
                 createdOrder = await api.payOrder(activeOrderId, paymentDetails);
             } else {
                 createdOrder = await api.createOrder({
+                    ...orderMetadata,
                     items: payloadItems,
                     totalAmount: paymentDetails.grandTotal || calculatedTotal,
                     subTotal: paymentDetails.subTotal || calculatedTotal,
@@ -381,101 +439,101 @@ export function POSDashboard() {
                     change: paymentDetails.change,
                     paymentStatus: 'PAID',
                     orderType,
-                    ...orderMetadata
+                    customerId: paymentDetails.customerId || orderMetadata.customerId,
                 });
             }
 
             console.log('Checkout SUCCESS. createdOrder from API:', createdOrder);
             console.log('Current cartItems in state:', cartItems);
 
-                // Robust 1-to-1 matching to handle potential reordering and multiple identical items
-                const itemPool = [...(cartItems as any[])];
-                const claimedIndices = new Set<number>();
+            // Robust 1-to-1 matching to handle potential reordering and multiple identical items
+            const itemPool = [...(cartItems as any[])];
+            const claimedIndices = new Set<number>();
 
-                const orderItems = (createdOrder.orderItems || createdOrder.items || []).map((oi: any, oiIdx: number) => {
-                    const oiProdId = oi.productId?.toString();
-                    const oiPkgId = oi.packageId?.toString();
-                    const oiSizeId = (oi.sizeId || oi.productSizeId || oi.size?.id)?.toString() || null;
+            const orderItems = (createdOrder.orderItems || createdOrder.items || []).map((oi: any, oiIdx: number) => {
+                const oiProdId = oi.productId?.toString();
+                const oiPkgId = oi.packageId?.toString();
+                const oiSizeId = (oi.sizeId || oi.productSizeId || oi.size?.id)?.toString() || null;
 
-                    // 1. Try matching by index first
-                    let cartIdx = oiIdx;
-                    let cartItem = itemPool[cartIdx];
-                    
-                    const ciProdId = cartItem?.productId?.toString() || cartItem?.id?.toString();
-                    const ciPkgId = cartItem?.packageId?.toString() || cartItem?.id?.toString();
-                    const ciSizeId = (cartItem?.sizeId || cartItem?.size?.id)?.toString() || null;
+                // 1. Try matching by index first
+                let cartIdx = oiIdx;
+                let cartItem = itemPool[cartIdx];
 
-                    const isIndexMatch = !claimedIndices.has(cartIdx) && 
-                                        ((oiProdId && ciProdId === oiProdId) || (oiPkgId && ciPkgId === oiPkgId)) &&
-                                        (oiSizeId === ciSizeId);
+                const ciProdId = cartItem?.productId?.toString() || cartItem?.id?.toString();
+                const ciPkgId = cartItem?.packageId?.toString() || cartItem?.id?.toString();
+                const ciSizeId = (cartItem?.sizeId || cartItem?.size?.id)?.toString() || null;
 
-                    if (isIndexMatch) {
+                const isIndexMatch = !claimedIndices.has(cartIdx) &&
+                    ((oiProdId && ciProdId === oiProdId) || (oiPkgId && ciPkgId === oiPkgId)) &&
+                    (oiSizeId === ciSizeId);
+
+                if (isIndexMatch) {
+                    claimedIndices.add(cartIdx);
+                } else {
+                    // 2. Fallback: Search pool for first unclaimed match
+                    cartIdx = itemPool.findIndex((ci, idx) => {
+                        if (claimedIndices.has(idx)) return false;
+                        const pId = ci.productId?.toString() || ci.id?.toString();
+                        const pkgId = ci.packageId?.toString() || ci.id?.toString();
+                        const sId = (ci.sizeId || ci.size?.id)?.toString() || null;
+
+                        return ((oiProdId && pId === oiProdId) || (oiPkgId && pkgId === oiPkgId)) && (oiSizeId === sId);
+                    });
+
+                    if (cartIdx !== -1) {
+                        cartItem = itemPool[cartIdx];
                         claimedIndices.add(cartIdx);
                     } else {
-                        // 2. Fallback: Search pool for first unclaimed match
-                        cartIdx = itemPool.findIndex((ci, idx) => {
-                            if (claimedIndices.has(idx)) return false;
-                            const pId = ci.productId?.toString() || ci.id?.toString();
-                            const pkgId = ci.packageId?.toString() || ci.id?.toString();
-                            const sId = (ci.sizeId || ci.size?.id)?.toString() || null;
-                            
-                            return ((oiProdId && pId === oiProdId) || (oiPkgId && pkgId === oiPkgId)) && (oiSizeId === sId);
-                        });
-
-                        if (cartIdx !== -1) {
-                            cartItem = itemPool[cartIdx];
-                            claimedIndices.add(cartIdx);
-                        } else {
-                            cartItem = null; // Unmatched
-                        }
+                        cartItem = null; // Unmatched
                     }
+                }
 
-                    const sizeValue = cartItem?.size?.name || 
-                                     (typeof cartItem?.size === 'string' ? cartItem.size : null) || 
-                                     oi.productSize?.name || 
-                                     oi.size?.name || 
-                                     (typeof oi.size === 'string' ? oi.size : null);
+                const sizeValue = cartItem?.size?.name ||
+                    (typeof cartItem?.size === 'string' ? cartItem.size : null) ||
+                    oi.productSize?.name ||
+                    oi.size?.name ||
+                    (typeof oi.size === 'string' ? oi.size : null);
 
-                    const addonsValue = cartItem?.selectedAddons || oi.selectedAddons || oi.orderItemAddons || [];
+                const addonsValue = cartItem?.selectedAddons || oi.selectedAddons || oi.orderItemAddons || [];
 
-                    return {
-                        ...oi,
-                        name: cartItem?.name || cartItem?.product?.name || cartItem?.package?.name || oi.product?.name || oi.package?.name || `Item`,
-                        unitPrice: Number(oi.unitPrice || oi.priceAtTimeOfSale || (cartItem?.size ? cartItem.size.price : cartItem?.product?.price || cartItem?.package?.price || 0)),
-                        product: cartItem?.product || oi.product,
-                        package: cartItem?.package || oi.package,
-                        size: sizeValue,
-                        productSize: cartItem?.size || oi.productSize || oi.size,
-                        addons: addonsValue,
-                        selectedAddons: addonsValue
-                    };
-                });
+                return {
+                    ...oi,
+                    name: cartItem?.name || cartItem?.product?.name || cartItem?.package?.name || oi.product?.name || oi.package?.name || `Item`,
+                    unitPrice: Number(oi.unitPrice || oi.priceAtTimeOfSale || (cartItem?.size ? cartItem.size.price : cartItem?.product?.price || cartItem?.package?.price || 0)),
+                    product: cartItem?.product || oi.product,
+                    package: cartItem?.package || oi.package,
+                    size: sizeValue,
+                    productSize: cartItem?.size || oi.productSize || oi.size,
+                    addons: addonsValue,
+                    selectedAddons: addonsValue
+                };
+            });
 
-                const orderToSave = {
-                    ...createdOrder,
-                    orderItems,
-                    items: orderItems, // Force unified naming to avoid template mismatches
-                    subTotal: Number(paymentDetails.subTotal || createdOrder.subTotal || calculatedTotal),
+            const orderToSave = {
+                ...createdOrder,
+                orderItems,
+                items: orderItems, // Force unified naming to avoid template mismatches
+                subTotal: Number(paymentDetails.subTotal || createdOrder.subTotal || calculatedTotal),
                 discount: Number(paymentDetails.discount || createdOrder.discount || 0),
                 grandTotal: Number(paymentDetails.grandTotal || createdOrder.grandTotal || (calculatedTotal - (paymentDetails.discount || 0))),
                 discountPercentage: paymentDetails.discountPercentage || createdOrder.discountPercentage,
                 invoiceNumber: createdOrder.invoiceNumber || generateInvoiceNumber()
             };
-            
+
             console.log('FINAL orderToSave for receipt:', orderToSave);
-            
+
             setLastOrder(orderToSave);
             toast.success('Payment processed successfully!');
             setActiveOrderId(null);
             setIsMobileCartOpen(false);
             queryClient.invalidateQueries({ queryKey: ['products'] });
-            
+
             // Clear cart LAST to ensure all state used above was available
             handleClearCart();
-            
+
             // Open Success Modal instead of just toast
             setIsSuccessModalOpen(true);
-            
+
             return orderToSave;
 
         } catch (error) {
@@ -486,6 +544,137 @@ export function POSDashboard() {
             }
             console.error(error);
             throw error;
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleSplitConfirm = async (splitDetails: { paymentMethod: string; amount: number; paidItemIds: string[] }) => {
+        let currentOrderId = activeOrderId;
+
+        try {
+            setIsSubmitting(true);
+
+            // If it's a new order (no ID), save it first
+            if (!currentOrderId) {
+                const payloadItems = cartItems.map((item) => {
+                    const basePrice = item.size ? Number(item.size.price) : Number(item.product?.price || item.package?.price || 0);
+                    const addonsPrice = item.selectedAddons?.reduce((s: number, a: any) => s + Number(a.price), 0) || 0;
+
+                    return {
+                        productId: item.productId,
+                        packageId: item.packageId || undefined,
+                        quantity: item.quantity,
+                        type: item.type,
+                        sizeId: item.sizeId || (item.size as any)?.id || undefined,
+                        addonIds: item.addonIds || item.selectedAddons?.map((a: any) => a.id) || [],
+                        unitPrice: basePrice + addonsPrice,
+                        notes: item.notes
+                    };
+                });
+
+                const createdOrder = await api.createOrder({
+                    items: payloadItems,
+                    totalAmount: cartGrandTotal,
+                    subTotal: cartTotalPrice,
+                    discount: 0,
+                    grandTotal: cartGrandTotal,
+                    paymentMethod: splitDetails.paymentMethod as any,
+                    paymentStatus: 'PARTIAL',
+                    orderType,
+                    ...orderMetadata
+                });
+
+                currentOrderId = createdOrder.id;
+                setActiveOrderId(currentOrderId);
+
+                // CRITICAL FIX: The items we just created have real database IDs now.
+                // We must map our selection to these new IDs before splitting.
+                if (splitDetails.paidItemIds && splitDetails.paidItemIds.length > 0) {
+                    const mappedIds: string[] = [];
+                    // Check if the selection included an 'undefined' ID (common for new items)
+                    const includesUndefined = splitDetails.paidItemIds.includes(undefined as any) || splitDetails.paidItemIds.includes("undefined");
+
+                    cartItems.forEach((cartItem) => {
+                        // Match if ID matches OR if it was an undefined-ID selection for a new item
+                        if (splitDetails.paidItemIds.includes(cartItem.id as string) || (!cartItem.id && includesUndefined)) {
+                            const matchingDbItem = createdOrder.orderItems?.find((oi: any) => {
+                                const isSameProduct = oi.productId === cartItem.productId && oi.packageId === cartItem.packageId;
+                                const isSameQty = Number(oi.quantity) === Number(cartItem.quantity);
+                                // Avoid duplicate mapping
+                                return isSameProduct && isSameQty && !mappedIds.includes(oi.id);
+                            });
+                            if (matchingDbItem) mappedIds.push(matchingDbItem.id);
+                        }
+                    });
+                    splitDetails.paidItemIds = mappedIds;
+                }
+
+                // Also update cartItems with the new IDs from the created order
+                handleRecallOrder(createdOrder);
+            }
+
+            if (!currentOrderId) {
+                throw new Error("Could not create or find an order ID for split payment.");
+            }
+
+            const updatedOrder = await api.splitPayOrder(currentOrderId as string, splitDetails);
+
+            // Re-map items to include the IDs and latest data
+            const mappedOrder = {
+                ...updatedOrder,
+                items: updatedOrder.orderItems?.map((oi: any) => ({
+                    ...oi,
+                    name: oi.product?.name || oi.package?.name || 'Item',
+                    unitPrice: Number(oi.unitPrice || 0)
+                })) || []
+            };
+
+            const lastPayment = updatedOrder.payments?.slice(-1)[0];
+            const paidItemIdsArr = lastPayment?.paidItemIds || [];
+
+            // CRITICAL: Filter for receipt to show ONLY what was just paid
+            if (paidItemIdsArr.length > 0) {
+                const filteredItems = updatedOrder.orderItems?.filter((oi: any) =>
+                    paidItemIdsArr.includes(oi.id)
+                ).map((oi: any) => ({
+                    ...oi,
+                    name: oi.product?.name || oi.package?.name || 'Item',
+                    unitPrice: Number(oi.unitPrice || 0)
+                }));
+
+                setLastSplitResult({
+                    ...mappedOrder,
+                    items: filteredItems,
+                    subTotal: lastPayment.amount,
+                    grandTotal: lastPayment.amount,
+                    isSplitReceipt: true,
+                    paymentMethod: lastPayment.paymentMethod
+                });
+            } else {
+                setLastSplitResult(null);
+            }
+
+            setLastOrder(mappedOrder);
+            setIsSuccessModalOpen(true);
+
+            const totalPaid = updatedOrder.payments?.reduce((s: number, p: any) => s + Number(p.amount), 0) || 0;
+            const remaining = Number(updatedOrder.grandTotal) - totalPaid;
+
+            if (updatedOrder.paymentStatus === 'PAID') {
+                toast.success('Order fully paid!');
+                handleClearCart();
+                setActiveOrderId(null);
+                setLastOrder(null);
+                setIsCheckoutModalOpen(false);
+            } else {
+                toast.success(`Payment processed. Remaining: ${settings?.currencySymbol || 'Rs.'}${Math.max(0, remaining).toFixed(2)}`);
+                handleRecallOrder(updatedOrder);
+            }
+        } catch (error: any) {
+            console.error('Split payment failed:', error);
+            const errorMessage = error.response?.data?.error || error.message || 'Failed to process split payment';
+            toast.error(errorMessage);
         } finally {
             setIsSubmitting(false);
         }
@@ -592,7 +781,7 @@ export function POSDashboard() {
                                         )}
                                     </div>
                                     <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
-                                        <button 
+                                        <button
                                             onClick={() => { setShowNotifications(false); setIsPartiesModalOpen(true); }}
                                             className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:text-blue-700"
                                         >
@@ -734,6 +923,10 @@ export function POSDashboard() {
                     discount={0}
                     onViewHeldOrders={() => setIsHeldOrdersModalOpen(true)}
                     onEdit={handleEditCartItem}
+                    alreadyPaidIds={alreadyPaidIds}
+                    totalPaid={totalPaidInSession}
+                    remainingBalance={remainingBalance}
+                    orderTotal={lastOrder?.grandTotal}
                 />
             </aside>
 
@@ -753,6 +946,10 @@ export function POSDashboard() {
                             discount={0}
                             onViewHeldOrders={() => setIsHeldOrdersModalOpen(true)}
                             onEdit={handleEditCartItem}
+                            alreadyPaidIds={alreadyPaidIds}
+                            totalPaid={totalPaidInSession}
+                            remainingBalance={remainingBalance}
+                            orderTotal={lastOrder?.grandTotal}
                         />
                     </div>
                 </div>
@@ -766,14 +963,17 @@ export function POSDashboard() {
             <CheckoutModal
                 isOpen={isCheckoutModalOpen}
                 onClose={() => setIsCheckoutModalOpen(false)}
-                totalAmount={cartGrandTotal}
+                totalAmount={lastOrder?.grandTotal || cartGrandTotal}
+                items={cartItems}
                 onConfirm={handleConfirmCheckout}
+                onSplitConfirm={handleSplitConfirm}
+                customerId={orderMetadata.customerId}
             />
 
             <CheckoutSuccessModal
                 isOpen={isSuccessModalOpen}
                 onClose={() => setIsSuccessModalOpen(false)}
-                orderData={lastOrder}
+                orderData={lastSplitResult || lastOrder}
             />
 
             {selectedProductForModal && (
@@ -793,7 +993,7 @@ export function POSDashboard() {
                     onConfirm={handleSelectionConfirm}
                 />
             )}
-            <PartiesListModal 
+            <PartiesListModal
                 isOpen={isPartiesModalOpen}
                 onClose={() => setIsPartiesModalOpen(false)}
             />

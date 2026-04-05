@@ -266,13 +266,7 @@ function ProductList({ categories, products, onRefresh }: { categories: Category
                                 <tr key={prod.id} className="hover:bg-slate-50/50 transition-colors group">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-4">
-                                            {prod.imageUrl ? (
-                                                <img src={prod.imageUrl} className="w-10 h-10 rounded-lg object-cover" />
-                                            ) : (
-                                                <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">
-                                                    <ShoppingBag size={18} />
-                                                </div>
-                                            )}
+                                            <ProductThumbnail imageUrl={prod.imageUrl} />
                                             <div>
                                                 <div className="font-bold text-slate-800 text-sm">{prod.name}</div>
                                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{prod.type}</div>
@@ -338,6 +332,11 @@ function ProductModal({ categories, initialData, onClose, onSuccess }: { categor
         initialData?.sizes?.map((s: any) => ({ name: s.name, price: Number(s.price) })) || []
     );
     const [isUploading, setIsUploading] = useState(false);
+    const [imgError, setImgError] = useState(false);
+
+    useEffect(() => {
+        setImgError(false);
+    }, [formData.imageUrl]);
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -388,9 +387,14 @@ function ProductModal({ categories, initialData, onClose, onSuccess }: { categor
                 <div className="p-8 space-y-6 overflow-y-auto">
                     {/* Image Upload Section */}
                     <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 group hover:border-blue-400 hover:bg-blue-50/30 transition-all relative overflow-hidden h-48">
-                        {formData.imageUrl ? (
+                        {(formData.imageUrl && !imgError) ? (
                             <>
-                                <img src={formData.imageUrl} alt="Preview" className="absolute inset-0 w-full h-full object-cover" />
+                                <img 
+                                    src={formData.imageUrl} 
+                                    alt="Preview" 
+                                    onError={() => setImgError(true)}
+                                    className="absolute inset-0 w-full h-full object-cover" 
+                                />
                                 <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                                     <label className="p-3 bg-white rounded-xl text-slate-800 cursor-pointer hover:scale-110 transition-transform shadow-lg">
                                         <Upload size={20} />
@@ -1115,5 +1119,25 @@ function PackageModal({ initialData, onClose, onSuccess }: { initialData: any | 
                 </div>
             </div>
         </div>
+    );
+}
+
+function ProductThumbnail({ imageUrl }: { imageUrl?: string | null }) {
+    const [imgError, setImgError] = useState(false);
+
+    if (!imageUrl || imgError) {
+        return (
+            <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">
+                <ShoppingBag size={18} />
+            </div>
+        );
+    }
+
+    return (
+        <img 
+            src={imageUrl} 
+            onError={() => setImgError(true)} 
+            className="w-10 h-10 rounded-lg object-cover" 
+        />
     );
 }
