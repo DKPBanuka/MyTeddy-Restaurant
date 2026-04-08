@@ -7,6 +7,7 @@ import { Plus, Trash2, Edit2, Save, X, Layers, ShoppingBag, Search, Upload, Load
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSocket } from '../context/SocketContext';
 
 export function MenuManagement() {
     const queryClient = useQueryClient();
@@ -15,6 +16,7 @@ export function MenuManagement() {
     const [catName, setCatName] = useState('');
     const [editingCatId, setEditingCatId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'CATEGORIES' | 'PRODUCTS' | 'GLOBAL_ADDONS' | 'PACKAGES'>('CATEGORIES');
+    const { socket } = useSocket();
 
     // Queries
     const { data: categories = [] } = useQuery({
@@ -33,6 +35,24 @@ export function MenuManagement() {
         queryClient.invalidateQueries({ queryKey: ['packages'] });
         queryClient.invalidateQueries({ queryKey: ['global-addons'] });
     };
+
+    // --- Real-time Listeners ---
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleUpdate = () => {
+            console.log('Real-time: Menu data updated, refreshing...');
+            invalidateAll();
+        };
+
+        socket.on('PRODUCT_UPDATED', handleUpdate);
+        socket.on('INVENTORY_UPDATED', handleUpdate);
+
+        return () => {
+            socket.off('PRODUCT_UPDATED', handleUpdate);
+            socket.off('INVENTORY_UPDATED', handleUpdate);
+        };
+    }, [socket, queryClient]);
 
     const handleCreateCategory = async () => {
         if (!catName.trim()) return;

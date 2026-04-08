@@ -13,6 +13,7 @@ import { SettingsController } from './settings.controller';
 import { RolePermissionsController } from './role-permissions.controller';
 
 import { CustomersGatewayController } from './customers.controller';
+import { RealTimeGateway } from './real-time.gateway';
 
 @Module({
     imports: [
@@ -36,6 +37,6 @@ import { CustomersGatewayController } from './customers.controller';
         RolePermissionsController,
         CustomersGatewayController,
     ],
-    providers: [],
+    providers: [RealTimeGateway],
 })
 export class AppModule { }

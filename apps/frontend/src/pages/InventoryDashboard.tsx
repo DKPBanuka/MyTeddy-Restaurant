@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../api';
 import { toast } from 'sonner';
 import { Plus, Edit2, Trash2, AlertTriangle, Search, X } from 'lucide-react';
+import { useSocket } from '../context/SocketContext';
 
 interface Ingredient {
     id: string;
@@ -50,10 +51,29 @@ export function InventoryDashboard() {
     // UI States
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
+    const { socket } = useSocket();
 
     useEffect(() => {
         fetchData();
     }, [activeTab]);
+
+    // --- Real-time Listeners ---
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleUpdate = () => {
+            console.log('Real-time: Inventory/Order updated, refreshing data...');
+            fetchData();
+        };
+
+        socket.on('INVENTORY_UPDATED', handleUpdate);
+        socket.on('ORDER_UPDATED', handleUpdate);
+
+        return () => {
+            socket.off('INVENTORY_UPDATED', handleUpdate);
+            socket.off('ORDER_UPDATED', handleUpdate);
+        };
+    }, [socket]);
 
     const fetchData = async () => {
         setIsLoading(true);

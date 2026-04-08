@@ -1,5 +1,6 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { useSocket } from './SocketContext';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
@@ -36,6 +37,23 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     queryKey: ['settings'],
     queryFn: () => api.getSettings(),
   });
+
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleUpdate = () => {
+      console.log('Real-time: Settings updated, invalidating query...');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    };
+
+    socket.on('SETTING_UPDATED', handleUpdate);
+
+    return () => {
+      socket.off('SETTING_UPDATED', handleUpdate);
+    };
+  }, [socket, queryClient]);
 
   const mutation = useMutation({
     mutationFn: (dto: Partial<RestaurantSettings>) => api.updateSettings(dto),

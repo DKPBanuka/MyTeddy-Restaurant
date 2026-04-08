@@ -2,9 +2,14 @@ import { Controller, Post, Get, Patch, Body, Param, Inject, HttpException, HttpS
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { firstValueFrom, catchError, throwError } from 'rxjs';
 
+import { RealTimeGateway } from './real-time.gateway';
+
 @Controller('orders')
 export class OrdersGatewayController {
-    constructor(@Inject('ORDER_SERVICE') private readonly orderClient: ClientProxy) { }
+    constructor(
+        @Inject('ORDER_SERVICE') private readonly orderClient: ClientProxy,
+        private readonly realTime: RealTimeGateway
+    ) { }
 
     @Post()
     async createOrder(@Body() createOrderDto: any) {
@@ -14,6 +19,7 @@ export class OrdersGatewayController {
                     catchError(error => throwError(() => new RpcException(error)))
                 )
             );
+            this.realTime.emit('ORDER_UPDATED', result);
             return result;
         } catch (error: any) {
             console.error('OrdersGatewayController.createOrder FAILED:', JSON.stringify(error));
@@ -101,6 +107,7 @@ export class OrdersGatewayController {
                     catchError(error => throwError(() => new RpcException(error)))
                 )
             );
+            this.realTime.emit('ORDER_UPDATED', result);
             return result;
         } catch (error: any) {
             throw new HttpException({
@@ -118,6 +125,7 @@ export class OrdersGatewayController {
                     catchError(error => throwError(() => new RpcException(error)))
                 )
             );
+            this.realTime.emit('ORDER_UPDATED', result);
             return result;
         } catch (error: any) {
             throw new HttpException({
@@ -135,6 +143,7 @@ export class OrdersGatewayController {
                     catchError(error => throwError(() => new RpcException(error)))
                 )
             );
+            this.realTime.emit('ORDER_UPDATED', result);
             return result;
         } catch (error: any) {
             throw new HttpException({
@@ -152,6 +161,7 @@ export class OrdersGatewayController {
                     catchError(error => throwError(() => new RpcException(error)))
                 )
             );
+            this.realTime.emit('ORDER_UPDATED', result);
             return result;
         } catch (error: any) {
             throw new HttpException({

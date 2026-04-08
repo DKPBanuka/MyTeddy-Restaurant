@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Inject, Query, UseInterceptors, UploadedFile, HttpException, HttpStatus } from '@nestjs/common';
+import { RealTimeGateway } from './real-time.gateway';
 import { ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -10,7 +11,10 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 @Controller('products')
 export class ProductsGatewayController {
-    constructor(@Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientProxy) { }
+    constructor(
+        @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientProxy,
+        private readonly realTime: RealTimeGateway
+    ) { }
 
     @Get()
     async getProducts(@Query('categoryId') categoryId?: string) {
@@ -19,17 +23,23 @@ export class ProductsGatewayController {
 
     @Post()
     async createProduct(@Body() data: any) {
-        return firstValueFrom(this.inventoryClient.send({ cmd: 'create_product' }, data));
+        const result = await firstValueFrom(this.inventoryClient.send({ cmd: 'create_product' }, data));
+        this.realTime.emit('PRODUCT_UPDATED', result);
+        return result;
     }
 
     @Patch(':id')
     async updateProduct(@Param('id') id: string, @Body() data: any) {
-        return firstValueFrom(this.inventoryClient.send({ cmd: 'update_product' }, { id, data }));
+        const result = await firstValueFrom(this.inventoryClient.send({ cmd: 'update_product' }, { id, data }));
+        this.realTime.emit('PRODUCT_UPDATED', { id });
+        return result;
     }
 
     @Delete(':id')
     async deleteProduct(@Param('id') id: string) {
-        return firstValueFrom(this.inventoryClient.send({ cmd: 'delete_product' }, id));
+        const result = await firstValueFrom(this.inventoryClient.send({ cmd: 'delete_product' }, id));
+        this.realTime.emit('PRODUCT_UPDATED', { id });
+        return result;
     }
 
     @Post('upload-image')

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Percent, DollarSign, Printer, Calculator } from 'lucide-react';
+import { X, Percent, DollarSign, Printer, Calculator, Download } from 'lucide-react';
 import { type PartyBookingDto } from '../api';
 import ModernReceiptUI from './ModernReceiptUI';
 
@@ -9,7 +9,7 @@ interface ReceiptPreparationModalProps {
     booking: PartyBookingDto;
     settings: any;
     receiptType: 'PARTY_ADVANCE' | 'PARTY_FINAL';
-    onConfirm: (data: { discount: number; serviceCharge: number; paymentMethod: string; addonsTotal: number }) => Promise<void>;
+    onConfirm: (data: { discount: number; serviceCharge: number; paymentMethod: string; addonsTotal: number }, action: 'PRINT' | 'DOWNLOAD') => Promise<void>;
     isSubmitting: boolean;
 }
 
@@ -205,20 +205,37 @@ export function ReceiptPreparationModal({
                             </div>
                         </div>
 
-                        <button
-                            onClick={() => onConfirm({ discount: discountAmount, serviceCharge, paymentMethod, addonsTotal: extraAdjustments })}
-                            disabled={isSubmitting}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-2xl font-black transition-all shadow-xl shadow-blue-200 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3"
-                        >
-                            {isSubmitting ? (
-                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                            ) : (
-                                <>
-                                    <Printer size={20} />
-                                    SAVE & PRINT INVOICE
-                                </>
-                            )}
-                        </button>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => onConfirm({ discount: discountAmount, serviceCharge, paymentMethod, addonsTotal: extraAdjustments }, 'PRINT')}
+                                disabled={isSubmitting}
+                                className="flex-1 bg-slate-900 hover:bg-black text-white py-5 rounded-2xl font-black transition-all shadow-xl shadow-slate-200 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3"
+                            >
+                                {isSubmitting ? (
+                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                ) : (
+                                    <>
+                                        <Printer size={20} />
+                                        SAVE & PRINT
+                                    </>
+                                )}
+                            </button>
+                            <button
+                                onClick={() => onConfirm({ discount: discountAmount, serviceCharge, paymentMethod, addonsTotal: extraAdjustments }, 'DOWNLOAD')}
+                                disabled={isSubmitting}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-8 rounded-2xl font-black transition-all shadow-xl shadow-blue-200 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3"
+                                title="Download PDF"
+                            >
+                                {isSubmitting ? (
+                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                ) : (
+                                    <>
+                                        <Download size={20} />
+                                        <span className="hidden sm:inline">PDF</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

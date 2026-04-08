@@ -19,6 +19,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSettings } from '../context/SettingsContext';
 import { generateInvoiceNumber } from '../utils/invoice';
 import { generatePDFReceipt } from '../utils/pdfReceipt';
+import { useSocket } from '../context/SocketContext';
 
 
 type OrderType = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
@@ -52,6 +53,7 @@ export function POSDashboard() {
     const [showNotifications, setShowNotifications] = useState(false);
     const [isPartiesModalOpen, setIsPartiesModalOpen] = useState(false);
     const queryClient = useQueryClient();
+    const { socket } = useSocket();
 
     const { data: products = [], isLoading: productsLoading } = useQuery({
         queryKey: ['products'],
@@ -79,7 +81,6 @@ export function POSDashboard() {
             const parties = await api.getPartyBookings();
             return parties || [];
         },
-        refetchInterval: 60000, // Check every minute
     });
 
     useEffect(() => {
@@ -100,6 +101,47 @@ export function POSDashboard() {
             }
         }
     }, [allParties]);
+
+    // --- Real-time Listeners ---
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleBookingUpdate = () => {
+            console.log('Real-time: Party booking updated, invalidating query...');
+            queryClient.invalidateQueries({ queryKey: ['parties-alert'] });
+        };
+
+        const handleSettingsUpdate = () => {
+            console.log('Real-time: Settings updated, refreshing...');
+            window.location.reload(); 
+        };
+
+        const handleProductUpdate = () => {
+            console.log('Real-time: Product or category updated, invalidating queries...');
+            queryClient.invalidateQueries({ queryKey: ['products'] });
+            queryClient.invalidateQueries({ queryKey: ['categories'] });
+            queryClient.invalidateQueries({ queryKey: ['packages'] });
+        };
+
+        const handleInventoryUpdate = () => {
+            console.log('Real-time: Inventory updated, invalidating queries...');
+            queryClient.invalidateQueries({ queryKey: ['global-addons'] });
+            // Products might be affected if they have stock (retail)
+            queryClient.invalidateQueries({ queryKey: ['products'] });
+        };
+
+        socket.on('PARTY_BOOKING_UPDATED', handleBookingUpdate);
+        socket.on('SETTING_UPDATED', handleSettingsUpdate);
+        socket.on('PRODUCT_UPDATED', handleProductUpdate);
+        socket.on('INVENTORY_UPDATED', handleInventoryUpdate);
+
+        return () => {
+            socket.off('PARTY_BOOKING_UPDATED', handleBookingUpdate);
+            socket.off('SETTING_UPDATED', handleSettingsUpdate);
+            socket.off('PRODUCT_UPDATED', handleProductUpdate);
+            socket.off('INVENTORY_UPDATED', handleInventoryUpdate);
+        };
+    }, [socket, queryClient]);
 
     const isLoading = productsLoading;
 
@@ -867,7 +909,7 @@ export function POSDashboard() {
                             <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5 content-start">
+                        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-3 md:gap-5 content-start">
                             {filteredItems.map((item: any) => {
                                 const relevantAddons = globalAddons.filter(a =>
                                     a.categories?.some((c: any) => c.id === item.categoryId)

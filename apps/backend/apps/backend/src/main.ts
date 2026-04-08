@@ -13,7 +13,12 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.use(json({ limit: '50mb' }));
   app.use(urlencoded({ extended: true, limit: '50mb' }));
-  app.enableCors(); // Enable CORS for the frontend
-  await app.listen(process.env.PORT ?? 3000);
+  app.enableCors({
+    origin: '*',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+    allowedHeaders: 'Content-Type, Accept, Authorization',
+  });
+  await app.listen(process.env.PORT ?? 3000, '0.0.0.0'); // Listen on all interfaces
 }
 bootstrap();

@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, Printer, XCircle, ArrowRight } from 'lucide-react';
+import { CheckCircle2, Printer, XCircle, ArrowRight, ArrowDownToLine } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import ModernReceiptUI from './ModernReceiptUI';
 import { generatePDFReceipt } from '../utils/pdfReceipt';
@@ -20,10 +20,10 @@ export const CheckoutSuccessModal: React.FC<CheckoutSuccessModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 relative">
+      <div className="bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 relative print:shadow-none print:bg-transparent print:rounded-none">
         
         {/* Banner Section */}
-        <div className="bg-slate-900 p-8 flex flex-col items-center text-white relative">
+        <div className="bg-slate-900 p-8 flex flex-col items-center text-white relative no-print">
           <div className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-emerald-900/20 animate-bounce">
             <CheckCircle2 size={48} className="text-white" />
           </div>
@@ -48,7 +48,7 @@ export const CheckoutSuccessModal: React.FC<CheckoutSuccessModalProps> = ({
             </div>
           </div>
 
-          <div className="w-full md:w-72 flex flex-col gap-4 shrink-0">
+          <div className="w-full md:w-72 flex flex-col gap-4 shrink-0 no-print">
             <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-2xl mb-2">
               <div className="text-emerald-800 font-bold text-sm mb-1 uppercase tracking-wider text-center">Order Recorded</div>
               <div className="text-emerald-600 text-[10px] font-semibold text-center leading-tight">Your database is updated and items are ready for fulfillment.</div>
@@ -56,14 +56,25 @@ export const CheckoutSuccessModal: React.FC<CheckoutSuccessModalProps> = ({
 
             <button
               onClick={() => {
-                generatePDFReceipt(orderData, settings, settings?.logoUrl);
-                setTimeout(onClose, 1000); // Close after starting download
+                setTimeout(() => window.print(), 100);
               }}
               className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black py-5 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-xl shadow-slate-200"
             >
               <Printer size={22} />
               PRINT RECEIPT
             </button>
+
+            <button
+              onClick={() => {
+                generatePDFReceipt(orderData, settings, settings?.logoUrl);
+                setTimeout(onClose, 2000); // Give user enough time to see the download start
+              }}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-xl shadow-blue-100"
+            >
+              <ArrowDownToLine size={22} />
+              DOWNLOAD PDF
+            </button>
+
             <button
               onClick={onClose}
               className="w-full bg-white border-2 border-slate-200 hover:border-slate-900 hover:text-slate-900 text-slate-500 font-black py-5 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-[0.98]"
@@ -77,7 +88,7 @@ export const CheckoutSuccessModal: React.FC<CheckoutSuccessModalProps> = ({
         {/* Close Icon for convenience */}
         <button 
           onClick={onClose}
-          className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors"
+          className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors no-print"
         >
           <XCircle size={24} />
         </button>

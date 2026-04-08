@@ -34,16 +34,30 @@ export default function ModernReceiptUI({
 
   const isParty = receiptType === 'PARTY_ADVANCE' || receiptType === 'PARTY_FINAL';
 
+  const pbDatePrefix = (() => {
+    const d = new Date(orderData?.eventDate || orderData?.createdAt || new Date());
+    const y = d.getFullYear();
+    const m = (d.getMonth() + 1).toString().padStart(2, '0');
+    const day = d.getDate().toString().padStart(2, '0');
+    return `${y}${m}${day}`;
+  })();
+
   const invoiceNo = isParty
-    ? `PB-${(orderData?.id || '0000').slice(-6).toUpperCase()}`
+    ? `PB-${pbDatePrefix}-${(orderData?.id || '0000').slice(-4).toUpperCase()}`
     : (orderData?.invoiceNumber || "INV-0000");
 
-  const actualDate = isParty ? orderData?.eventDate : (orderData?.date || new Date());
-  const dateStr = actualDate ? new Date(actualDate).toLocaleString('en-GB', {
+  const now = new Date();
+  const invoiceDateStr = now.toLocaleString('en-GB', {
     day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
+    hour: '2-digit', minute: '2-digit', hour12: true,
     timeZone: 'Asia/Colombo'
-  }) : new Date().toLocaleString('en-GB', { timeZone: 'Asia/Colombo' });
+  });
+
+  const eventDateStr = (isParty && orderData?.eventDate) ? new Date(orderData.eventDate).toLocaleString('en-GB', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true,
+    timeZone: 'Asia/Colombo'
+  }) : null;
 
   // Items Parsing
   let displayItems: any[] = [];
@@ -200,38 +214,11 @@ export default function ModernReceiptUI({
     if (receiptType === 'PARTY_FINAL') return 'FINAL INVOICE - PARTY BOOKING';
     return null;
   };
-
   return (
     <div className="font-sans">
       <style>
         {`
-          @media print {
-            @page { margin: 0; }
-            body { 
-              background: white; 
-              margin: 0;
-              padding: 0;
-              display: flex;
-              justify-content: flex-start;
-              align-items: flex-start;
-            }
-            .no-print { display: none !important; }
-            .line-clamp-2 {
-              display: -webkit-box;
-              -webkit-line-clamp: 2;
-              -webkit-box-orient: vertical;  
-              overflow: hidden;
-              text-overflow: ellipsis;
-            }
-            .print-area { 
-              box-shadow: none !important; 
-              margin: 0 !important; 
-              border-radius: 0 !important;
-              width: ${paperSize === '80mm' ? '72mm' : '48mm'} !important;
-              padding: 0.5em !important;
-            }
-          }
-          .signature-font { font-family: 'Great Vibes', cursive; }
+          .signature-font { font-family: 'Great Vibes', cursive; font-size: 38px; }
           .receipt-text-base { font-size: 1em; }
           .receipt-text-sm { font-size: 0.85em; }
           .receipt-text-xs { font-size: 0.7em; }
@@ -239,6 +226,35 @@ export default function ModernReceiptUI({
           .receipt-text-xl { font-size: 1.5em; }
           .receipt-text-2xl { font-size: 1.8em; }
           .receipt-spacing { margin-top: 1.5em; margin-bottom: 1.5em; }
+          .dashed-line { border-top: 2px dashed #444 !important; }
+          
+          @media print {
+            body * { visibility: hidden !important; }
+            #receipt-preview, #receipt-preview * { visibility: visible !important; }
+            
+            /* RESET ALL LAYOUT PROPERTIES OF ROOT NODES TO PREVENT BLANK PAGES */
+            html, body, #root, [data-overlay-container] {
+              position: static !important;
+              height: auto !important;
+              overflow: visible !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              background: white !important;
+            }
+
+            #receipt-preview {
+              position: absolute !important;
+              left: 0 !important;
+              top: 0 !important;
+              width: ${paperSize === '80mm' ? '300px' : '230px'} !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              box-shadow: none !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              background: white !important;
+            }
+          }
         `}
       </style>
 
@@ -246,7 +262,7 @@ export default function ModernReceiptUI({
       <div
         id="receipt-preview"
         className={`print-area relative mx-auto
-          ${paperSize === '80mm' ? 'w-[320px] text-[15px] p-8 rounded-3xl' : 'w-[240px] text-[12px] p-5 rounded-2xl'}
+          ${paperSize === '80mm' ? 'w-[320px] text-[17px] p-8 rounded-3xl' : 'w-[240px] text-[12px] p-5 rounded-2xl'}
         `}
         style={{
           lineHeight: '1.4',
@@ -263,9 +279,9 @@ export default function ModernReceiptUI({
               <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
             </div>
           )}
-          <h1 className="receipt-text-xl font-bold text-center tracking-wide leading-tight mt-[0.2em]" style={{ color: '#000000' }}>{restaurantName.toUpperCase()}</h1>
-          <p className="receipt-text-base text-center mt-[0.3em]" style={{ color: '#1f2937' }}>{address}</p>
-          <p className="receipt-text-base text-center" style={{ color: '#1f2937' }}>Tel: {phone}</p>
+          <h1 className="receipt-text-xl font-black text-center tracking-wide leading-tight mt-[0.2em]" style={{ color: '#000000', fontWeight: 950 }}>{restaurantName.toUpperCase()}</h1>
+          <p className="receipt-text-base text-center mt-[0.3em]" style={{ color: '#333333' }}>{address}</p>
+          <p className="receipt-text-base text-center" style={{ color: '#333333' }}>Tel: {phone}</p>
         </div>
 
         {getReceiptHeader() ? (
@@ -280,52 +296,58 @@ export default function ModernReceiptUI({
           )
         )}
 
-        <hr className="border-t-[1.5px] border-dashed receipt-spacing" style={{ borderColor: '#9ca3af' }} />
+        <div className="dashed-line receipt-spacing"></div>
 
         {/* Invoice Meta */}
-        <div className="flex justify-between receipt-text-base mb-[0.3em]">
-          <span style={{ color: '#4b5563' }}>Invoice:</span>
-          <span className="font-medium" style={{ color: '#111827' }}>{invoiceNo}</span>
+        <div className="flex justify-between receipt-text-base mb-[0.3em] font-bold uppercase tracking-tight text-black whitespace-nowrap">
+          <span className="flex-shrink-0">Invoice #:</span>
+          <span className="font-black overflow-hidden text-ellipsis pl-1">{invoiceNo}</span>
         </div>
-        <div className="flex justify-between receipt-text-base">
-          <span style={{ color: '#4b5563' }}>{isParty ? 'Event Date:' : 'Date:'}</span>
-          <span className="font-medium" style={{ color: '#111827' }}>{dateStr}</span>
+        <div className="flex justify-between receipt-text-base mb-[0.3em] font-bold uppercase tracking-tight text-black whitespace-nowrap font-bold">
+          <span className="flex-shrink-0">Inv. Date:</span>
+          <span className="font-black overflow-hidden text-ellipsis pl-1">{invoiceDateStr}</span>
         </div>
+        {isParty && eventDateStr && (
+          <div className="flex justify-between receipt-text-base font-bold uppercase tracking-tight text-black whitespace-nowrap">
+            <span className="flex-shrink-0">Event Date:</span>
+            <span className="font-black overflow-hidden text-ellipsis pl-1">{eventDateStr}</span>
+          </div>
+        )}
 
-        <hr className="border-t-[1.5px] border-dashed receipt-spacing" style={{ borderColor: '#9ca3af' }} />
+        <div className="dashed-line receipt-spacing"></div>
 
         {/* Table Header */}
-        <div className="grid grid-cols-12 gap-[0.5em] font-bold receipt-text-base mb-[0.8em]">
-          <div className="col-span-5">ITEM</div>
-          <div className="col-span-2 text-center">QTY</div>
-          <div className="col-span-2 text-right">PRICE</div>
-          <div className="col-span-3 text-right">TOTAL</div>
+        <div className="grid grid-cols-12 gap-[0.25em] font-bold receipt-text-sm mb-[0.8em]">
+          <div className="col-span-5 col-item-header">ITEM</div>
+          <div className="col-span-2 col-qty-header text-center">QTY</div>
+          <div className="col-span-2 col-price-header text-right">PRICE</div>
+          <div className="col-span-3 col-total-header text-right">TOTAL</div>
         </div>
 
         {/* Items List */}
         <div className="space-y-[0.8em] mb-[1.5em]">
           {displayItems.map((item: any, index: number) => {
             return (
-              <div key={index} className="grid grid-cols-12 gap-[0.5em] receipt-text-base items-start" style={{ color: '#111827' }}>
-                <div className="col-span-5 pr-[0.2em] leading-tight flex flex-col items-start overflow-hidden">
-                  <div className="font-bold w-full">
+              <div key={index} className="grid grid-cols-12 gap-[0.25em] receipt-text-base items-start" style={{ color: '#000000' }}>
+                <div className="col-span-5 col-item-header pr-[0.2em] leading-tight flex flex-col items-start overflow-hidden font-bold">
+                  <div className="w-full">
                     {item.name}
                     {item.size && (
-                      <div className="receipt-text-sm font-[1000] text-slate-950 mt-1">
+                      <div className="receipt-text-sm font-[950] text-black mt-1">
                         ({item.size})
                       </div>
                     )}
                   </div>
                 </div>
-                <div className="col-span-2 text-center font-bold">{item.qty}</div>
-                <div className="col-span-2 text-right whitespace-nowrap">{formatCurrency(item.price)}</div>
-                <div className="col-span-3 text-right whitespace-nowrap font-black">{formatCurrency(item.total)}</div>
+                <div className="col-span-2 col-qty-header font-bold text-center">{item.qty}</div>
+                <div className="col-span-2 col-price-header text-right whitespace-nowrap">{formatCurrency(item.price)}</div>
+                <div className="col-span-3 col-total-header text-right whitespace-nowrap font-black">{formatCurrency(item.total)}</div>
               </div>
             );
           })}
         </div>
 
-        <hr className="border-t-[1.5px] border-dashed receipt-spacing" style={{ borderColor: '#9ca3af' }} />
+        <div className="dashed-line receipt-spacing"></div>
 
         {/* Financials Section */}
         {receiptType === 'NORMAL' ? (
@@ -340,16 +362,16 @@ export default function ModernReceiptUI({
 
             {/* Discount */}
             {discountAmt > 0 && (
-              <div className="flex justify-between items-center py-[0.4em] px-[0.5em] receipt-text-lg mb-[0.4em] rounded-sm" style={{ backgroundColor: '#e5e7eb' }}>
+              <div className="flex justify-between items-center py-[0.4em] px-[0.5em] receipt-text-base mb-[0.4em] rounded-sm font-bold" style={{ backgroundColor: '#f3f4f6' }}>
                 <span>Discount ({discountPct}%)</span>
-                <span>-<span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(discountAmt)}</span>
+                <span>-Rs. {formatCurrency(discountAmt)}</span>
               </div>
             )}
 
             {/* Total */}
-            <div className="flex justify-between items-center py-[0.5em] px-[0.5em] mt-[0.8em] rounded-sm" style={{ backgroundColor: '#e5e7eb' }}>
-              <span className="font-bold receipt-text-xl">Total</span>
-              <span className="font-bold receipt-text-2xl tracking-tight"><span className="receipt-text-sm mr-[0.2em] font-normal">Rs.</span>{formatCurrency(total)}</span>
+            <div className="flex justify-between items-center py-[0.5em] px-[0.5em] mt-[0.8em] rounded-sm" style={{ backgroundColor: '#f3f4f6' }}>
+              <span className="font-black receipt-text-xl uppercase">Total</span>
+              <span className="font-black receipt-text-2xl tracking-tight">Rs. {formatCurrency(total)}</span>
             </div>
           </>
         ) : receiptType === 'PARTY_ADVANCE' ? (
@@ -421,9 +443,9 @@ export default function ModernReceiptUI({
         )}
 
         {/* Footer Area */}
-        <div className="mt-[2.5em] pb-[2em] text-center flex flex-col items-center">
-          {receiptType === 'NORMAL' && <p className="font-bold receipt-text-lg mb-[0.5em]">PAID VIA {paymentMethod.replace('PAID VIA ', '').toUpperCase()}</p>}
-          <p className="signature-font mb-[0.5em] transform -rotate-2" style={{ fontSize: '2.8em', lineHeight: '1' }}>Thank You!</p>
+        <div className="mt-[30px] pb-[20px] text-center flex flex-col items-center w-full">
+          {receiptType === 'NORMAL' && <p className="font-black receipt-text-base mb-[5px] uppercase">PAID VIA {paymentMethod.replace('PAID VIA ', '').toUpperCase()}</p>}
+          <p className="signature-font mb-[0.5em] transform -rotate-2" style={{ lineHeight: '1' }}>Thank You!</p>
           {isParty && <p className="receipt-text-xs uppercase tracking-widest opacity-50 font-bold mt-2">Professional Hospitality by MyTeddy</p>}
         </div>
 

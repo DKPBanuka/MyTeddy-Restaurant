@@ -19,11 +19,13 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import type { Customer } from '../types';
+import { useSocket } from '../context/SocketContext';
 import { toast } from 'sonner';
 
 export function Customers() {
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [loading, setLoading] = useState(true);
+    const { socket } = useSocket();
     const [searchTerm, setSearchTerm] = useState('');
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -53,6 +55,22 @@ export function Customers() {
     useEffect(() => {
         fetchCustomers();
     }, []);
+
+    // --- Real-time Listeners ---
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleUpdate = () => {
+            console.log('Real-time: Customer updated, refreshing...');
+            fetchCustomers();
+        };
+
+        socket.on('CUSTOMER_UPDATED', handleUpdate);
+
+        return () => {
+            socket.off('CUSTOMER_UPDATED', handleUpdate);
+        };
+    }, [socket]);
 
     const filteredCustomers = customers.filter(c => 
         c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 

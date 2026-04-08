@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
 import { downloadCSV } from '../utils/csvExport';
+import { useSocket } from '../context/SocketContext';
 
 type TimePeriod = 'TODAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'CUSTOM';
 
@@ -73,6 +74,7 @@ export const AnalysisDashboard: React.FC = () => {
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [dashboardMode, setDashboardMode] = useState<'ANALYTICS' | 'EXECUTIVE'>('EXECUTIVE');
     const [lang, setLang] = useState<'EN' | 'SI'>('EN');
+    const { socket } = useSocket();
 
     const t: any = {
         EN: {
@@ -103,8 +105,8 @@ export const AnalysisDashboard: React.FC = () => {
             expense_analysis_desc: "Granular breakdown of operational costs and procurement cycles.",
             employee_roi: "Employee ROI",
             employee_roi_desc: "Tracking service speed, upsell rates, and labor efficiency.",
-            receivables: "Receivables Aging",
-            receivables_desc: "Advanced tracking for party booking balances and credit cycles.",
+            receivables_aging: "Receivables Aging",
+            receivables_aging_desc: "Advanced tracking for party booking balances and credit cycles.",
             strategic: "Strategic Growth",
             strategic_desc: "AI-powered projections and market trend correlation.",
             
@@ -199,8 +201,8 @@ export const AnalysisDashboard: React.FC = () => {
             expense_analysis_desc: "මෙහෙයුම් පිරිවැය සහ ප්‍රසම්පාදන චක්‍රවල සවිස්තරාත්මක බිඳවැටීම.",
             employee_roi: "සේවක ප්‍රතිලාභ",
             employee_roi_desc: "සේවා වේගය සහ ශ්‍රම කාර්යක්ෂමතාව නිරීක්ෂණය කිරීම.",
-            receivables: "හිඟ මුදල් නිරීක්ෂණය",
-            receivables_desc: "සාද වෙන් කිරීම් සහ වෙනත් හිඟ මුදල් පිළිබඳ උසස් නිරීක්ෂණය.",
+            receivables_aging: "හිඟ මුදල් නිරීක්ෂණය",
+            receivables_aging_desc: "සාද වෙන් කිරීම් සහ වෙනත් හිඟ මුදල් පිළිබඳ උසස් නිරීක්ෂණය.",
             strategic: "උපායමාර්ගික වර්ධනය",
             strategic_desc: "AI ආධාරයෙන් වෙළඳපල ප්‍රවණතා පුරෝකථනය කිරීම.",
             
@@ -301,6 +303,24 @@ export const AnalysisDashboard: React.FC = () => {
         fetchData();
         setSelectedCategory(null);
     }, [period, compare]);
+
+    // --- Real-time Listeners ---
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleUpdate = () => {
+            console.log('Real-time: Data updated, refreshing analytics...');
+            fetchData();
+        };
+
+        socket.on('ORDER_UPDATED', handleUpdate);
+        socket.on('PARTY_BOOKING_UPDATED', handleUpdate);
+
+        return () => {
+            socket.off('ORDER_UPDATED', handleUpdate);
+            socket.off('PARTY_BOOKING_UPDATED', handleUpdate);
+        };
+    }, [socket]);
 
     const fetchData = async () => {
         try {
@@ -579,8 +599,8 @@ export const AnalysisDashboard: React.FC = () => {
                                 disabled
                             />
                             <BIModule 
-                                title={strings.receivables} 
-                                description={strings.receivables_desc}
+                                title={strings.receivables_aging} 
+                                description={strings.receivables_aging_desc}
                                 icon={<Clock className="text-purple-400" />}
                                 stats={[
                                     { label: strings.unpaid_parties, value: data.partyStats.count.toString() },

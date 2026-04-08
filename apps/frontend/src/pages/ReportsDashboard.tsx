@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import { DollarSign, ShoppingBag, TrendingUp, AlertCircle } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
+import { useSocket } from '../context/SocketContext';
 
 interface ReportSummary {
     todayRevenue: number;
@@ -22,10 +23,29 @@ export const ReportsDashboard: React.FC = () => {
     const [data, setData] = useState<ReportSummary | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const { socket } = useSocket();
 
     useEffect(() => {
         fetchData();
     }, []);
+
+    // --- Real-time Listeners ---
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleUpdate = () => {
+            console.log('Real-time: Data updated, refreshing report summary...');
+            fetchData();
+        };
+
+        socket.on('ORDER_UPDATED', handleUpdate);
+        socket.on('PARTY_BOOKING_UPDATED', handleUpdate);
+
+        return () => {
+            socket.off('ORDER_UPDATED', handleUpdate);
+            socket.off('PARTY_BOOKING_UPDATED', handleUpdate);
+        };
+    }, [socket]);
 
     const fetchData = async () => {
         try {

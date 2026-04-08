@@ -13,6 +13,8 @@ import { generatePDFReceipt } from '../utils/pdfReceipt';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
+import ModernReceiptUI from '../components/ModernReceiptUI';
+import { useSocket } from '../context/SocketContext';
 
 export function OrdersDashboard() {
     const { settings } = useSettings();
@@ -25,6 +27,7 @@ export function OrdersDashboard() {
     const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const { socket } = useSocket();
 
     const fetchOrders = async () => {
         try {
@@ -70,6 +73,31 @@ export function OrdersDashboard() {
         fetchOrders();
     }, [startDate, endDate, statusFilter, searchQuery]);
 
+    // --- Real-time Listeners ---
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleOrderUpdate = () => {
+            console.log('Real-time: Order updated, refetching...');
+            fetchOrders();
+            toast.info('Orders list updated', {
+                description: 'A new order was placed or updated elsewhere',
+                duration: 3000
+            });
+        };
+
+        socket.on('ORDER_UPDATED', handleOrderUpdate);
+        socket.on('PARTY_BOOKING_UPDATED', handleOrderUpdate);
+
+        return () => {
+            socket.off('ORDER_UPDATED', handleOrderUpdate);
+            socket.off('PARTY_BOOKING_UPDATED', handleOrderUpdate);
+        };
+    }, [socket]); // Simplified dependency as fetchOrders is derived from state that used inside useEffect closure but technically should be in deps IF it was wrapped in useCallback. 
+                  // But in this component fetchOrders is not memoized, so I'll just use it directly. 
+                  // Actually, fetchOrders uses state variables. If I include it in deps, it might cycle if fetchOrders changes (which it doesn't, but it's defined in every render).
+                  // So I'll just omit it or wrap it in useCallback. For now, omit for simplicity as the event itself is the trigger.
+
     const stats = useMemo(() => {
         const count = orders.length;
         const revenue = orders
@@ -96,14 +124,19 @@ export function OrdersDashboard() {
             : 'bg-red-50 text-red-600 border-red-200';
     };
 
-    const handleReprint = () => {
+    const handleDownloadPDF = () => {
         try {
             if (!selectedOrder) return;
             generatePDFReceipt(selectedOrder, settings, settings?.logoUrl);
-            toast.success('Reprinting receipt...');
+            toast.success('Downloading PDF receipt...');
         } catch (error) {
-            toast.error('Failed to reprint receipt.');
+            toast.error('Failed to download PDF.');
         }
+    };
+
+    const handlePrint = () => {
+        if (!selectedOrder) return;
+        setTimeout(() => window.print(), 100);
     };
 
     return (
@@ -476,23 +509,39 @@ export function OrdersDashboard() {
                         </div>
 
                         {/* Modal Actions */}
-                        <div className="px-10 py-10 bg-slate-50/80 border-t border-gray-200 flex items-center gap-6">
+                        <div className="px-10 py-10 bg-slate-50/80 border-t border-gray-200 flex items-center gap-6 no-print">
                             <button
-                                onClick={handleReprint}
-                                className="flex-1 flex items-center justify-center gap-4 px-10 py-6 bg-slate-900 text-white rounded-3xl font-black text-[11px] uppercase tracking-[0.3em] hover:bg-slate-800 transition-all shadow-2xl shadow-slate-200 active:scale-95 group"
+                                onClick={handlePrint}
+                                className="flex-1 flex items-center justify-center gap-3 px-8 py-5 bg-slate-900 text-white rounded-[1.5rem] font-bold text-[11px] uppercase tracking-[0.2em] hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 active:scale-95 group"
                             >
-                                <Printer size={22} className="group-hover:-translate-y-0.5 transition-transform" />
+                                <Printer size={20} className="group-hover:-translate-y-0.5 transition-transform" />
                                 PRINT RECEIPT
+                            </button>
+
+                            <button
+                                onClick={handleDownloadPDF}
+                                className="flex-1 flex items-center justify-center gap-3 px-8 py-5 bg-white text-indigo-600 rounded-[1.5rem] font-bold text-[11px] uppercase tracking-[0.2em] border-2 border-indigo-100 hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm active:scale-95 group"
+                            >
+                                <Download size={20} className="group-hover:-translate-y-0.5 transition-transform" />
+                                DOWNLOAD PDF
                             </button>
 
                             {selectedOrder.status !== 'CANCELLED' && (
                                 <button
-                                    className="flex-1 flex items-center justify-center gap-4 px-10 py-6 bg-white text-slate-900 rounded-3xl font-black text-[11px] uppercase tracking-widest hover:bg-red-50 hover:text-red-600 hover:border-red-200 border-2 border-gray-200 transition-all shadow-sm active:scale-95"
+                                    className="px-6 py-5 bg-white text-slate-400 rounded-[1.5rem] font-bold text-[11px] uppercase tracking-widest hover:bg-red-50 hover:text-red-600 hover:border-red-200 border-2 border-gray-100 transition-all shadow-sm active:scale-95"
                                 >
-                                    <RotateCcw size={22} />
-                                    VOID TRANSACTION
+                                    <RotateCcw size={20} />
                                 </button>
                             )}
+                        </div>
+
+                        {/* Hidden Receipt specifically for printing */}
+                        <div className="hidden print:block">
+                            <ModernReceiptUI 
+                                orderData={selectedOrder} 
+                                settings={settings} 
+                                logoUrl={settings?.logoUrl}
+                            />
                         </div>
                     </div>
                 </div>

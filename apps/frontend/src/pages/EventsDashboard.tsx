@@ -8,11 +8,13 @@ import { PartiesListModal } from '../components/PartiesListModal';
 import { toast } from 'sonner';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
+import { useSocket } from '../context/SocketContext';
 
 export function EventsDashboard() {
     // --- Data State ---
     const [bookings, setBookings] = useState<PartyBookingDto[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const { socket } = useSocket();
 
     // --- Filter & Search State ---
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -76,6 +78,26 @@ export function EventsDashboard() {
     useEffect(() => {
         fetchBookings();
     }, [fetchBookings]);
+
+    // --- Real-time Listeners ---
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleBookingUpdate = () => {
+            console.log('Real-time: Party booking updated, refetching...');
+            fetchBookings();
+            toast.info('Dashboard updated from server', {
+                description: 'A change was made in another device',
+                duration: 3000
+            });
+        };
+
+        socket.on('PARTY_BOOKING_UPDATED', handleBookingUpdate);
+
+        return () => {
+            socket.off('PARTY_BOOKING_UPDATED', handleBookingUpdate);
+        };
+    }, [socket, fetchBookings]);
 
     // --- Helper Functions ---
 

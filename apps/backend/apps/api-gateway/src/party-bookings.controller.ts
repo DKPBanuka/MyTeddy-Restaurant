@@ -2,14 +2,21 @@ import { Controller, Post, Get, Patch, Body, Query, Param, Inject } from '@nestj
 import { ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
 
+import { RealTimeGateway } from './real-time.gateway';
+
 @Controller('party-bookings')
 export class PartyBookingsGatewayController {
-    constructor(@Inject('ORDER_SERVICE') private client: ClientProxy) { }
+    constructor(
+        @Inject('ORDER_SERVICE') private client: ClientProxy,
+        private readonly realTime: RealTimeGateway
+    ) { }
 
     @Post()
     async createBooking(@Body() createBookingDto: any) {
         try {
-            return await firstValueFrom(this.client.send({ cmd: 'create_party_booking' }, createBookingDto));
+            const result = await firstValueFrom(this.client.send({ cmd: 'create_party_booking' }, createBookingDto));
+            this.realTime.emit('PARTY_BOOKING_UPDATED', result);
+            return result;
         } catch (error) {
             console.error('Gateway Error creating party booking:', error);
             throw error;
@@ -40,7 +47,9 @@ export class PartyBookingsGatewayController {
     @Patch(':id/advance')
     async updateAdvance(@Param('id') id: string, @Body() updateDto: { amount: number }) {
         try {
-            return await firstValueFrom(this.client.send({ cmd: 'update_party_booking_advance' }, { id, amount: updateDto.amount }));
+            const result = await firstValueFrom(this.client.send({ cmd: 'update_party_booking_advance' }, { id, amount: updateDto.amount }));
+            this.realTime.emit('PARTY_BOOKING_UPDATED', result);
+            return result;
         } catch (error) {
             console.error('Gateway Error updating advance:', error);
             throw error;
@@ -53,7 +62,9 @@ export class PartyBookingsGatewayController {
         @Body() body: { eventDate: string; startTime: string; endTime: string }
     ) {
         try {
-            return await firstValueFrom(this.client.send({ cmd: 'update_party_booking_time' }, { id, ...body }));
+            const result = await firstValueFrom(this.client.send({ cmd: 'update_party_booking_time' }, { id, ...body }));
+            this.realTime.emit('PARTY_BOOKING_UPDATED', result);
+            return result;
         } catch (error) {
             console.error('Gateway Error updating time:', error);
             throw error;
@@ -63,7 +74,9 @@ export class PartyBookingsGatewayController {
     @Patch(':id/extras')
     async addExtras(@Param('id') id: string, @Body() body: { addonsAmount: number }) {
         try {
-            return await firstValueFrom(this.client.send({ cmd: 'add_party_booking_extras' }, { id, ...body }));
+            const result = await firstValueFrom(this.client.send({ cmd: 'add_party_booking_extras' }, { id, ...body }));
+            this.realTime.emit('PARTY_BOOKING_UPDATED', result);
+            return result;
         } catch (error) {
             console.error('Gateway Error adding extras:', error);
             throw error;
@@ -73,7 +86,9 @@ export class PartyBookingsGatewayController {
     @Patch(':id/items')
     async updateItems(@Param('id') id: string, @Body() body: { items: any[], menuTotal: number }) {
         try {
-            return await firstValueFrom(this.client.send({ cmd: 'update_party_booking_items' }, { id, ...body }));
+            const result = await firstValueFrom(this.client.send({ cmd: 'update_party_booking_items' }, { id, ...body }));
+            this.realTime.emit('PARTY_BOOKING_UPDATED', result);
+            return result;
         } catch (error) {
             console.error('Gateway Error updating items:', error);
             throw error;
@@ -83,7 +98,9 @@ export class PartyBookingsGatewayController {
     @Patch(':id')
     async updateBooking(@Param('id') id: string, @Body() updateData: any) {
         try {
-            return await firstValueFrom(this.client.send({ cmd: 'update_party_booking' }, { id, updateData }));
+            const result = await firstValueFrom(this.client.send({ cmd: 'update_party_booking' }, { id, updateData }));
+            this.realTime.emit('PARTY_BOOKING_UPDATED', result);
+            return result;
         } catch (error) {
             console.error('Gateway Error updating booking:', error);
             throw error;

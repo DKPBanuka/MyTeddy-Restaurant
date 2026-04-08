@@ -112,7 +112,7 @@ export const ModernReceiptWithLogo: React.FC<ModernReceiptProps> = ({ orderData,
       <hr className="border-t-[1.5px] border-dashed border-slate-300 receipt-spacing" />
 
       {/* Table Header */}
-      <div className="grid grid-cols-12 gap-[0.5em] font-black receipt-text-xs mb-[0.8em] text-slate-400 uppercase tracking-widest">
+      <div className="grid grid-cols-12 gap-[0.25em] font-black receipt-text-xs mb-[0.8em] text-slate-400 uppercase tracking-wider">
         <div className="col-span-5">ITEM</div>
         <div className="col-span-2 text-center">QTY</div>
         <div className="col-span-2 text-right">PRICE</div>
@@ -123,7 +123,7 @@ export const ModernReceiptWithLogo: React.FC<ModernReceiptProps> = ({ orderData,
       <div className="space-y-[1em] mb-[1.5em]">
         {items.map((item, idx) => (
           <div key={`${item.id}-${idx}`} className="flex flex-col">
-            <div className="grid grid-cols-12 gap-[0.5em] receipt-text-base text-slate-900 items-start">
+            <div className="grid grid-cols-12 gap-[0.25em] receipt-text-base text-slate-900 items-start">
               <div className="col-span-5 pr-[0.2em] leading-tight font-bold uppercase">{item.name}</div>
               <div className="col-span-2 text-center font-medium">{item.quantity}</div>
               <div className="col-span-2 text-right whitespace-nowrap text-slate-600">{formatCurrency(item.unitPrice)}</div>

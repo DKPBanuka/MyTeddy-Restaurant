@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { Role } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 
 interface StaffUser {
     id: string;
@@ -108,6 +109,7 @@ export const StaffDashboard: React.FC = () => {
     // Permissions State
     const [rolePermissions, setRolePermissions] = useState<any[]>([]);
     const [isSavingPermissions, setIsSavingPermissions] = useState(false);
+    const { socket } = useSocket();
 
     const AVAILABLE_FEATURES = ['POS', 'KDS', 'REPORTS', 'EVENTS', 'INVENTORY', 'STAFF', 'ANALYSIS'];
 
@@ -136,6 +138,25 @@ export const StaffDashboard: React.FC = () => {
             fetchPermissions();
         }
     }, [currentUser?.role]);
+
+    // --- Real-time Listeners ---
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleUpdate = () => {
+            console.log('Real-time: Staff updated, refreshing...');
+            fetchStaff();
+            if (currentUser?.role === 'ADMIN') {
+                fetchPermissions();
+            }
+        };
+
+        socket.on('STAFF_UPDATED', handleUpdate);
+
+        return () => {
+            socket.off('STAFF_UPDATED', handleUpdate);
+        };
+    }, [socket, currentUser?.role]);
 
     const fetchPermissions = async () => {
         try {

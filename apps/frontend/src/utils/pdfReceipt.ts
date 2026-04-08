@@ -2,23 +2,14 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { toTitleCase } from './format';
 
-export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?: string, receiptType: 'NORMAL' | 'PARTY_ADVANCE' | 'PARTY_FINAL' = 'NORMAL') => {
+export const getReceiptHTML = (orderData: any, settings: any, logoUrl?: string, receiptType: 'NORMAL' | 'PARTY_ADVANCE' | 'PARTY_FINAL' = 'NORMAL'): string => {
     const isParty = receiptType === 'PARTY_ADVANCE' || receiptType === 'PARTY_FINAL';
-
-    // 1. Create a hidden element for rendering the receipt
-    const container = document.createElement('div');
-    container.style.position = 'absolute';
-    container.style.left = '-9999px';
-    container.style.top = '0';
-    container.style.width = '80mm';
-    container.style.visibility = 'hidden';
-    document.body.appendChild(container);
 
     let items = [];
     if (isParty) {
         const rawItems = orderData.items;
         const parsedItems = typeof rawItems === 'string' ? JSON.parse(rawItems) : (rawItems || []);
-        
+
         items = parsedItems.map((item: any) => {
             let unitPrice = 0;
             if (item.packageId) {
@@ -34,7 +25,7 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
 
             const rawName = item.package?.name || item.product?.name || item.name || 'Item';
             const sizeName = typeof item.size === 'string' ? item.size : (item.size?.name || item.sizeName || null);
-            
+
             return {
                 name: toTitleCase(rawName.replace(/\(RETAIL\)/gi, '').trim()),
                 size: toTitleCase(sizeName),
@@ -55,7 +46,7 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
             const rawName = item.productName || item.product?.name || item.name || 'Item';
             const nameWithoutRetail = toTitleCase(rawName.replace(/\(RETAIL\)/gi, '').trim());
             const qty = item.quantity || item.qty || 1;
-            
+
             let unitPrice = 0;
             const potentialPrices = [
                 item.price,
@@ -64,7 +55,7 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
                 item.product?.price,
                 item.package?.price
             ];
-            
+
             for (const p of potentialPrices) {
                 const val = Number(p);
                 if (!isNaN(val) && val > 0) {
@@ -72,25 +63,25 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
                     break;
                 }
             }
-            
+
             if (unitPrice === 0) {
                 const totalVal = Number(item.total || item.totalPrice || item.itemTotal || 0);
                 if (totalVal > 0) unitPrice = totalVal / qty;
             }
 
-            const sizeName = item.sizeName || 
-                             item.productSize?.name || 
-                             (typeof item.size === 'string' ? item.size : item.size?.name) || 
-                             item.variantName || 
-                             null;
+            const sizeName = item.sizeName ||
+                item.productSize?.name ||
+                (typeof item.size === 'string' ? item.size : item.size?.name) ||
+                item.variantName ||
+                null;
             const finalSizeName = sizeName ? toTitleCase(sizeName as string) : null;
-            
+
             const itemTotal = Number(item.total || item.itemTotal || (unitPrice * qty));
-            return { 
-                name: nameWithoutRetail, 
-                size: finalSizeName, 
-                qty, 
-                unitPrice, 
+            return {
+                name: nameWithoutRetail,
+                size: finalSizeName,
+                qty,
+                unitPrice,
                 itemTotal,
                 type: item.type || item.product?.type || 'FOOD'
             };
@@ -140,7 +131,7 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
         </tr>
     `;
 
-    const subTotal = isParty 
+    const subTotal = isParty
         ? (Number(orderData.hallCharge || 0) + Number(orderData.menuTotal || 0))
         : Number(orderData.subTotal || orderData.subtotal || 0);
 
@@ -161,21 +152,38 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
         return null;
     };
 
-    const actualDate = isParty ? orderData.eventDate : (orderData.date || new Date());
-    const dateStr = actualDate ? new Date(actualDate).toLocaleString('en-GB', {
+    const now = new Date();
+    const invoiceDateStr = now.toLocaleString('en-GB', {
         day: '2-digit', month: '2-digit', year: 'numeric',
-        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
+        hour: '2-digit', minute: '2-digit', hour12: true,
         timeZone: 'Asia/Colombo'
-    }) : new Date().toLocaleString('en-GB', { timeZone: 'Asia/Colombo' });
+    });
+
+    const eventDateStr = (isParty && orderData.eventDate) ? new Date(orderData.eventDate).toLocaleString('en-GB', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: true,
+        timeZone: 'Asia/Colombo'
+    }) : null;
 
     const formatCurrency = (amount: number) => Number(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
-    const invoiceNo = isParty 
-        ? `PB-${(orderData.id || '0000').slice(-6).toUpperCase()}`
+    const getPBDate = (dateStr: any) => {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        const y = d.getFullYear();
+        const m = (d.getMonth() + 1).toString().padStart(2, '0');
+        const day = d.getDate().toString().padStart(2, '0');
+        return `${y}${m}${day}`;
+    };
+
+    const pbDatePrefix = getPBDate(orderData.eventDate || orderData.createdAt);
+
+    const invoiceNo = isParty
+        ? `PB-${pbDatePrefix}-${(orderData.id || '0000').slice(-4).toUpperCase()}`
         : (orderData.invoiceNumber || "INV-000");
 
     // Conditional Logo Logic - ZERO MARGIN for html2canvas gap fix
-    const logoHtml = logoUrl 
+    const logoHtml = logoUrl
         ? `<div style="display: flex; justify-content: center; width: 100%; margin: 0; padding: 0;">
             <img src="${logoUrl}" style="width: 85px; height: 85px; object-fit: contain; display: block; margin: 0 auto;" />
            </div>`
@@ -236,9 +244,9 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
         </style>
     `;
 
-    container.innerHTML = `
+    return `
         ${styleTag}
-        <div class="receipt-pdf" id="receipt-content">
+        <div class="receipt-pdf" id="receipt-content" style="width: 80mm;">
             <div style="display: flex; flex-direction: column; align-items: center; width: 100%; margin: 0; padding: 0;">
                 ${logoHtml}
                 <div class="text-center" style="width: 100%; margin: 0; padding: 0;">
@@ -252,14 +260,20 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
 
             <div class="dashed-line"></div>
 
-            <div class="flex justify-between" style="font-size: 13px; margin-bottom: 4px;">
-                <span style="color: #666;">Invoice:</span>
-                <span class="font-bold">${invoiceNo}</span>
+            <div class="flex justify-between font-bold" style="font-size: 11.5px; margin-bottom: 4px; color: #000; text-transform: uppercase; letter-spacing: -0.3px; white-space: nowrap;">
+                <span style="flex-shrink: 0;">Invoice #:</span>
+                <span class="font-black" style="overflow: hidden; text-overflow: ellipsis; padding-left: 4px;">${invoiceNo}</span>
             </div>
-            <div class="flex justify-between" style="font-size: 13px;">
-                <span style="color: #666;">${isParty ? 'Event Date' : 'Date'}:</span>
-                <span class="font-bold">${dateStr}</span>
+            <div class="flex justify-between font-bold" style="font-size: 11.5px; margin-bottom: 4px; color: #000; text-transform: uppercase; letter-spacing: -0.3px; white-space: nowrap;">
+                <span style="flex-shrink: 0;">Inv. Date:</span>
+                <span class="font-black" style="overflow: hidden; text-overflow: ellipsis; padding-left: 4px;">${invoiceDateStr}</span>
             </div>
+            ${isParty && eventDateStr ? `
+            <div class="flex justify-between font-bold" style="font-size: 11.5px; color: #000; text-transform: uppercase; letter-spacing: -0.3px; white-space: nowrap;">
+                <span style="flex-shrink: 0;">Event Date:</span>
+                <span class="font-black" style="overflow: hidden; text-overflow: ellipsis; padding-left: 4px;">${eventDateStr}</span>
+            </div>
+            ` : ''}
 
             <div class="dashed-line"></div>
 
@@ -337,15 +351,32 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
             <div class="text-center" style="margin-top: 30px; padding-bottom: 20px; width: 100%;">
                 ${receiptType === 'NORMAL' ? `<div class="font-black" style="font-size: 16px; margin-bottom: 5px;">PAID VIA ${paymentMethod.replace('PAID VIA ', '').toUpperCase()}</div>` : ''}
                 <div class="signature">Thank You!</div>
-                <div style="font-size: 14px; font-weight: 800; margin-top: 8px; letter-spacing: 1px;">THANK YOU! COME AGAIN</div>
             </div>
         </div>
     `;
+};
+
+export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?: string, receiptType: 'NORMAL' | 'PARTY_ADVANCE' | 'PARTY_FINAL' = 'NORMAL') => {
+    // 1. Create a hidden element for rendering the receipt
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    container.style.width = '80mm';
+    container.style.visibility = 'hidden';
+    document.body.appendChild(container);
+
+    container.innerHTML = getReceiptHTML(orderData, settings, logoUrl, receiptType);
 
     // 3. Temporarily lock body to prevent layout shifts/nav bar flashing
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     document.body.classList.add('is-printing');
+
+    const isParty = receiptType === 'PARTY_ADVANCE' || receiptType === 'PARTY_FINAL';
+    const invoiceNo = isParty
+        ? `PB-${(orderData.id || '0000').slice(-6).toUpperCase()}`
+        : (orderData.invoiceNumber || "INV-000");
 
     try {
         // 4. Capture Canvas (Use onclone to unhide for capture)
@@ -353,7 +384,7 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
         if (!element) throw new Error("Receipt content not found");
 
         const canvas = await html2canvas(element as HTMLElement, {
-            scale: 4, 
+            scale: 4,
             useCORS: true,
             logging: false,
             backgroundColor: '#ffffff',
@@ -390,4 +421,51 @@ export const generatePDFReceipt = async (orderData: any, settings: any, logoUrl?
         // Cleanup DOM
         document.body.removeChild(container);
     }
+};
+
+export const printReceiptBrowser = (orderData: any, settings: any, logoUrl?: string, receiptType: 'NORMAL' | 'PARTY_ADVANCE' | 'PARTY_FINAL' = 'NORMAL') => {
+    const htmlContent = getReceiptHTML(orderData, settings, logoUrl, receiptType);
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.width = '0px';
+    iframe.style.height = '0px';
+    iframe.style.border = 'none';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+        console.error("Failed to access iframe document for printing.");
+        return;
+    }
+
+    doc.open();
+    doc.write(`
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <title>Print Receipt</title>
+                <meta charset="UTF-8">
+            </head>
+            <body style="margin: 0; padding: 0; background: white;">
+                ${htmlContent}
+                <script>
+                    window.onload = function() {
+                        setTimeout(function() {
+                            window.focus();
+                            window.print();
+                        }, 500);
+                    };
+                </script>
+            </body>
+        </html>
+    `);
+    doc.close();
+
+    // Clean up iframe after printing is likely complete
+    setTimeout(() => {
+        if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+        }
+    }, 10000);
 };

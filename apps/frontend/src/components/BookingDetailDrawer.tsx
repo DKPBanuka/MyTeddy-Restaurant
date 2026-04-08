@@ -4,7 +4,7 @@ import { api, type PartyBookingDto } from '../api';
 import { toast } from 'sonner';
 import { MenuSelectionPopup } from './MenuSelectionPopup';
 import { useSettings } from '../context/SettingsContext';
-import { generatePDFReceipt } from '../utils/pdfReceipt';
+import { generatePDFReceipt, printReceiptBrowser } from '../utils/pdfReceipt';
 import { ReceiptPreparationModal } from './ReceiptPreparationModal';
 
 interface BookingDetailDrawerProps {
@@ -27,6 +27,15 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
         isOpen: false,
         type: 'PARTY_ADVANCE'
     });
+
+    const pbId = (() => {
+        if (!booking) return '';
+        const d = new Date(booking.eventDate || booking.createdAt || new Date());
+        const y = d.getFullYear();
+        const m = (d.getMonth() + 1).toString().padStart(2, '0');
+        const day = d.getDate().toString().padStart(2, '0');
+        return `PB-${y}${m}${day}-${(booking.id || '0000').slice(-4).toUpperCase()}`;
+    })();
 
     if (!isOpen || !booking) return null;
 
@@ -87,7 +96,7 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
         }
     };
 
-    const handlePreparationConfirm = async (data: { discount: number; serviceCharge: number; paymentMethod: string; addonsTotal: number }) => {
+    const handlePreparationConfirm = async (data: { discount: number; serviceCharge: number; paymentMethod: string; addonsTotal: number }, action: 'PRINT' | 'DOWNLOAD') => {
         setIsSubmitting(true);
         try {
             const isFinalSettlement = preparationModal.type === 'PARTY_FINAL';
@@ -115,7 +124,11 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
                 advancePaid: isFinalSettlement ? finalTotal : booking.advancePaid,
                 status: isFinalSettlement ? 'COMPLETED' : booking.status
             };
-            generatePDFReceipt(updatedBooking, settings, settings?.logoUrl, preparationModal.type);
+            if (action === 'PRINT') {
+                printReceiptBrowser(updatedBooking, settings, settings?.logoUrl, preparationModal.type);
+            } else {
+                generatePDFReceipt(updatedBooking, settings, settings?.logoUrl, preparationModal.type);
+            }
             
             // 4. Close modal
             setPreparationModal(prev => ({ ...prev, isOpen: false }));
@@ -148,16 +161,19 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
                         <div>
                             <div className="flex items-center gap-4">
                                 <h2 className="text-3xl font-black text-slate-800 tracking-tight">{booking.customerName}</h2>
-                                {onEdit && (
-                                    <button 
-                                        onClick={onEdit} 
-                                        className="text-[10px] flex items-center gap-1 font-black uppercase tracking-widest text-slate-400 border-2 border-slate-200 px-3 py-1 rounded-xl hover:border-blue-500 hover:text-blue-600 transition-colors shadow-sm bg-white"
-                                    >
-                                        <Edit size={12} />
-                                        Edit
-                                    </button>
-                                )}
-                            </div>
+                                <div className="bg-blue-100 text-blue-700 px-3 py-1 rounded-lg font-black text-xs tracking-wider border-2 border-blue-200 shadow-sm whitespace-nowrap">
+                                    {pbId}
+                                </div>
+                                        {onEdit && (
+                                            <button 
+                                                onClick={onEdit} 
+                                                className="text-[10px] flex items-center gap-1 font-black uppercase tracking-widest text-slate-400 border-2 border-slate-200 px-3 py-1 rounded-xl hover:border-blue-500 hover:text-blue-600 transition-colors shadow-sm bg-white"
+                                            >
+                                                <Edit size={12} />
+                                                Edit
+                                            </button>
+                                        )}
+                                    </div>
                             <div className="flex flex-wrap items-center gap-3 mt-3">
                                 <span className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest border shadow-sm ${getStatusStyles(booking.status || 'PENDING')}`}>
                                     {booking.status}
@@ -184,13 +200,13 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
                         <div className="bg-white/90 backdrop-blur-sm p-5 rounded-3xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:col-span-2 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all">
                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Schedule</p>
                             <div className="flex flex-wrap gap-4 items-center">
-                                <p className="font-bold text-slate-700 flex items-center gap-2"><CalendarIcon size={16} className="text-emerald-500"/> {new Date(booking.eventDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                                <p className="font-bold text-slate-700 flex items-center gap-2"><CalendarIcon size={16} className="text-emerald-500"/> {new Date(booking.eventDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Colombo' })}</p>
                                 <span className="hidden sm:block text-slate-300">•</span>
                                 <p className="font-bold text-slate-700 flex items-center gap-2">
                                     <Clock size={16} className="text-emerald-500"/> 
-                                    {booking.startTime.includes('T') ? new Date(booking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : booking.startTime}
+                                    {booking.startTime.includes('T') ? new Date(booking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Colombo' }) : booking.startTime}
                                     {' — '}
-                                    {booking.endTime.includes('T') ? new Date(booking.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : booking.endTime}
+                                    {booking.endTime.includes('T') ? new Date(booking.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Colombo' }) : booking.endTime}
                                 </p>
                             </div>
                         </div>

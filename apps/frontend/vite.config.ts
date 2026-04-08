@@ -53,4 +53,8 @@ export default defineConfig({
       }
     })
   ],
+  server: {
+    host: 'localhost',  // Run only on localhost
+    port: 5000,
+  },
 })

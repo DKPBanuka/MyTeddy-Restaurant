@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { toast } from 'sonner';
 import { Layers, Coffee, Loader2 } from 'lucide-react';
+import { useSocket } from '../context/SocketContext';
 
 interface TableStatus {
     tableNo: string;
@@ -14,6 +15,7 @@ export function FloorPlan() {
     const navigate = useNavigate();
     const [tables, setTables] = useState<TableStatus[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const { socket } = useSocket();
 
     const fetchTables = async () => {
         try {
@@ -30,9 +32,23 @@ export function FloorPlan() {
 
     useEffect(() => {
         fetchTables();
-        const interval = setInterval(fetchTables, 10000);
-        return () => clearInterval(interval);
     }, []);
+
+    // --- Real-time Listeners ---
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleUpdate = () => {
+            console.log('Real-time: Order/Table status updated, refreshing...');
+            fetchTables();
+        };
+
+        socket.on('ORDER_UPDATED', handleUpdate);
+
+        return () => {
+            socket.off('ORDER_UPDATED', handleUpdate);
+        };
+    }, [socket]);
 
     const handleTableClick = (table: TableStatus) => {
         if (table.status === 'AVAILABLE') {

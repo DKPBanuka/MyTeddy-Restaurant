@@ -1,10 +1,14 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Inject, HttpException, HttpStatus } from '@nestjs/common';
+import { RealTimeGateway } from './real-time.gateway';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { firstValueFrom, catchError, throwError } from 'rxjs';
 
 @Controller('staff')
 export class StaffGatewayController {
-    constructor(@Inject('AUTH_SERVICE') private readonly authClient: ClientProxy) { }
+    constructor(
+        @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy,
+        private readonly realTime: RealTimeGateway
+    ) { }
 
     @Get()
     async getStaff() {
@@ -31,6 +35,7 @@ export class StaffGatewayController {
                     catchError(error => throwError(() => new RpcException(error)))
                 )
             );
+            this.realTime.emit('STAFF_UPDATED', result);
             return result;
         } catch (error: any) {
             throw new HttpException({
@@ -48,6 +53,7 @@ export class StaffGatewayController {
                     catchError(error => throwError(() => new RpcException(error)))
                 )
             );
+            this.realTime.emit('STAFF_UPDATED', { id });
             return result;
         } catch (error: any) {
             throw new HttpException({
@@ -65,6 +71,7 @@ export class StaffGatewayController {
                     catchError(error => throwError(() => new RpcException(error)))
                 )
             );
+            this.realTime.emit('STAFF_UPDATED', { id });
             return result;
         } catch (error: any) {
             throw new HttpException({

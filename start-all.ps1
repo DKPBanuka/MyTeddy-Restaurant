@@ -6,7 +6,8 @@ Write-Host "Starting MyTeddy Microservices..." -ForegroundColor Cyan
 
 foreach ($service in $services) {
     Write-Host "Starting $service..." -ForegroundColor Green
-    $job = Start-Process -FilePath "npx" -ArgumentList "nest", "start", $service -NoNewWindow -PassThru -WorkingDirectory "./apps/backend"
+    $npxCmd = if ($IsWindows -or $env:OS -eq "Windows_NT") { "npx.cmd" } else { "npx" }
+    $job = Start-Process -FilePath $npxCmd -ArgumentList "nest", "start", $service -NoNewWindow -PassThru -WorkingDirectory "./apps/backend"
     $pids += $job.Id
     Start-Sleep -Seconds 5
 }
