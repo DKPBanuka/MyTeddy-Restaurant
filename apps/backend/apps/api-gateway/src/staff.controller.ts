@@ -3,7 +3,14 @@ import { RealTimeGateway } from './real-time.gateway';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { firstValueFrom, catchError, throwError } from 'rxjs';
 
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { PermissionsGuard } from './auth/permissions.guard';
+import { Permissions } from './auth/permissions.decorator';
+import { UseGuards } from '@nestjs/common';
+
 @Controller('staff')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@Permissions('STAFF_MANAGE')
 export class StaffGatewayController {
     constructor(
         @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy,

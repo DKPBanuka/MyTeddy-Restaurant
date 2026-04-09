@@ -1,8 +1,14 @@
-import { Controller, Get, Patch, Body } from '@nestjs/common';
+import { Controller, Get, Patch, Body, UseGuards } from '@nestjs/common';
 import { PrismaService } from '@app/prisma';
 import { RealTimeGateway } from './real-time.gateway';
 
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { PermissionsGuard } from './auth/permissions.guard';
+import { Permissions } from './auth/permissions.decorator';
+
 @Controller('settings')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@Permissions('SETTINGS_MANAGE')
 export class SettingsController {
     constructor(
         private readonly prisma: PrismaService,

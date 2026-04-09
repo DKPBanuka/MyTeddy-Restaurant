@@ -36,7 +36,9 @@ export class AuthService {
             rolePerm = {
                 id: 'temp',
                 role: user.role,
-                permissions: user.role === 'ADMIN' ? ['POS', 'INVENTORY', 'REPORTS', 'EVENTS', 'STAFF', 'KDS'] : ['POS'],
+                permissions: user.role === 'ADMIN' 
+                    ? ['POS_ACCESS', 'REPORTS_VIEW', 'EVENTS_MANAGE', 'INVENTORY_MANAGE', 'STAFF_MANAGE', 'MENU_MANAGE', 'ANALYSIS_VIEW', 'SETTINGS_MANAGE'] 
+                    : ['POS_ACCESS'],
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };

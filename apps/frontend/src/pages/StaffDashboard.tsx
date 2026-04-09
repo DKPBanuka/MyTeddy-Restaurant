@@ -111,7 +111,17 @@ export const StaffDashboard: React.FC = () => {
     const [isSavingPermissions, setIsSavingPermissions] = useState(false);
     const { socket } = useSocket();
 
-    const AVAILABLE_FEATURES = ['POS', 'KDS', 'REPORTS', 'EVENTS', 'INVENTORY', 'STAFF', 'ANALYSIS'];
+    const AVAILABLE_FEATURES = [
+        'POS_ACCESS', 
+        'KDS_ACCESS', 
+        'REPORTS_VIEW', 
+        'EVENTS_MANAGE', 
+        'INVENTORY_MANAGE', 
+        'STAFF_MANAGE', 
+        'ANALYSIS_VIEW', 
+        'MENU_MANAGE', 
+        'SETTINGS_MANAGE'
+    ];
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);

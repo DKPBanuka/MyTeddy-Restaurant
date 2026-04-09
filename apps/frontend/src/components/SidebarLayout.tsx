@@ -73,62 +73,64 @@ export function SidebarLayout() {
 
                 {/* Nav Links */}
                 <nav className="flex-1 flex flex-col w-full">
-                    {hasPermission('POS') && (
+                    {hasPermission('POS_ACCESS') && (
                         <NavLink to="/" end className={navLinkClass} title="Menu">
                             <LayoutDashboard size={24} className="shrink-0" />
                             {actualExpanded && <span className="whitespace-nowrap">Menu</span>}
                         </NavLink>
                     )}
-                    {hasPermission('REPORTS') && (
+                    {hasPermission('REPORTS_VIEW') && (
                         <NavLink to="/orders" className={navLinkClass} title="Orders / Reconciliation">
                             <TrendingUp size={24} className="shrink-0" />
                             {actualExpanded && <span className="whitespace-nowrap">Orders</span>}
                         </NavLink>
                     )}
-                    {hasPermission('EVENTS') && (
+                    {hasPermission('EVENTS_MANAGE') && (
                         <NavLink to="/events" className={navLinkClass} title="Party Bookings">
                             <Calendar size={24} className="shrink-0" />
                             {actualExpanded && <span className="whitespace-nowrap">Party Bookings</span>}
                         </NavLink>
                     )}
-                    {hasPermission('INVENTORY') && (
+                    {hasPermission('INVENTORY_MANAGE') && (
                         <NavLink to="/inventory" className={navLinkClass} title="Inventory">
                             <Layers size={24} className="shrink-0" />
                             {actualExpanded && <span className="whitespace-nowrap">Inventory</span>}
                         </NavLink>
                     )}
-                    {hasPermission('STAFF') && (
+                    {hasPermission('STAFF_MANAGE') && (
                         <NavLink to="/staff" className={navLinkClass} title="Staff">
                             <ShieldCheck size={24} className="shrink-0" />
                             {actualExpanded && <span className="whitespace-nowrap">Staff</span>}
                         </NavLink>
                     )}
-                    {hasPermission('POS') && (
+                    {hasPermission('POS_ACCESS') && (
                         <NavLink to="/customers" className={navLinkClass} title="Customers">
                             <Contact size={24} className="shrink-0" />
                             {actualExpanded && <span className="whitespace-nowrap">Customers</span>}
                         </NavLink>
                     )}
-                    {user?.role === 'ADMIN' && (
+                    {hasPermission('ANALYSIS_VIEW') && (
                         <NavLink to="/analysis" className={navLinkClass} title="Analysis Dashboard">
                             <BarChart3 size={24} className="shrink-0" />
                             {actualExpanded && <span className="whitespace-nowrap">Analysis</span>}
                         </NavLink>
                     )}
-                    {user?.role === 'ADMIN' && (
+                    {hasPermission('MENU_MANAGE') && (
                         <NavLink to="/menu-management" className={navLinkClass} title="Menu Management">
                             <Library size={24} className="shrink-0" />
                             {actualExpanded && <span className="whitespace-nowrap">Menu Management</span>}
                         </NavLink>
                     )}
                 </nav>
-
+ 
                 {/* Bottom Settings / Logout */}
                 <div className="flex flex-col w-full mt-auto">
-                    <NavLink to="/settings" className={navLinkClass} title="Settings">
-                        <Settings size={24} className="shrink-0" />
-                        {actualExpanded && <span className="whitespace-nowrap">Settings</span>}
-                    </NavLink>
+                    {hasPermission('SETTINGS_MANAGE') && (
+                        <NavLink to="/settings" className={navLinkClass} title="Settings">
+                            <Settings size={24} className="shrink-0" />
+                            {actualExpanded && <span className="whitespace-nowrap">Settings</span>}
+                        </NavLink>
+                    )}
                     <button
                         onClick={logout}
                         className={`flex items-center ${actualExpanded ? 'gap-4 px-6' : 'justify-center px-0'} py-3.5 text-sm font-semibold text-red-400 hover:text-red-500 hover:bg-red-500/10 transition-all text-left border-t border-slate-800 mt-2 w-full`}
@@ -147,31 +149,31 @@ export function SidebarLayout() {
 
             {/* BOTTOM NAVIGATION BAR (Mobile Only) */}
             <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 flex items-center justify-around px-2 py-3 z-50">
-                {hasPermission('POS') && (
+                {hasPermission('POS_ACCESS') && (
                     <NavLink to="/" end className={({ isActive }) => `flex flex-col items-center gap-1 p-2 w-16 transition-all ${isActive ? 'text-white' : 'text-slate-500'}`}>
                         <LayoutDashboard size={24} />
                         <span className="text-[10px] font-bold">Menu</span>
                     </NavLink>
                 )}
-                {hasPermission('EVENTS') && (
+                {hasPermission('EVENTS_MANAGE') && (
                     <NavLink to="/events" className={({ isActive }) => `flex flex-col items-center gap-1 p-2 w-16 transition-all ${isActive ? 'text-white' : 'text-slate-500'}`}>
                         <Calendar size={24} />
                         <span className="text-[10px] font-bold">Party</span>
                     </NavLink>
                 )}
-                {hasPermission('INVENTORY') && (
+                {hasPermission('INVENTORY_MANAGE') && (
                     <NavLink to="/inventory" className={({ isActive }) => `flex flex-col items-center gap-1 p-2 w-16 transition-all ${isActive ? 'text-white' : 'text-slate-500'}`}>
                         <Layers size={24} />
                         <span className="text-[10px] font-bold">Inv.</span>
                     </NavLink>
                 )}
-                {hasPermission('POS') && (
+                {hasPermission('POS_ACCESS') && (
                     <NavLink to="/customers" className={({ isActive }) => `flex flex-col items-center gap-1 p-2 w-16 transition-all ${isActive ? 'text-white' : 'text-slate-500'}`}>
                         <Contact size={24} />
                         <span className="text-[10px] font-bold">Cust.</span>
                     </NavLink>
                 )}
-                {user?.role === 'ADMIN' && (
+                {hasPermission('ANALYSIS_VIEW') && (
                     <NavLink to="/analysis" className={({ isActive }) => `flex flex-col items-center gap-1 p-2 w-16 transition-all ${isActive ? 'text-white' : 'text-slate-500'}`}>
                         <BarChart3 size={24} />
                         <span className="text-[10px] font-bold">Analysis</span>

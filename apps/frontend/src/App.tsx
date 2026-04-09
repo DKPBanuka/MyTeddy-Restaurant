@@ -42,31 +42,40 @@ function App() {
             <Routes>
               {/* ... Routes ... */}
               <Route element={<SidebarLayout />}>
-                <Route element={<ProtectedRoute requiredPermission="POS" />}>
+                <Route element={<ProtectedRoute requiredPermission="POS_ACCESS" />}>
                   <Route path="/" element={<POSDashboard />} />
                   <Route path="/customers" element={<Customers />} />
                 </Route>
 
-                <Route element={<ProtectedRoute requiredPermission="EVENTS" />}>
+                <Route element={<ProtectedRoute requiredPermission="EVENTS_MANAGE" />}>
                   <Route path="/events" element={<EventsDashboard />} />
                 </Route>
 
-                <Route element={<ProtectedRoute requiredPermission="INVENTORY" />}>
+                <Route element={<ProtectedRoute requiredPermission="INVENTORY_MANAGE" />}>
                   <Route path="/inventory" element={<InventoryDashboard />} />
                 </Route>
 
-                <Route element={<ProtectedRoute requiredPermission="REPORTS" />}>
+                <Route element={<ProtectedRoute requiredPermission="REPORTS_VIEW" />}>
                   <Route path="/reports" element={<ReportsDashboard />} />
                   <Route path="/orders" element={<OrdersDashboard />} />
                 </Route>
 
-                <Route element={<ProtectedRoute requiredPermission="STAFF" />}>
+                <Route element={<ProtectedRoute requiredPermission="STAFF_MANAGE" />}>
                   <Route path="/staff" element={<StaffDashboard />} />
                 </Route>
 
-                <Route path="/menu-management" element={<MenuManagement />} />
-                <Route path="/analysis" element={<AnalysisDashboard />} />
-                <Route path="/settings" element={<Settings />} />
+                <Route element={<ProtectedRoute requiredPermission="MENU_MANAGE" />}>
+                  <Route path="/menu-management" element={<MenuManagement />} />
+                </Route>
+
+                <Route element={<ProtectedRoute requiredPermission="ANALYSIS_VIEW" />}>
+                  <Route path="/analysis" element={<AnalysisDashboard />} />
+                </Route>
+
+                <Route element={<ProtectedRoute requiredPermission="SETTINGS_MANAGE" />}>
+                  <Route path="/settings" element={<Settings />} />
+                </Route>
+
                 <Route path="/receipt-preview" element={<ReceiptPreview />} />
 
                 <Route path="*" element={<Navigate to="/" replace />} />

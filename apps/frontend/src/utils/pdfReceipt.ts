@@ -10,17 +10,33 @@ export const getReceiptHTML = (orderData: any, settings: any, logoUrl?: string, 
         const rawItems = orderData.items;
         const parsedItems = typeof rawItems === 'string' ? JSON.parse(rawItems) : (rawItems || []);
 
-        items = parsedItems.map((item: any) => {
+        const addonAggregator: Record<string, { name: string, qty: number, unitPrice: number }> = {};
+
+        const baseItems = parsedItems.map((item: any) => {
             let unitPrice = 0;
             if (item.packageId) {
                 unitPrice = parseFloat(item.package?.price || '0');
             } else if (item.productId) {
                 unitPrice = item.size ? parseFloat(item.size.price) : parseFloat(item.product?.price || '0');
-                if (item.selectedAddons) {
-                    unitPrice += item.selectedAddons.reduce((sum: number, a: any) => sum + parseFloat(a.price), 0);
-                }
             } else if (item.addonIds && item.selectedAddons) {
                 unitPrice = parseFloat(item.selectedAddons[0]?.price || '0');
+            }
+
+            // Process sub-addons for this specific item
+            if (item.selectedAddons && item.productId) {
+                item.selectedAddons.forEach((addon: any) => {
+                    const key = `${addon.name}-${addon.price}`;
+                    const parentQty = item.quantity || 1;
+                    if (addonAggregator[key]) {
+                        addonAggregator[key].qty += parentQty;
+                    } else {
+                        addonAggregator[key] = {
+                            name: addon.name,
+                            qty: parentQty,
+                            unitPrice: parseFloat(addon.price || '0')
+                        };
+                    }
+                });
             }
 
             const rawName = item.package?.name || item.product?.name || item.name || 'Item';
@@ -36,9 +52,17 @@ export const getReceiptHTML = (orderData: any, settings: any, logoUrl?: string, 
             };
         });
 
-        if (Number(orderData.hallCharge) > 0) {
-            items.push({ name: 'Hall Charge (Exclusive)', qty: 1, unitPrice: Number(orderData.hallCharge), itemTotal: Number(orderData.hallCharge), type: 'SERVICE' });
-        }
+        // Convert aggregated addons to item rows
+        const addonItems = Object.values(addonAggregator).map(addon => ({
+            name: `+ ${toTitleCase(addon.name)}`,
+            size: null,
+            qty: addon.qty,
+            unitPrice: addon.unitPrice,
+            itemTotal: addon.unitPrice * addon.qty,
+            type: 'FOOD'
+        }));
+
+        items = [...baseItems, ...addonItems];
 
         // Additional Extras moved to summary section
     } else {
@@ -101,7 +125,7 @@ export const getReceiptHTML = (orderData: any, settings: any, logoUrl?: string, 
 
         if (grandAddonsTotal > 0) {
             items.push({
-                name: 'Addition items',
+                name: 'Additional Items',
                 size: null,
                 qty: 1,
                 unitPrice: grandAddonsTotal,
@@ -312,7 +336,21 @@ export const getReceiptHTML = (orderData: any, settings: any, logoUrl?: string, 
                 </div>
             ` : (receiptType === 'PARTY_ADVANCE' || receiptType === 'PARTY_FINAL') ? `
                 <div class="flex justify-between font-bold" style="font-size: 14px; padding: 0 4px;">
-                    <span>Base Total</span>
+                    <span>Menu Total</span>
+                    <span>Rs. ${formatCurrency(Number(orderData.menuTotal || 0))}</span>
+                </div>
+
+                ${Number(orderData.hallCharge || 0) > 0 ? `
+                <div class="flex justify-between font-bold" style="font-size: 14px; padding: 0 4px; margin-top: 4px;">
+                    <span>Hall Charge</span>
+                    <span>Rs. ${formatCurrency(Number(orderData.hallCharge))}</span>
+                </div>
+                ` : ''}
+
+                <div class="dashed-line" style="margin: 8px 0;"></div>
+
+                <div class="flex justify-between font-bold" style="font-size: 14px; padding: 0 4px; color: #000;">
+                    <span>Gross Base Value</span>
                     <span>Rs. ${formatCurrency(subTotal)}</span>
                 </div>
 

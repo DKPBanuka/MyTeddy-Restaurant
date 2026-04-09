@@ -9,7 +9,13 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_ANON_KEY || ''; // OR SERVICE_ROLE_KEY if needed. Assuming env holds it.
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { PermissionsGuard } from './auth/permissions.guard';
+import { Permissions } from './auth/permissions.decorator';
+import { UseGuards } from '@nestjs/common';
+
 @Controller('products')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class ProductsGatewayController {
     constructor(
         @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientProxy,
@@ -22,6 +28,7 @@ export class ProductsGatewayController {
     }
 
     @Post()
+    @Permissions('MENU_MANAGE')
     async createProduct(@Body() data: any) {
         const result = await firstValueFrom(this.inventoryClient.send({ cmd: 'create_product' }, data));
         this.realTime.emit('PRODUCT_UPDATED', result);
@@ -29,6 +36,7 @@ export class ProductsGatewayController {
     }
 
     @Patch(':id')
+    @Permissions('MENU_MANAGE')
     async updateProduct(@Param('id') id: string, @Body() data: any) {
         const result = await firstValueFrom(this.inventoryClient.send({ cmd: 'update_product' }, { id, data }));
         this.realTime.emit('PRODUCT_UPDATED', { id });
@@ -36,6 +44,7 @@ export class ProductsGatewayController {
     }
 
     @Delete(':id')
+    @Permissions('MENU_MANAGE')
     async deleteProduct(@Param('id') id: string) {
         const result = await firstValueFrom(this.inventoryClient.send({ cmd: 'delete_product' }, id));
         this.realTime.emit('PRODUCT_UPDATED', { id });
@@ -43,6 +52,7 @@ export class ProductsGatewayController {
     }
 
     @Post('upload-image')
+    @Permissions('MENU_MANAGE')
     @UseInterceptors(FileInterceptor('file'))
     async uploadImage(@UploadedFile() file: any) {
         if (!file) {

@@ -68,50 +68,62 @@ export default function ModernReceiptUI({
     const rawItems = orderData?.items;
     baseItems = typeof rawItems === 'string' ? JSON.parse(rawItems) : (rawItems || []);
 
-    const mappedItems = baseItems.map((item: any) => {
+    const addonAggregator: Record<string, { name: string, qty: number, unitPrice: number }> = {};
+
+    const baseItemsList = baseItems.map((item: any) => {
       let itemPrice = 0;
       if (item.packageId) {
         itemPrice = parseFloat(item.package?.price || '0');
       } else if (item.productId) {
         itemPrice = item.size ? parseFloat(item.size.price) : parseFloat(item.product?.price || '0');
-        if (item.selectedAddons) {
-          itemPrice += item.selectedAddons.reduce((sum: number, a: any) => sum + parseFloat(a.price), 0);
-        }
       } else if (item.addonIds && item.selectedAddons) {
         itemPrice = parseFloat(item.selectedAddons[0]?.price || '0');
+      }
+
+      // Process sub-addons for aggregation
+      if (item.selectedAddons && item.productId) {
+        item.selectedAddons.forEach((addon: any) => {
+          const key = `${addon.name}-${addon.price}`;
+          const parentQty = item.quantity || 1;
+          if (addonAggregator[key]) {
+            addonAggregator[key].qty += parentQty;
+          } else {
+            addonAggregator[key] = {
+              name: addon.name,
+              qty: parentQty,
+              unitPrice: parseFloat(addon.price || '0')
+            };
+          }
+        });
       }
 
       const rawName = item.package?.name || item.product?.name || item.name || 'Item';
       const sizeName = typeof item.size === 'string' ? item.size : (item.size?.name || item.sizeName || null);
 
-      // Truncate name if it's too long to allow space for the size
       const maxChars = 45;
       const displayNameRaw = rawName.replace(/\(RETAIL\)/gi, '').trim();
       const displayName = displayNameRaw.length > maxChars ? displayNameRaw.substring(0, maxChars - 3) + '...' : displayNameRaw;
 
-      const addons = (item.selectedAddons || []).map((a: any) => a.name);
-
       return {
         name: displayName,
         size: sizeName,
-        addons: addons,
         qty: item.quantity || 1,
         price: itemPrice,
         total: itemPrice * (item.quantity || 1)
       };
     });
-    displayItems = [...displayItems, ...mappedItems];
 
-    // Add Hall Charge if applicable
-    const hallCharge = Number(orderData?.hallCharge || 0);
-    if (hallCharge > 0) {
-      displayItems.push({
-        name: 'Hall Charge (Exclusive)',
-        qty: 1,
-        price: hallCharge,
-        total: hallCharge
-      });
-    }
+    const addonItems = Object.values(addonAggregator).map(addon => ({
+      name: `+ ${addon.name}`,
+      qty: addon.qty,
+      price: addon.unitPrice,
+      total: addon.unitPrice * addon.qty,
+      isAddonRow: true
+    }));
+
+    displayItems = [...baseItemsList, ...addonItems];
+
+    displayItems = [...baseItemsList, ...addonItems];
 
     // Note: Additional Extras moved to summary section as requested
   } else {
@@ -182,7 +194,7 @@ export default function ModernReceiptUI({
 
     if (grandAddonsTotal > 0) {
       displayItems.push({
-        name: 'Addition items',
+        name: 'Additional Items',
         qty: 1,
         price: grandAddonsTotal,
         total: grandAddonsTotal,
@@ -377,9 +389,21 @@ export default function ModernReceiptUI({
         ) : receiptType === 'PARTY_ADVANCE' ? (
           <>
             <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em]">
-              <span>Base Total</span>
+              <span>Menu Total</span>
+              <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(Number(orderData?.menuTotal || 0))}</span>
+            </div>
+            {Number(orderData?.hallCharge || 0) > 0 && (
+              <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em]">
+                <span>Hall Charge</span>
+                <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(Number(orderData?.hallCharge))}</span>
+              </div>
+            )}
+            <div className="dashed-line my-2"></div>
+            <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em] font-black">
+              <span>Gross Base Value</span>
               <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(subtotal)}</span>
             </div>
+
             {addonsTotal > 0 && (
               <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em] font-bold">
                 <span>Additional Extras</span>
@@ -410,9 +434,21 @@ export default function ModernReceiptUI({
         ) : (
           <>
             <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em]">
-              <span>Base Total</span>
+              <span>Menu Total</span>
+              <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(Number(orderData?.menuTotal || 0))}</span>
+            </div>
+            {Number(orderData?.hallCharge || 0) > 0 && (
+              <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em]">
+                <span>Hall Charge</span>
+                <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(Number(orderData?.hallCharge))}</span>
+              </div>
+            )}
+            <div className="dashed-line my-2"></div>
+            <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em] font-black">
+              <span>Gross Base Value</span>
               <span><span className="receipt-text-sm mr-[0.2em]">Rs.</span>{formatCurrency(subtotal)}</span>
             </div>
+
             {addonsTotal > 0 && (
               <div className="flex justify-between items-center receipt-text-lg mb-[0.4em] px-[0.2em] font-bold">
                 <span>Additional Extras</span>

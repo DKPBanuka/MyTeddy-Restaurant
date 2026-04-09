@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { X, Search, ShoppingBag, Package as PackageIcon, Utensils, Plus, Minus, CheckCircle2, Loader2 } from 'lucide-react';
+import { X, Search, ShoppingBag, Package as PackageIcon, Utensils, Plus, Minus, CheckCircle2, Loader2, ChevronRight, Check, Edit2, Trash2 } from 'lucide-react';
 import { api } from '../api';
 import type { Product, Package, GlobalAddon, OrderItemDto, ProductSize, Category } from '../types';
 
@@ -29,6 +29,12 @@ export function MenuSelectionPopup({
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
+    // Context for customization (Size + Addons)
+    const [customizingProduct, setCustomizingProduct] = useState<Product | null>(null);
+    const [tempSelectedSize, setTempSelectedSize] = useState<ProductSize | null>(null);
+    const [tempAddonCounts, setTempAddonCounts] = useState<Record<string, number>>({});
+    const [editingItemIdx, setEditingItemIdx] = useState<number | null>(null);
+
     useEffect(() => {
         if (isOpen) {
             fetchInitialData();
@@ -57,11 +63,19 @@ export function MenuSelectionPopup({
     };
 
     const handleAddItem = (item: Partial<OrderItemDto>) => {
+        if (editingItemIdx !== null) {
+            setSelectedItems(prev => prev.map((i, idx) => idx === editingItemIdx ? { ...i, ...item } as OrderItemDto : i));
+            setEditingItemIdx(null);
+            return;
+        }
+
         setSelectedItems(prev => {
+            // Uniqueness check for non-customized additions (like direct package add)
             const existingIdx = prev.findIndex(i => {
                 if (item.packageId) return i.packageId === item.packageId;
-                if (item.productId) return i.productId === item.productId && i.sizeId === item.sizeId;
-                if (item.addonIds && i.addonIds && !item.productId) return i.addonIds[0] === item.addonIds[0] && !i.productId && !i.packageId;
+                if (item.productId && !item.selectedAddons?.length) {
+                    return i.productId === item.productId && i.sizeId === item.sizeId && (!i.selectedAddons || i.selectedAddons.length === 0);
+                }
                 return false;
             });
 
@@ -81,13 +95,33 @@ export function MenuSelectionPopup({
 
     const handleUpdateQuantity = (idx: number, delta: number) => {
         setSelectedItems(prev => {
-            if (prev[idx].quantity + delta === 0) {
+            if (prev[idx].quantity + delta <= 0) {
                 return prev.filter((_, i) => i !== idx);
             }
             return prev.map((item, i) => 
                 i === idx ? { ...item, quantity: item.quantity + delta } : item
             );
         });
+    };
+
+    const handleEditItem = (idx: number) => {
+        const item = selectedItems[idx];
+        if (item.productId && item.product) {
+            setEditingItemIdx(idx);
+            setCustomizingProduct(item.product);
+            setTempSelectedSize(item.size || (item.product.sizes?.length ? item.product.sizes[0] : null));
+            
+            // Map selectedAddons to counts
+            const counts: Record<string, number> = {};
+            item.selectedAddons?.forEach(a => {
+                counts[a.id] = (counts[a.id] || 0) + 1;
+            });
+            setTempAddonCounts(counts);
+        }
+    };
+
+    const handleRemoveItem = (idx: number) => {
+        setSelectedItems(prev => prev.filter((_, i) => i !== idx));
     };
 
     const filteredContent = useMemo(() => {
@@ -114,83 +148,116 @@ export function MenuSelectionPopup({
                 if (item.selectedAddons) {
                     price += item.selectedAddons.reduce((sum, a) => sum + parseFloat(a.price), 0);
                 }
-            } else if (item.addonIds && item.selectedAddons) {
+            } else if (item.addonIds && item.selectedAddons && !item.productId) {
                 price = parseFloat(item.selectedAddons[0].price || '0');
             }
             return acc + (price * item.quantity);
         }, 0);
     }, [selectedItems]);
 
+    // Addons applicable for the currently customizing product
+    const applicableAddons = useMemo(() => {
+        if (!customizingProduct) return [];
+        return addons.filter(a => 
+            !a.categoryIds || a.categoryIds.length === 0 || a.categoryIds.includes(customizingProduct.categoryId || '')
+        );
+    }, [customizingProduct, addons]);
+
+    const handleConfirmCustomization = () => {
+        if (!customizingProduct) return;
+
+        const flattenedAddons: GlobalAddon[] = [];
+        const addonIds: string[] = [];
+        Object.entries(tempAddonCounts).forEach(([id, count]) => {
+            const addon = addons.find(a => a.id === id);
+            if (addon && count > 0) {
+                for (let i = 0; i < count; i++) {
+                    flattenedAddons.push(addon);
+                    addonIds.push(id);
+                }
+            }
+        });
+
+        handleAddItem({
+            productId: customizingProduct.id,
+            product: customizingProduct,
+            sizeId: tempSelectedSize?.id,
+            size: tempSelectedSize || undefined,
+            addonIds,
+            selectedAddons: flattenedAddons
+        });
+
+        setCustomizingProduct(null);
+        setTempSelectedSize(null);
+        setTempAddonCounts({});
+        setEditingItemIdx(null);
+    };
+
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" onClick={onClose}></div>
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={onClose}></div>
             
-            <div className="relative bg-white w-full max-w-6xl h-[90vh] rounded-[2.5rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-in fade-in zoom-in duration-300">
-                {/* Main Content */}
+            <div className="relative bg-white w-full max-w-[95vw] h-[92vh] rounded-[3.5rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-in fade-in zoom-in duration-500">
+                {/* Main Content Area */}
                 <div className="flex-1 flex flex-col min-w-0 bg-white">
-                    <header className="px-8 py-6 border-b border-slate-100 shrink-0">
-                        <div className="flex items-center justify-between mb-6">
+                    <header className="px-12 py-10 border-b border-slate-100 shrink-0 bg-white relative z-20 font-sans">
+                        <div className="flex items-center justify-between mb-10">
                             <div>
-                                <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-                                    <ShoppingBag className="text-blue-600" size={24} />
+                                <h2 className="text-4xl font-black text-slate-950 tracking-tight flex items-center gap-4">
+                                    <div className="p-3 bg-blue-600 rounded-[1.5rem] shadow-xl shadow-blue-600/20">
+                                        <ShoppingBag className="text-white" size={28} />
+                                    </div>
                                     Menu Selection Portal
                                 </h2>
-                                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mt-1">Select Packages, Items, and Add-ons</p>
+                                <p className="text-slate-400 text-[11px] font-black uppercase tracking-[0.25em] mt-3 ml-1 leading-none">Curate your grand celebration menu</p>
                             </div>
-                            <button onClick={onClose} className="w-10 h-10 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center transition-colors">
-                                <X size={20} />
+                            <button onClick={onClose} className="w-14 h-14 bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-[1.5rem] flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-sm">
+                                <X size={28} />
                             </button>
                         </div>
 
-                        <div className="flex flex-col md:flex-row gap-4">
-                            <div className="flex bg-slate-100 p-1.5 rounded-2xl shrink-0">
-                                <button
-                                    onClick={() => { setActiveTab('PACKAGES'); setSelectedCategoryId(null); }}
-                                    className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${activeTab === 'PACKAGES' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                                >
-                                    <PackageIcon size={14} /> Packages
-                                </button>
-                                <button
-                                    onClick={() => { setActiveTab('ITEMS'); setSelectedCategoryId(null); }}
-                                    className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${activeTab === 'ITEMS' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                                >
-                                    <Utensils size={14} /> Food Items
-                                </button>
-                                <button
-                                    onClick={() => { setActiveTab('ADDONS'); setSelectedCategoryId(null); }}
-                                    className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${activeTab === 'ADDONS' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                                >
-                                    <Plus size={14} /> Add-ons
-                                </button>
+                        <div className="flex flex-col md:flex-row gap-8">
+                            <div className="flex bg-slate-100 p-2 rounded-[1.5rem] shrink-0 shadow-inner">
+                                {(['PACKAGES', 'ITEMS', 'ADDONS'] as TabType[]).map((tab) => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => { setActiveTab(tab); setSelectedCategoryId(null); }}
+                                        className={`px-10 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-white text-blue-600 shadow-xl transform scale-[1.02]' : 'text-slate-500 hover:text-slate-950'}`}
+                                    >
+                                        {tab === 'PACKAGES' && 'All Packages'}
+                                        {tab === 'ITEMS' && 'Gourmet Items'}
+                                        {tab === 'ADDONS' && 'Side Add-ons'}
+                                    </button>
+                                ))}
                             </div>
 
                             <div className="flex-1 relative group">
-                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18} />
+                                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={24} />
                                 <input
                                     type="text"
-                                    placeholder={`Search for ${activeTab.toLowerCase()}...`}
+                                    placeholder={`Discover ${activeTab.toLowerCase()}...`}
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl outline-none font-bold text-slate-700 transition-all focus:bg-white"
+                                    className="w-full pl-16 pr-8 py-5.5 bg-slate-50/50 border-2 border-slate-100 focus:border-blue-500 focus:bg-white rounded-[2rem] outline-none font-bold text-slate-700 transition-all shadow-sm focus:shadow-blue-500/5 placeholder:text-slate-300"
                                 />
                             </div>
                         </div>
 
                         {activeTab === 'ITEMS' && categories.length > 0 && (
-                            <div className="flex items-center gap-2 mt-6 overflow-x-auto pb-2 custom-scrollbar no-scrollbar scroll-smooth">
+                            <div className="flex items-center gap-4 mt-10 overflow-x-auto pb-4 no-scrollbar scroll-smooth">
                                 <button 
                                     onClick={() => setSelectedCategoryId(null)}
-                                    className={`px-5 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all whitespace-nowrap ${!selectedCategoryId ? 'bg-slate-800 text-white shadow-lg' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                                    className={`px-8 py-3 rounded-2xl text-[11px] font-black tracking-[0.25em] transition-all whitespace-nowrap border-2 ${!selectedCategoryId ? 'bg-slate-950 border-slate-950 text-white shadow-2xl' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300 hover:text-slate-600'}`}
                                 >
-                                    ALL
+                                    ALL CATEGORIES
                                 </button>
                                 {categories.map(cat => (
                                     <button 
                                         key={cat.id}
                                         onClick={() => setSelectedCategoryId(cat.id)}
-                                        className={`px-5 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all whitespace-nowrap ${selectedCategoryId === cat.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                                        className={`px-8 py-3 rounded-2xl text-[11px] font-black tracking-[0.25em] transition-all whitespace-nowrap border-2 ${selectedCategoryId === cat.id ? 'bg-blue-600 border-blue-600 text-white shadow-2xl shadow-blue-500/20' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300 hover:text-slate-600'}`}
                                     >
                                         {cat.name.toUpperCase()}
                                     </button>
@@ -199,16 +266,15 @@ export function MenuSelectionPopup({
                         )}
                     </header>
 
-                    <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-slate-50/30">
+                    <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-slate-50/10 relative">
                         {isLoading ? (
-                            <div className="flex flex-col items-center justify-center h-full gap-4 text-slate-400">
-                                <Loader2 className="animate-spin" size={48} />
-                                <p className="font-bold">Syncing Menu Data...</p>
+                            <div className="flex flex-col items-center justify-center h-full gap-5 text-slate-200">
+                                <Loader2 className="animate-spin" size={64} />
+                                <p className="font-black uppercase tracking-[0.5em] text-[10px] ml-1">Loading Catalog Architecture...</p>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-10">
                                 {filteredContent.map((item: any) => {
-                                    // Calculate "Laabaya" (Savings) for packages
                                     let laabaya = 0;
                                     if (activeTab === 'PACKAGES' && item.items) {
                                         const individualTotal = item.items.reduce((sum: number, pkgItem: any) => {
@@ -219,91 +285,112 @@ export function MenuSelectionPopup({
                                     }
 
                                     return (
-                                        <div key={item.id} className={`bg-white border-2 border-slate-100 rounded-[2rem] overflow-hidden hover:border-blue-500 transition-all group shadow-sm flex flex-col hover:shadow-xl hover:shadow-blue-600/5 hover:-translate-y-1 duration-300 ${activeTab === 'ADDONS' ? 'scale-95' : ''}`}>
-                                            <div className={`relative ${activeTab === 'ADDONS' ? 'h-24' : 'h-32'} bg-slate-50 overflow-hidden`}>
+                                        <div 
+                                            key={item.id} 
+                                            onClick={() => {
+                                                if (activeTab === 'ITEMS') {
+                                                    setEditingItemIdx(null);
+                                                    setCustomizingProduct(item);
+                                                    setTempSelectedSize(item.sizes && item.sizes.length > 0 ? item.sizes[0] : null);
+                                                    setTempAddonCounts({});
+                                                } else {
+                                                    if (activeTab === 'PACKAGES') handleAddItem({ packageId: item.id, package: item });
+                                                    else if (activeTab === 'ADDONS') handleAddItem({ addonIds: [item.id], selectedAddons: [item] });
+                                                }
+                                            }}
+                                            className="bg-white border-2 border-slate-100 rounded-[2.5rem] overflow-hidden hover:border-blue-500 transition-all group shadow-sm flex flex-col hover:shadow-2xl hover:shadow-blue-600/10 hover:-translate-y-2 duration-500 cursor-pointer relative"
+                                        >
+                                            <div className="relative h-44 bg-slate-50 overflow-hidden">
                                                 {item.imageUrl ? (
                                                     <img 
                                                         src={item.imageUrl} 
                                                         alt={item.name} 
-                                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000"
                                                     />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center text-slate-200">
-                                                        {activeTab === 'PACKAGES' ? <PackageIcon size={32} /> : (activeTab === 'ADDONS' ? <Plus size={24} /> : <Utensils size={32} />)}
+                                                        {activeTab === 'PACKAGES' ? <PackageIcon size={40} /> : (activeTab === 'ADDONS' ? <Plus size={32} /> : <Utensils size={40} />)}
                                                     </div>
                                                 )}
                                                 
-                                                {/* Show single price only if no sizes or not an item */}
-                                                {(!item.sizes || item.sizes.length === 0) && (
-                                                    <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md px-2 py-1 rounded-lg font-black text-blue-600 text-[9px] shadow-sm border border-blue-100">
-                                                        Rs. {parseFloat(item.price || '0').toLocaleString()}
+                                                {/* Stock Badge */}
+                                                {activeTab === 'ITEMS' && item.retailStock && (
+                                                    <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl font-bold text-[10px] text-slate-900 shadow-lg border border-slate-100">
+                                                        Stock: {item.retailStock.stockQty}
                                                     </div>
                                                 )}
 
-                                                {/* Laabaya Tag */}
-                                                {laabaya > 0 && (
-                                                    <div className="absolute bottom-3 left-3 bg-green-500 text-white px-2 py-1 rounded-lg font-black text-[8px] uppercase tracking-widest shadow-lg shadow-green-500/20 animate-bounce">
-                                                        Save Rs. {laabaya.toLocaleString()}
+                                                {/* Category Badge */}
+                                                {(activeTab === 'ITEMS' && item.category) && (
+                                                    <div className="absolute top-4 right-4 bg-blue-600 text-white px-3 py-1.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg">
+                                                        {item.category.name.split(' ')[0]}
                                                     </div>
                                                 )}
+                                                
+                                                {activeTab === 'PACKAGES' && (
+                                                    <>
+                                                        <div className="absolute top-4 right-4 bg-indigo-600 text-white px-3 py-1.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg">
+                                                            PACKAGE
+                                                        </div>
+                                                        {laabaya > 0 && (
+                                                            <div className="absolute bottom-4 left-4 bg-emerald-500 text-white px-3 py-1.5 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 animate-in fade-in slide-in-from-bottom-2">
+                                                                SAVE Rs. {laabaya.toLocaleString()}
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
+
+                                                {/* Expired Overlay */}
+                                                {item.isActive === false && (
+                                                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] flex items-center justify-center">
+                                                        <div className="bg-slate-200/20 border-2 border-white/30 px-6 py-2 rounded-2xl font-black text-white text-[10px] uppercase tracking-[0.3em] rotate-[-12deg] shadow-2xl">
+                                                            EXPIRED
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                
+                                                <div className="absolute inset-0 bg-blue-600/0 group-hover:bg-blue-600/5 transition-colors duration-500" />
                                             </div>
 
-                                            <div className={`${activeTab === 'ADDONS' ? 'p-3' : 'p-4'} flex flex-col flex-1`}>
-                                                <div className="flex items-start justify-between gap-2 mb-1">
-                                                    <h4 className={`font-black text-slate-800 ${activeTab === 'ADDONS' ? 'text-xs' : 'text-sm'} leading-tight line-clamp-1`}>{item.name}</h4>
-                                                </div>
-                                                {activeTab === 'PACKAGES' && (
-                                                    <div className="mt-1 space-y-1 mb-3">
-                                                        <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                                                            <CheckCircle2 size={10} /> Includes:
-                                                        </p>
-                                                        <div className="bg-slate-50/80 rounded-xl p-2.5 border border-slate-100/50">
-                                                            {item.items?.map((pkgI: any, idx: number) => (
-                                                                <div key={idx} className="text-[9px] font-bold text-slate-600 flex justify-between gap-2 mb-1 last:mb-0">
-                                                                    <span className="truncate">{pkgI.product?.name}</span>
-                                                                    <span className="text-slate-400 shrink-0">x{pkgI.quantity}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
+
+                                            <div className="p-6 flex flex-col flex-1 relative">
+                                                <h4 className="font-black text-slate-950 text-base leading-tight line-clamp-1 mb-2 group-hover:text-blue-600 transition-colors uppercase tracking-tight">{item.name}</h4>
+                                                
+                                                <p className="text-slate-400 text-[11px] font-bold line-clamp-1 mb-4 leading-relaxed">
+                                                    {activeTab === 'PACKAGES' ? `${item.items?.length || 0} premium specialties included` : (item.description || 'A signature selection crafted by our master chefs.')}
+                                                </p>
+
+                                                {activeTab === 'PACKAGES' && item.items && (
+                                                    <div className="mb-6 bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex flex-col gap-2 transition-all group-hover:bg-white">
+                                                        {item.items.slice(0, 3).map((pkgI: any, idx: number) => (
+                                                            <div key={idx} className="text-[10px] font-bold text-slate-500 flex justify-between gap-3 px-1">
+                                                                <span className="truncate">{pkgI.product?.name}</span>
+                                                                <span className="text-indigo-500 font-black shrink-0">x{pkgI.quantity}</span>
+                                                            </div>
+                                                        ))}
+                                                        {item.items.length > 3 && <p className="text-[9px] text-slate-400 font-extrabold ml-1 uppercase tracking-widest">+{item.items.length - 3} more items</p>}
                                                     </div>
                                                 )}
-                                                <p className={`text-slate-400 ${activeTab === 'ADDONS' ? 'text-[9px]' : 'text-[10px]'} font-bold line-clamp-2 mb-4 flex-1 italic`}>{item.description || 'Premium selection.'}</p>
 
-                                                <div className="space-y-2">
-                                                    {/* Size Selection with Prices */}
+
+                                                <div className="mt-auto pt-2">
+                                                    <div className="text-xl font-black text-slate-950 tracking-tighter mb-1">
+                                                        Rs. {parseFloat(item.price || '0').toLocaleString()}
+                                                    </div>
                                                     {activeTab === 'ITEMS' && item.sizes && item.sizes.length > 0 && (
-                                                        <div className="grid grid-cols-1 gap-1.5 mb-2">
-                                                            {item.sizes.map((s: ProductSize) => (
-                                                                <button 
-                                                                    key={s.id}
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleAddItem({ productId: item.id, product: item, sizeId: s.id, size: s });
-                                                                    }}
-                                                                    className="flex items-center justify-between px-3 py-2 rounded-xl text-[9px] font-black uppercase bg-slate-50 text-slate-600 hover:bg-blue-600 hover:text-white transition-all border border-transparent hover:border-blue-600 group/btn"
-                                                                >
-                                                                    <span>{s.name}</span>
-                                                                    <span className="text-blue-600 group-hover/btn:text-white/80">Rs. {parseFloat(s.price).toLocaleString()}</span>
-                                                                </button>
-                                                            ))}
+                                                        <div className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-0.5">
+                                                            VARIANTS AVAILABLE
                                                         </div>
                                                     )}
+                                                </div>
 
-                                                    {(!item.sizes || item.sizes.length === 0) && (
-                                                        <button 
-                                                            onClick={() => {
-                                                                if (activeTab === 'PACKAGES') handleAddItem({ packageId: item.id, package: item });
-                                                                else if (activeTab === 'ADDONS') handleAddItem({ addonIds: [item.id], selectedAddons: [item] });
-                                                                else handleAddItem({ productId: item.id, product: item });
-                                                            }}
-                                                            className={`w-full bg-slate-900 text-white ${activeTab === 'ADDONS' ? 'py-2 rounded-lg' : 'py-3 rounded-xl'} text-[10px] font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-slate-900/10 active:scale-95 group-hover:bg-blue-600 group-hover:shadow-blue-600/20`}
-                                                        >
-                                                            <Plus size={activeTab === 'ADDONS' ? 10 : 12} /> Add
-                                                        </button>
-                                                    )}
+                                                {/* Floating Plus Button */}
+                                                <div className="absolute bottom-6 right-6 w-11 h-11 rounded-2xl bg-white border-2 border-slate-100 text-slate-300 flex items-center justify-center transition-all group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 group-hover:scale-110 active:scale-95 shadow-sm group-hover:shadow-xl group-hover:shadow-blue-600/20">
+                                                    <Plus size={24} strokeWidth={3} />
                                                 </div>
                                             </div>
                                         </div>
+
                                     );
                                 })}
                             </div>
@@ -311,89 +398,222 @@ export function MenuSelectionPopup({
                     </div>
                 </div>
 
-                {/* Sidebar: Current Selection */}
-                <div className="w-full md:w-[400px] bg-slate-50 flex flex-col shrink-0 border-l border-slate-100">
-                    <div className="p-8 border-b border-slate-100 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
-                        <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                            Summary
-                            <span className="bg-blue-100 text-blue-600 text-[10px] px-2 py-1 rounded-md">{selectedItems.length} items</span>
-                        </h3>
+                {/* Dashboard-Style Checklist Sidebar */}
+                <div className="w-full md:w-[600px] bg-slate-50/50 flex flex-col shrink-0 border-l border-slate-100 relative group/sidebar font-sans h-full">
+                    <div className="px-12 py-10 bg-white border-b border-slate-100 sticky top-0 z-20 backdrop-blur-md">
+                        <div className="flex items-center justify-between mb-8">
+                            <div>
+                                <h3 className="text-3xl font-black text-slate-950 tracking-tight leading-none mb-3">Event Checklist</h3>
+                                <p className="text-slate-400 text-[11px] font-black uppercase tracking-[0.25em] ml-1 leading-none">Management Dashboard Overview</p>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                                <span className="bg-slate-950 text-white text-[10px] font-black px-5 py-2 rounded-full shadow-2xl">ENTITIES: {selectedItems.length}</span>
+                            </div>
+                        </div>
+                        
+                        {/* Table Headers (Mirroring Menu Management) */}
+                        <div className="grid grid-cols-[1fr,120px,100px] gap-6 px-4 py-4 bg-slate-50 rounded-2xl border border-slate-100 mb-0">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-4">Product Hierarchy</span>
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Batch Size</span>
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest text-right pr-4">Actions</span>
+                        </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto px-10 py-8 space-y-4 custom-scrollbar min-h-0 bg-slate-50/20">
                         {selectedItems.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-4 py-20">
-                                <ShoppingBag size={48} className="opacity-20" />
-                                <p className="font-bold text-center">Your selection is empty.<br/>Browse the menu to add items.</p>
+                            <div className="flex flex-col items-center justify-center h-full text-slate-200 gap-10 py-24 animate-in fade-in duration-1000">
+                                <div className="w-36 h-36 rounded-[4rem] bg-white border-4 border-dashed border-slate-100 flex items-center justify-center shadow-inner group-hover/sidebar:rotate-3 transition-transform duration-700">
+                                    <ShoppingBag size={56} className="opacity-20 translate-y-1" />
+                                </div>
+                                <div className="text-center space-y-4">
+                                    <p className="font-black text-[10px] uppercase tracking-[0.5em] text-slate-300 leading-relaxed translate-x-1">No Entries Documented</p>
+                                    <p className="font-bold text-[10px] text-slate-400/40 italic leading-none">Populate your master menu from the catalog</p>
+                                </div>
                             </div>
                         ) : (
                             selectedItems.map((item, idx) => (
-                                <div key={idx} className="bg-white rounded-[2rem] p-4 shadow-sm border border-slate-100 flex items-center gap-4 group">
-                                    <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shrink-0">
-                                        {item.packageId ? <PackageIcon size={20} /> : <Utensils size={20} />}
+                                <div key={idx} className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 group/item hover:border-blue-500 hover:shadow-[0_20px_40px_-15px_rgba(15,23,42,0.05)] transition-all duration-500 relative animate-in slide-in-from-right-16">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h5 className="font-extrabold text-slate-950 text-[15px] truncate pr-4 uppercase tracking-tighter leading-none">{item.package?.name || item.product?.name || (item.selectedAddons?.[0]?.name)}</h5>
+                                        <span className="text-[15px] font-black text-slate-950 tracking-tighter">Rs. {((item.size ? parseFloat(item.size.price) : parseFloat(item.product?.price || item.package?.price || '0')) + (item.selectedAddons?.reduce((sum, a) => sum + parseFloat(a.price), 0) || 0)).toLocaleString()}</span>
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h5 className="font-black text-slate-800 text-sm truncate">{item.package?.name || item.product?.name || (item.selectedAddons?.[0]?.name)}</h5>
-                                        <p className="text-[10px] font-bold text-slate-400 flex items-center gap-2">
-                                            {item.size?.name && <span className="text-blue-500 uppercase">{item.size.name}</span>}
-                                            {item.packageId ? 'Package Bundle' : 'Food Item'}
-                                        </p>
-                                    </div>
-                                    <div className="flex items-center gap-3 bg-slate-50 p-1 rounded-xl">
-                                        <button 
-                                            onClick={() => handleUpdateQuantity(idx, -1)}
-                                            className="w-6 h-6 flex items-center justify-center bg-white rounded-lg text-slate-400 hover:text-red-500 transition-colors shadow-sm"
-                                        >
-                                            <Minus size={12} />
-                                        </button>
-                                        <span className="text-xs font-black text-slate-700 w-4 text-center">{item.quantity}</span>
-                                        <button 
-                                            onClick={() => handleUpdateQuantity(idx, 1)}
-                                            className="w-6 h-6 flex items-center justify-center bg-white rounded-lg text-slate-400 hover:text-blue-600 transition-colors shadow-sm"
-                                        >
-                                            <Plus size={12} />
-                                        </button>
+
+                                    <div className="flex items-center gap-2">
+                                        {(item.size || (item.selectedAddons && item.selectedAddons.length > 0)) && (
+                                            <div className="bg-blue-50 text-blue-600 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border border-blue-100">
+                                                + ADD-ONS / SIZES
+                                            </div>
+                                        )}
+                                        <div className="bg-slate-100 text-slate-400 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest">
+                                            {item.quantity}x
+                                        </div>
+
+                                        <div className="flex items-center gap-2 ml-auto opacity-0 group-hover/item:opacity-100 transition-all">
+                                            <button onClick={() => handleUpdateQuantity(idx, -1)} className="w-8 h-8 flex items-center justify-center bg-slate-50 text-slate-400 hover:bg-red-500 hover:text-white rounded-xl transition-all"><Minus size={14} /></button>
+                                            <button onClick={() => handleUpdateQuantity(idx, 1)} className="w-8 h-8 flex items-center justify-center bg-slate-50 text-slate-400 hover:bg-blue-600 hover:text-white rounded-xl transition-all"><Plus size={14} /></button>
+                                            <button onClick={() => handleRemoveItem(idx)} className="w-8 h-8 flex items-center justify-center bg-slate-50 text-slate-400 hover:bg-red-500 hover:text-white rounded-xl transition-all"><Trash2 size={14} /></button>
+                                        </div>
                                     </div>
                                 </div>
+
                             ))
                         )}
                     </div>
 
-                    <footer className="p-8 border-t border-slate-100 bg-white/50 backdrop-blur-sm space-y-6">
-                        <div className="flex justify-between items-center text-sm font-black">
-                            <span className="text-slate-400 uppercase tracking-widest text-[10px]">Total Selection</span>
-                            <span className="text-slate-800 text-2xl">Rs. {cartTotal.toLocaleString()}</span>
+                    <footer className="p-10 bg-white shadow-[0_-30px_60px_-15px_rgba(0,0,0,0.05)] mt-auto rounded-t-[4rem] border-t border-slate-100 relative z-30 font-sans">
+                        <div className="mb-10 px-4">
+                            <div className="flex justify-between items-center mb-6">
+                                <span className="text-slate-400 uppercase tracking-[0.4em] text-[9px] font-black leading-none">Consolidated Subtotal</span>
+                                <div className="text-right">
+                                    <span className="text-slate-950 text-5xl font-black tracking-tighter leading-none block mb-2">Rs. {cartTotal.toLocaleString()}</span>
+                                    <span className="text-[9px] font-bold text-slate-300 italic tracking-widest uppercase">Base price + Customizations</span>
+                                </div>
+                            </div>
+                            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden relative">
+                                <div className="h-full bg-blue-600 transition-all duration-1000 ease-out" style={{ width: `${Math.min(100, (cartTotal / 100000) * 100)}%` }} />
+                            </div>
                         </div>
                         
-                        <div className="flex gap-3">
-                            <button 
-                                onClick={onClose}
-                                className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-500 font-black rounded-2xl text-xs transition-all active:scale-[0.98]"
-                            >
-                                Cancel
-                            </button>
+                        <div className="flex flex-col gap-4">
                             <button 
                                 onClick={() => {
                                     onConfirm(selectedItems, cartTotal);
                                     onClose();
                                 }}
                                 disabled={selectedItems.length === 0}
-                                className="flex-[2] py-4 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl text-xs shadow-lg shadow-blue-600/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50"
+                                className="w-full py-6 bg-slate-900 border-b-[6px] border-slate-950 hover:bg-slate-800 text-white font-black rounded-3xl text-sm uppercase tracking-[0.3em] shadow-xl transition-all active:translate-y-1 active:border-b-0 flex items-center justify-center gap-4 disabled:opacity-50 group/confirm"
                             >
-                                <CheckCircle2 size={16} /> Confirm Menu
+                                <CheckCircle2 size={32} className="text-blue-500" /> 
+                                <span>Finalize Celebration Portfolio</span>
+                            </button>
+                            <button 
+                                onClick={onClose}
+                                className="text-slate-400 hover:text-red-500 font-black text-[10px] uppercase tracking-[0.4em] transition-all text-center"
+                            >
+                                Discard Master Selections
                             </button>
                         </div>
                     </footer>
+
                 </div>
             </div>
 
+            {/* Premium Integrated Customization View */}
+            {customizingProduct && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 pointer-events-none">
+                    <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-md pointer-events-auto animate-in fade-in duration-500" onClick={() => {setCustomizingProduct(null); setEditingItemIdx(null);}}></div>
+                    
+                    <div className="relative bg-white w-full max-w-3xl rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] pointer-events-auto flex flex-col animate-in zoom-in-95 duration-500 overflow-hidden">
+                        <div className="px-12 py-10 border-b border-slate-100 bg-white shrink-0 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-4xl font-black text-slate-950 leading-tight tracking-tighter mb-1 uppercase">{customizingProduct.name}</h3>
+                                <p className="text-slate-400 text-[11px] font-black uppercase tracking-[0.3em]">Customize your selection</p>
+                            </div>
+                            <button onClick={() => {setCustomizingProduct(null); setEditingItemIdx(null);}} className="w-14 h-14 bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-red-500 rounded-2xl flex items-center justify-center transition-all">
+                                <X size={28} />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-12 space-y-12 custom-scrollbar bg-slate-50/20">
+                            {/* Portion Sizes Section */}
+                            {customizingProduct.sizes && customizingProduct.sizes.length > 0 && (
+                                <div className="space-y-6">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black text-xs">1</div>
+                                        <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-widest">SELECT SIZE <span className="text-red-500">*</span></h4>
+                                    </div>
+                                    <div className="flex flex-wrap gap-4">
+                                        {customizingProduct.sizes.map((s) => (
+                                            <button 
+                                                key={s.id}
+                                                onClick={() => setTempSelectedSize(s)}
+                                                className={`flex-1 min-w-[200px] p-6 rounded-[1.5rem] border-2 transition-all relative text-left ${tempSelectedSize?.id === s.id ? 'bg-white border-blue-600 shadow-xl shadow-blue-500/10' : 'bg-white border-slate-100'}`}
+                                            >
+                                                <div className="font-extrabold text-slate-950 text-lg mb-1">{s.name}</div>
+                                                <div className={`font-black tracking-tight ${tempSelectedSize?.id === s.id ? 'text-blue-600' : 'text-slate-400'}`}>Rs. {parseFloat(s.price).toLocaleString()}</div>
+                                                {tempSelectedSize?.id === s.id && <Check className="absolute top-4 right-4 text-blue-600" size={20} />}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Extra Add-ons Section */}
+                            <div className="space-y-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-black text-xs">2</div>
+                                    <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-widest">EXTRA ADD-ONS</h4>
+                                </div>
+                                <div className="space-y-3">
+                                    {applicableAddons.map((addon) => {
+                                        const count = tempAddonCounts[addon.id] || 0;
+                                        return (
+                                            <div key={addon.id} className="p-6 rounded-[1.5rem] bg-white border-2 border-slate-100 flex items-center justify-between">
+                                                <div>
+                                                    <div className="font-extrabold text-slate-950 text-lg mb-1">{addon.name}</div>
+                                                    <div className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Rs. {parseFloat(addon.price).toLocaleString()}</div>
+                                                </div>
+                                                <div className="flex items-center gap-4 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+                                                    <button 
+                                                        onClick={() => setTempAddonCounts(prev => ({ ...prev, [addon.id]: Math.max(0, (prev[addon.id] || 0) - 1) }))}
+                                                        className="w-10 h-10 flex items-center justify-center bg-white rounded-xl text-slate-400 hover:text-red-500 shadow-sm transition-all"
+                                                    >
+                                                        <Minus size={18} />
+                                                    </button>
+                                                    <span className="w-6 text-center font-black text-slate-950 text-lg">{count}</span>
+                                                    <button 
+                                                        onClick={() => setTempAddonCounts(prev => ({ ...prev, [addon.id]: (prev[addon.id] || 0) + 1 }))}
+                                                        className="w-10 h-10 flex items-center justify-center bg-white rounded-xl text-slate-300 hover:text-emerald-500 shadow-sm transition-all"
+                                                    >
+                                                        <Plus size={18} className="text-emerald-500" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-10 bg-white border-t border-slate-100 flex items-center justify-between">
+                            <div>
+                                <span className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] mb-1 block">Total Price:</span>
+                                <div className="text-slate-950 text-5xl font-black tracking-tighter">
+                                    Rs. {(
+                                        (tempSelectedSize ? parseFloat(tempSelectedSize.price) : parseFloat(customizingProduct.price || '0')) +
+                                        Object.entries(tempAddonCounts).reduce((sum, [id, count]) => {
+                                            const addon = addons.find(a => a.id === id);
+                                            return sum + (addon ? parseFloat(addon.price) * count : 0);
+                                        }, 0)
+                                    ).toLocaleString()}
+                                </div>
+                            </div>
+                            <button 
+                                onClick={handleConfirmCustomization}
+                                className="px-14 py-6 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-[2rem] text-sm uppercase tracking-[0.3em] flex items-center gap-4 shadow-xl shadow-blue-500/20 transition-all active:scale-95"
+                            >
+                                <Plus size={24} strokeWidth={3} />
+                                ADD
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+
             <style>{`
-                .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+                .custom-scrollbar::-webkit-scrollbar { width: 10px; }
                 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-                .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 50px; }
                 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
                 .no-scrollbar::-webkit-scrollbar { display: none; }
                 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+                .stripes-loading {
+                     background-image: linear-gradient(45deg, rgba(255,255,255,.1) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.1) 50%, rgba(255,255,255,.1) 75%, transparent 75%, transparent);
+                     background-size: 40px 40px;
+                     animation: stripes-move 2s linear infinite;
+                }
+                @keyframes stripes-move { from { background-position: 0 0; } to { background-position: 40px 0; } }
             `}</style>
         </div>
     );

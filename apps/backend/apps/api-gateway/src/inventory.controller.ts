@@ -3,7 +3,14 @@ import { RealTimeGateway } from './real-time.gateway';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { firstValueFrom, catchError, throwError } from 'rxjs';
 
+import { Request, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { PermissionsGuard } from './auth/permissions.guard';
+import { Permissions } from './auth/permissions.decorator';
+
 @Controller('inventory')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@Permissions('INVENTORY_MANAGE')
 export class InventoryGatewayController {
     constructor(
         @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientProxy,

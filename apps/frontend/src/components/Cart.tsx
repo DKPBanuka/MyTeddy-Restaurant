@@ -435,22 +435,30 @@ export function Cart({
                     {taxRate > 0 && <div className="h-px w-full border-t border-dashed border-slate-200 my-4"></div>}
 
                     <div className="flex justify-between items-center mb-2">
-                        <span className="text-slate-500 font-medium">{taxRate > 0 ? 'Grand Total' : 'TOTAL'}</span>
-                        <span className={`text-lg font-black ${totalPaid > 0 ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-800'}`}>
+                        <span className="text-slate-500 font-medium">{(taxRate > 0 || discount > 0) ? 'Grand Total' : 'Total Payable'}</span>
+                        <span className={`text-lg font-black ${Number(totalPaid) > 0 ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-800'}`}>
                             {formatCurrency(displayTotal, settings?.currencySymbol || 'Rs.')}
                         </span>
                     </div>
 
-                    {totalPaid > 0 && (
+                    {Number(totalPaid) > 0 && (
                         <div className="space-y-2 pt-2 border-t border-slate-100 mt-2">
                             <div className="flex justify-between items-center text-sm">
                                 <span className="text-emerald-600 font-bold uppercase tracking-wider text-[10px]">Total Paid</span>
                                 <span className="font-black text-emerald-600">{formatCurrency(totalPaid, settings?.currencySymbol || 'Rs.')}</span>
                             </div>
-                            <div className="flex justify-between items-center bg-blue-600 text-white p-3 rounded-xl shadow-md animate-pulse">
-                                <span className="font-black uppercase tracking-[0.2em] text-[10px]">Balance Due</span>
-                                <span className="text-xl font-black">{formatCurrency(remainingBalance, settings?.currencySymbol || 'Rs.')}</span>
-                            </div>
+                            
+                            {Number(remainingBalance) > 0 ? (
+                                <div className="flex justify-between items-center bg-blue-600 text-white p-3 rounded-xl shadow-md animate-pulse">
+                                    <span className="font-black uppercase tracking-[0.2em] text-[10px]">Balance Due</span>
+                                    <span className="text-xl font-black">{formatCurrency(remainingBalance, settings?.currencySymbol || 'Rs.')}</span>
+                                </div>
+                            ) : (
+                                <div className="flex items-center justify-center gap-2 bg-emerald-50 text-emerald-600 p-2 rounded-xl border border-emerald-100 mt-1">
+                                    <Star size={12} className="fill-current" />
+                                    <span className="font-black uppercase tracking-widest text-[10px]">Fully Settled</span>
+                                </div>
+                            )}
                         </div>
                     )}
 

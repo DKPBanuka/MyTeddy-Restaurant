@@ -25,11 +25,11 @@ async function main() {
         data: [
             {
                 role: Role.ADMIN,
-                permissions: ['POS', 'REPORTS', 'EVENTS', 'INVENTORY', 'STAFF', 'SETTINGS', 'CUSTOMERS', 'ANALYSIS', 'MENU_MANAGEMENT', 'DASHBOARD'],
+                permissions: ['POS_ACCESS', 'REPORTS_VIEW', 'EVENTS_MANAGE', 'INVENTORY_MANAGE', 'STAFF_MANAGE', 'MENU_MANAGE', 'ANALYSIS_VIEW', 'SETTINGS_MANAGE'],
             },
             {
                 role: Role.CASHIER,
-                permissions: ['POS', 'REPORTS', 'EVENTS'],
+                permissions: ['POS_ACCESS', 'REPORTS_VIEW', 'EVENTS_MANAGE'],
             }
         ]
     });
