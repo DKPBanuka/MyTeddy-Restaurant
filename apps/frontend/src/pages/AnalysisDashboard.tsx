@@ -19,11 +19,20 @@ import {
     Tag,
     AlertCircle,
     UserCheck,
-    Briefcase,
-    FileDown
+    Briefcase
 } from 'lucide-react';
+
+const MobileStyles = () => (
+    <style dangerouslySetInnerHTML={{ __html: `
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        @media (max-width: 640px) {
+            .chart-height { height: 260px !important; }
+            .metric-grid { grid-template-columns: 1fr !important; }
+        }
+    `}} />
+);
 import { formatCurrency } from '../utils/format';
-import { downloadCSV } from '../utils/csvExport';
 import { useSocket } from '../context/SocketContext';
 
 type TimePeriod = 'TODAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'CUSTOM';
@@ -69,11 +78,11 @@ export const AnalysisDashboard: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [period, setPeriod] = useState<TimePeriod>('WEEK');
-    const [compare, setCompare] = useState(true);
+    const [compare] = useState(true);
     const [customRange, setCustomRange] = useState({ start: '', end: '' });
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [dashboardMode, setDashboardMode] = useState<'ANALYTICS' | 'EXECUTIVE'>('EXECUTIVE');
-    const [lang, setLang] = useState<'EN' | 'SI'>('EN');
+    const [lang] = useState<'EN' | 'SI'>('EN');
     const { socket } = useSocket();
 
     const t: any = {
@@ -171,7 +180,9 @@ export const AnalysisDashboard: React.FC = () => {
             menu: "Menu",
             addons: "Addons",
             due_amount: "Amount Due",
-            forecast_desc: "Confirmed future bookings"
+            forecast_desc: "Confirmed future bookings",
+            strategic_pulse: "Strategic Pulse",
+            comparing_period: "Comparing Period"
         },
         SI: {
             title_main: "ව්‍යාපාරික",
@@ -219,7 +230,9 @@ export const AnalysisDashboard: React.FC = () => {
             unpaid_parties: "නොගෙවූ සාද",
             balance_due: "ගෙවිය යුතු ඉතිරිය",
             projection: "අපේක්ෂිත වර්ධනය",
-            market_cap: "වෙළඳපල ප්‍රාග්ධනය",
+            market_cap: "තොග වත්කම් වටිනාකම",
+            strategic_pulse: "උපායමාර්ගික ස්පන්දනය",
+            comparing_period: "සසඳන කාලසීමාව",
             
             // Charts
             rev_period: "කාලසීමාවේ ආදායම",
@@ -273,31 +286,6 @@ export const AnalysisDashboard: React.FC = () => {
 
     const strings = t[lang];
 
-    const handleDownloadCSV = () => {
-        if (!data) return;
-        
-        // 1. Export Sales Trend
-        const trendData = data.salesTrend.map(row => ({
-            Date: row.date,
-            Revenue: row.revenue
-        }));
-        downloadCSV(trendData, `Sales_Trend_${period}`);
-
-        // 2. Export Top Products
-        const productsData = data.topSellers.map(row => ({
-            Product: row.name,
-            Quantity_Sold: row.quantity
-        }));
-        downloadCSV(productsData, `Top_Products_${period}`);
-
-        // 3. Export Category Revenue
-        const categoryData = data.categoryRevenue.map(row => ({
-            Category: row.name,
-            Revenue: row.value,
-            Percentage: `${row.percent}%`
-        }));
-        downloadCSV(categoryData, `Category_Revenue_${period}`);
-    };
 
     useEffect(() => {
         fetchData();
@@ -360,6 +348,15 @@ export const AnalysisDashboard: React.FC = () => {
         }
     };
 
+    const getPulseInsight = () => {
+        if (!data) return "";
+        if (data.revenueGrowth > 10) return "Revenue is surging! Product demand is at an all-time high. 🔥";
+        if (data.revenueGrowth > 0) return "Steady growth detected. Market sentiment remains positive. 📈";
+        if (data.revenueGrowth < 0) return "Subtle decline in volume. Consider a targeted promotion. 📉";
+        if (data.partyStats.forecastedRevenue > 50000) return "Huge event weekend ahead! Prepare inventory levels. 🎈";
+        return "Operational metrics are within normal parameters. ⚡";
+    };
+
     if (loading) {
         return (
             <div className="flex-1 min-h-screen bg-[#0f172a] flex items-center justify-center">
@@ -379,138 +376,113 @@ export const AnalysisDashboard: React.FC = () => {
     if (!data) return null;
 
     return (
-        <div className="flex-1 min-h-screen bg-[#0f172a] text-slate-200 p-6 lg:p-10 font-sans selection:bg-indigo-500/30 overflow-x-hidden">
-            <div className="max-w-[1600px] mx-auto space-y-8">
+        <div className="flex-1 min-h-screen bg-[#0f172a] text-slate-200 p-4 lg:p-10 font-sans selection:bg-indigo-500/30 overflow-x-hidden">
+            <MobileStyles />
+            <div className="max-w-[1600px] mx-auto space-y-6 lg:y-8">
                 
-                {/* Header & Filters */}
-                <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-8">
-                    <div className="space-y-2">
-                        <div className="flex items-center gap-3 mb-1">
-                            <TrendingUp className="text-indigo-500" size={24} />
-                            <span className="text-[10px] uppercase tracking-[0.3em] font-black text-slate-500">{strings.subtitle}</span>
-                        </div>
-                        <h1 className="text-4xl lg:text-5xl font-black tracking-tight text-white drop-shadow-sm">
-                            {strings.title_main} <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">{strings.title_sub}</span>
-                        </h1>
-                        <div className="flex items-center gap-4 mt-2">
-                            <button 
-                                onClick={() => setDashboardMode('EXECUTIVE')}
-                                className={`text-xs font-black tracking-widest uppercase transition-all ${dashboardMode === 'EXECUTIVE' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1' : 'text-slate-500 hover:text-slate-300'}`}
-                            >
-                                {strings.mode_exec}
-                            </button>
-                            <button 
-                                onClick={() => setDashboardMode('ANALYTICS')}
-                                className={`text-xs font-black tracking-widest uppercase transition-all ${dashboardMode === 'ANALYTICS' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1' : 'text-slate-500 hover:text-slate-300'}`}
-                            >
-                                {strings.mode_analytics}
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div className="flex flex-wrap items-center gap-4 bg-white/5 p-2 rounded-[2rem] border border-white/10 backdrop-blur-xl">
-                        {(['TODAY', 'WEEK', 'MONTH', 'YEAR', 'CUSTOM'] as TimePeriod[]).map((p) => (
-                            <button
-                                key={p}
-                                onClick={() => setPeriod(p)}
-                                className={`px-6 py-2.5 rounded-full text-xs font-black tracking-widest transition-all ${
-                                    period === p 
-                                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/20' 
-                                    : 'text-slate-400 hover:text-white hover:bg-white/5'
-                                }`}
-                            >
-                                {p}
-                            </button>
-                        ))}
-                        <div className="h-8 w-px bg-white/10 mx-2 hidden sm:block"></div>
-                        
-                        {/* Comparison Toggle */}
-                        <button 
-                            onClick={() => setCompare(!compare)}
-                            className={`px-4 py-2 rounded-full text-[10px] font-black tracking-widest border transition-all flex items-center gap-2 ${
-                                compare 
-                                ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' 
-                                : 'bg-white/5 border-white/10 text-slate-500 hover:text-white'
-                            }`}
-                        >
-                            <RefreshCcw size={12} className={compare ? 'animate-spin-slow' : ''} />
-                            {compare ? strings.comparing : strings.compare}
-                        </button>
-
-                        <div className="h-8 w-px bg-white/10 mx-2 hidden sm:block"></div>
-
-                        {/* Language Toggle */}
-                        <div className="flex bg-white/5 rounded-full p-1 border border-white/10">
-                            <button 
-                                onClick={() => setLang('EN')}
-                                className={`px-4 py-1.5 rounded-full text-[10px] font-black transition-all ${lang === 'EN' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-500 hover:text-slate-300'}`}
-                            >
-                                EN
-                            </button>
-                            <button 
-                                onClick={() => setLang('SI')}
-                                className={`px-4 py-1.5 rounded-full text-[10px] font-black transition-all ${lang === 'SI' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-500 hover:text-slate-300'}`}
-                            >
-                                සිංහල
-                            </button>
+                {/* Sticky Header & Filters */}
+                <div className="sticky top-0 z-50 bg-[#0f172a]/80 backdrop-blur-xl -mx-4 px-4 py-4 mb-4 border-b border-white/5">
+                    <div className="flex flex-col gap-6">
+                        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-3">
+                                    <TrendingUp className="text-indigo-500" size={20} />
+                                    <span className="text-[9px] uppercase tracking-[0.3em] font-black text-slate-500">{strings.subtitle}</span>
+                                </div>
+                                <h1 className="text-3xl lg:text-5xl font-black tracking-tight text-white">
+                                    {strings.title_main} <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-pink-400">{strings.title_sub}</span>
+                                </h1>
+                                <div className="flex items-center gap-4 mt-1">
+                                    <button 
+                                        onClick={() => setDashboardMode('EXECUTIVE')}
+                                        className={`text-[9px] font-black tracking-widest uppercase transition-all ${dashboardMode === 'EXECUTIVE' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1' : 'text-slate-500'}`}
+                                    >
+                                        {strings.mode_exec}
+                                    </button>
+                                    <button 
+                                        onClick={() => setDashboardMode('ANALYTICS')}
+                                        className={`text-[9px] font-black tracking-widest uppercase transition-all ${dashboardMode === 'ANALYTICS' ? 'text-indigo-400 border-b-2 border-indigo-500 pb-1' : 'text-slate-500'}`}
+                                    >
+                                        {strings.mode_analytics}
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {/* Period Selection - Scrollable on Mobile */}
+                            <div className="overflow-x-auto pb-2 scrollbar-hide -mx-2 px-2">
+                                <div className="flex items-center gap-3 min-w-max bg-white/5 p-1.5 rounded-2xl border border-white/10 backdrop-blur-xl">
+                                    {(['TODAY', 'WEEK', 'MONTH', 'YEAR', 'CUSTOM'] as TimePeriod[]).map((p) => (
+                                        <button
+                                            key={p}
+                                            onClick={() => setPeriod(p)}
+                                            className={`px-4 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all ${
+                                                period === p 
+                                                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg' 
+                                                : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                            }`}
+                                        >
+                                            {p}
+                                        </button>
+                                    ))}
+                                    <div className="h-6 w-px bg-white/10 mx-1"></div>
+                                    <button 
+                                        onClick={fetchData}
+                                        className={`p-2 transition-all ${refreshing ? 'animate-spin text-indigo-400' : 'text-slate-500'}`}
+                                    >
+                                        <RefreshCcw size={16} />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
-                        <div className="h-8 w-px bg-white/10 mx-2 hidden sm:block"></div>
-                        
-                        <button 
-                            onClick={handleDownloadCSV}
-                            className="p-2.5 rounded-full text-slate-500 hover:text-indigo-400 hover:bg-white/5 transition-all"
-                            title="Download CSV Reports"
-                        >
-                            <FileDown size={18} />
-                        </button>
-
-                        <button 
-                            onClick={() => window.print()}
-                            className="p-2.5 rounded-full text-slate-500 hover:text-indigo-400 hover:bg-white/5 transition-all"
-                            title="Export Report"
-                        >
-                            <ShoppingBag size={18} />
-                        </button>
-                        
-                        <button 
-                            onClick={fetchData}
-                            disabled={refreshing}
-                            className={`p-2.5 rounded-full transition-all ${refreshing ? 'animate-spin text-indigo-400' : 'text-slate-500 hover:text-indigo-400 hover:bg-white/5'}`}
-                        >
-                            <RefreshCcw size={18} />
-                        </button>
+                        {/* Analysis Pulse Bar */}
+                        <div className="bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-transparent p-3 lg:p-4 rounded-2xl border-l-4 border-indigo-500 flex items-center gap-4 animate-in fade-in slide-in-from-left duration-700">
+                            <div className="h-10 w-10 shrink-0 rounded-xl bg-indigo-500/20 flex items-center justify-center">
+                                <TrendingUp className="text-indigo-400" size={20} />
+                            </div>
+                            <div>
+                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">{strings.strategic_pulse}</h4>
+                                <p className="text-xs lg:text-sm font-bold text-white leading-tight">{getPulseInsight()}</p>
+                            </div>
+                            {compare && (
+                                <div className="ml-auto hidden sm:flex items-center gap-2 bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-500/20">
+                                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                                    {strings.comparing_period}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
                 {period === 'CUSTOM' && (
-                    <div className="flex flex-wrap items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
-                        <div className="flex flex-col gap-1.5">
-                            <span className="text-[10px] uppercase tracking-widest font-black text-slate-500 ml-4">{strings.start_date}</span>
+                    <div className="flex flex-wrap items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-500 bg-white/5 p-4 rounded-3xl border border-indigo-500/10">
+                        <div className="flex-1 min-w-[140px] flex flex-col gap-1.5">
+                            <span className="text-[9px] uppercase tracking-widest font-black text-slate-500 ml-2">{strings.start_date}</span>
                             <input 
                                 type="date"
                                 value={customRange.start}
                                 onChange={(e) => setCustomRange(prev => ({ ...prev, start: e.target.value }))}
-                                className="bg-white/5 border border-white/10 rounded-2xl px-6 py-3 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all hover:bg-white/10"
+                                className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs font-bold text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white/10 transition-all"
                             />
                         </div>
-                        <div className="flex flex-col gap-1.5">
-                            <span className="text-[10px] uppercase tracking-widest font-black text-slate-500 ml-4">{strings.end_date}</span>
+                        <div className="flex-1 min-w-[140px] flex flex-col gap-1.5">
+                            <span className="text-[9px] uppercase tracking-widest font-black text-slate-500 ml-2">{strings.end_date}</span>
                             <input 
                                 type="date"
                                 value={customRange.end}
                                 onChange={(e) => setCustomRange(prev => ({ ...prev, end: e.target.value }))}
-                                className="bg-white/5 border border-white/10 rounded-2xl px-6 py-3 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all hover:bg-white/10"
+                                className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs font-bold text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white/10 transition-all"
                             />
                         </div>
                         <button 
                             onClick={fetchData}
-                            className="mt-6 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white px-8 py-3.5 rounded-2xl text-xs font-black tracking-widest transition-all shadow-lg shadow-indigo-500/20 uppercase"
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl text-[10px] font-black tracking-widest transition-all uppercase mt-4"
                         >
                             {strings.apply_filter}
                         </button>
                     </div>
                 )}
+
 
                 {dashboardMode === 'EXECUTIVE' ? (
                     <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -614,12 +586,11 @@ export const AnalysisDashboard: React.FC = () => {
                                 description={strings.strategic_desc}
                                 icon={<Award className="text-cyan-400" />}
                                 stats={[
-                                    { label: strings.projection, value: '+18% YoY' },
-                                    { label: strings.market_cap, value: '--' }
+                                    { label: strings.projection, value: `+${Math.max(0, (data.revenueGrowth || 0) + 5)}% Est.` },
+                                    { label: strings.market_cap, value: formatCurrency(data.financials?.inventoryValueRetail || 0) }
                                 ]}
-                                trend="Model training complete"
+                                trend={(data.financials?.netProfit || 0) > 0 ? "Surplus identified" : "Optimizing assets"}
                                 color="from-cyan-500/20"
-                                disabled
                             />
                         </div>
                     </div>
@@ -731,7 +702,7 @@ export const AnalysisDashboard: React.FC = () => {
                                             {strings.real_time}
                                         </div>
                                     </div>
-                                    <div className="h-[400px] w-full">
+                                    <div className="h-[250px] lg:h-[400px] w-full">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <AreaChart data={data.salesTrend}>
                                                 <defs>
@@ -745,8 +716,9 @@ export const AnalysisDashboard: React.FC = () => {
                                                     dataKey="date" 
                                                     axisLine={false} 
                                                     tickLine={false} 
-                                                    tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} 
-                                                    dy={15} 
+                                                    tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} 
+                                                    dy={15}
+                                                    interval={window.innerWidth < 640 ? 2 : 0}
                                                 />
                                                 <YAxis 
                                                     axisLine={false} 
@@ -775,7 +747,7 @@ export const AnalysisDashboard: React.FC = () => {
                                     <span className="h-8 w-1.5 rounded-full bg-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.5)]"></span>
                                     {strings.rev_by_payment}
                                 </h3>
-                                <div className="flex-1 min-h-[300px]">
+                                <div className="flex-1 h-[300px] lg:min-h-[300px]">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
                                             <Pie
@@ -815,7 +787,7 @@ export const AnalysisDashboard: React.FC = () => {
                                     </h3>
                                     <Clock size={24} className="text-slate-700" />
                                 </div>
-                                <div className="h-[350px]">
+                                <div className="h-[250px] lg:h-[350px]">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart data={data.hourlyData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
@@ -857,7 +829,7 @@ export const AnalysisDashboard: React.FC = () => {
                                     </h3>
                                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{strings.drill_down}</p>
                                 </div>
-                                <div className="h-[350px]">
+                                <div className="h-[250px] lg:h-[350px]">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart data={data.categoryRevenue} layout="vertical" margin={{ left: 60 }}>
                                             <XAxis type="number" hide />
@@ -892,7 +864,7 @@ export const AnalysisDashboard: React.FC = () => {
                                     <span className="h-8 w-1.5 rounded-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]"></span>
                                     {strings.status_split}
                                 </h3>
-                                <div className="h-[300px]">
+                                <div className="h-[250px] lg:h-[300px]">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
                                             <Pie
@@ -926,7 +898,7 @@ export const AnalysisDashboard: React.FC = () => {
                                     <span className="h-8 w-1.5 rounded-full bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]"></span>
                                     {strings.revenue_mix}
                                 </h3>
-                                <div className="h-[300px]">
+                                <div className="h-[250px] lg:h-[300px]">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart data={[
                                             { name: strings.menu, value: data.partyStats?.revenueSplit?.menu || 0 },
@@ -1074,30 +1046,30 @@ export const AnalysisDashboard: React.FC = () => {
 };
 
 const MetricCard = ({ title, value, color, bg, border, icon }: any) => (
-    <div className={`p-6 rounded-3xl border ${border} ${bg} backdrop-blur-xl transition-all hover:scale-[1.02] duration-300 group`}>
-        <div className="flex items-center gap-4">
-            <div className={`p-3 rounded-2xl ${bg} ${color} border ${border} group-hover:scale-110 transition-transform`}>
-                {icon}
+    <div className={`p-4 lg:p-6 rounded-2xl lg:rounded-3xl border ${border} ${bg} backdrop-blur-xl transition-all duration-300 group`}>
+        <div className="flex items-center gap-3 lg:gap-4">
+            <div className={`p-2 lg:p-3 rounded-xl lg:rounded-2xl ${bg} ${color} border ${border} group-hover:scale-110 transition-transform`}>
+                {React.cloneElement(icon, { size: window.innerWidth < 640 ? 16 : 20 } as any)}
             </div>
             <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">{title}</p>
-                <h4 className={`text-xl font-black ${color} tracking-tight`}>{value}</h4>
+                <p className="text-[8px] lg:text-[10px] font-black uppercase tracking-widest text-slate-500 mb-0.5 lg:mb-1">{title}</p>
+                <h4 className={`text-lg lg:text-xl font-black ${color} tracking-tight`}>{value}</h4>
             </div>
         </div>
     </div>
 );
 
 const BIModule = ({ title, description, icon, stats, trend, color, disabled }: any) => (
-    <div className={`relative p-8 rounded-[2.5rem] bg-white/5 border border-white/10 overflow-hidden transition-all duration-500 ${disabled ? 'opacity-50 grayscale' : 'hover:bg-white/10 hover:-translate-y-2 cursor-pointer group shadow-2xl hover:shadow-indigo-500/10'}`}>
+    <div className={`relative p-6 lg:p-8 rounded-3xl lg:rounded-[2.5rem] bg-white/5 border border-white/10 overflow-hidden transition-all duration-500 ${disabled ? 'opacity-50 grayscale' : 'hover:bg-white/10 hover:-translate-y-2 cursor-pointer group shadow-2xl hover:shadow-indigo-500/10'}`}>
         <div className={`absolute -top-12 -right-12 w-48 h-48 bg-gradient-to-br ${color} opacity-10 transition-all duration-700 blur-3xl rounded-full group-hover:opacity-20`}></div>
         
-        <div className="relative space-y-6">
+        <div className="relative space-y-4 lg:space-y-6">
             <div className="flex items-center justify-between">
-                <div className="p-4 bg-white/5 rounded-2xl border border-white/10 group-hover:border-white/20 transition-all">
+                <div className="p-3 lg:p-4 bg-white/5 rounded-xl lg:rounded-2xl border border-white/10 group-hover:border-white/20 transition-all text-sm lg:text-base">
                     {icon}
                 </div>
                 {disabled && (
-                    <span className="text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 bg-white/5 rounded-full text-slate-500 border border-white/5">Development</span>
+                    <span className="text-[8px] font-black uppercase tracking-[0.2em] px-2 py-1 bg-white/5 rounded-full text-slate-500 border border-white/5">Dev</span>
                 )}
             </div>
             
@@ -1127,27 +1099,27 @@ const BIModule = ({ title, description, icon, stats, trend, color, disabled }: a
 );
 
 const SummaryCard = ({ title, value, icon, trend, positive, color, footer }: any) => (
-    <div className="group relative bg-white/5 border border-white/10 rounded-[2.5rem] p-8 backdrop-blur-3xl shadow-2xl transition-all duration-500 hover:bg-white/10 hover:-translate-y-2 overflow-hidden">
-        <div className={`absolute -top-12 -right-12 w-48 h-48 bg-gradient-to-br ${color} opacity-0 group-hover:opacity-[0.07] transition-all duration-700 blur-3xl rounded-full`}></div>
-        <div className="flex justify-between items-start mb-8">
-            <div className={`p-4 bg-gradient-to-br ${color} rounded-2xl shadow-xl ring-4 ring-white/5 group-hover:scale-110 transition-transform duration-500`}>
-                {React.cloneElement(icon, { size: 28, className: "text-white" } as any)}
+    <div className="group relative bg-white/5 border border-white/10 rounded-3xl lg:rounded-[2.5rem] p-6 lg:p-8 backdrop-blur-3xl shadow-2xl transition-all duration-500 hover:bg-white/10 overflow-hidden">
+        <div className={`absolute -top-12 -right-12 w-32 h-32 lg:w-48 lg:h-48 bg-gradient-to-br ${color} opacity-0 group-hover:opacity-[0.07] transition-all duration-700 blur-3xl rounded-full`}></div>
+        <div className="flex justify-between items-start mb-6 lg:mb-8">
+            <div className={`p-3 lg:p-4 bg-gradient-to-br ${color} rounded-xl lg:rounded-2xl shadow-xl ring-4 ring-white/5 group-hover:scale-110 transition-transform duration-500`}>
+                {React.cloneElement(icon, { size: window.innerWidth < 640 ? 20 : 28, className: "text-white" } as any)}
             </div>
             {trend && (
-                <div className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest ${positive ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {positive ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}
+                <div className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-widest ${positive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {positive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
                     {trend}
                 </div>
             )}
         </div>
-        <div className="space-y-2">
-            <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">{title}</p>
-            <h3 className="text-3xl font-black text-white tracking-tight">{value}</h3>
+        <div className="space-y-1">
+            <p className="text-slate-500 text-[9px] font-black uppercase tracking-[0.2em]">{title}</p>
+            <h3 className="text-2xl lg:text-3xl font-black text-white tracking-tight">{value}</h3>
         </div>
-        <div className="mt-6 pt-6 border-t border-white/5 flex items-center justify-between">
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{footer}</span>
-            <div className="p-1.5 bg-white/5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                <ChevronRight size={14} className="text-indigo-400" />
+        <div className="mt-4 lg:mt-6 pt-4 lg:pt-6 border-t border-white/5 flex items-center justify-between">
+            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{footer}</span>
+            <div className="p-1 px-2 bg-white/5 rounded-lg opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                <ChevronRight size={12} className="text-indigo-400" />
             </div>
         </div>
     </div>

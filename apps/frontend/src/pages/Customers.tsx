@@ -14,7 +14,6 @@ import {
     X,
     Clock,
     Calendar as CalendarIcon,
-    ChevronRight,
     Loader2 as Spinner
 } from 'lucide-react';
 import { api } from '../api';

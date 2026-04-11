@@ -163,6 +163,7 @@ export interface Order {
     updatedAt: string;
     refundReason?: string | null;
     orderItems?: any[];
+    tokenId?: string;
     payments?: OrderPayment[];
 }
 

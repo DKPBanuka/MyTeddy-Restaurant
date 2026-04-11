@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ShoppingCart, Trash2, Layers, Archive, History as HistoryIcon, Plus, User2, Phone, Star, X as XIcon } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
 import type { OrderItemDto } from '../types';

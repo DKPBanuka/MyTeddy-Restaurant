@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { X, Search, ShoppingBag, Package as PackageIcon, Utensils, Plus, Minus, CheckCircle2, Loader2, ChevronRight, Check, Edit2, Trash2 } from 'lucide-react';
+import { X, Search, ShoppingBag, Package as PackageIcon, Utensils, Plus, Minus, CheckCircle2, Loader2, Check, Trash2 } from 'lucide-react';
 import { api } from '../api';
 import type { Product, Package, GlobalAddon, OrderItemDto, ProductSize, Category } from '../types';
 
@@ -104,22 +104,6 @@ export function MenuSelectionPopup({
         });
     };
 
-    const handleEditItem = (idx: number) => {
-        const item = selectedItems[idx];
-        if (item.productId && item.product) {
-            setEditingItemIdx(idx);
-            setCustomizingProduct(item.product);
-            setTempSelectedSize(item.size || (item.product.sizes?.length ? item.product.sizes[0] : null));
-            
-            // Map selectedAddons to counts
-            const counts: Record<string, number> = {};
-            item.selectedAddons?.forEach(a => {
-                counts[a.id] = (counts[a.id] || 0) + 1;
-            });
-            setTempAddonCounts(counts);
-        }
-    };
-
     const handleRemoveItem = (idx: number) => {
         setSelectedItems(prev => prev.filter((_, i) => i !== idx));
     };
@@ -159,7 +143,7 @@ export function MenuSelectionPopup({
     const applicableAddons = useMemo(() => {
         if (!customizingProduct) return [];
         return addons.filter(a => 
-            !a.categoryIds || a.categoryIds.length === 0 || a.categoryIds.includes(customizingProduct.categoryId || '')
+            !a.categories || a.categories.length === 0 || a.categories.some(c => c.id === customizingProduct.categoryId)
         );
     }, [customizingProduct, addons]);
 

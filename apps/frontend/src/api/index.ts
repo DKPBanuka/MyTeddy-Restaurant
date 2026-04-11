@@ -141,6 +141,10 @@ export const api = {
         const res = await apiClient.patch(`/orders/${id}/refund`, { reason });
         return res.data;
     },
+    getPendingOrders: async (): Promise<any[]> => {
+        const res = await apiClient.get(`/orders/pending`);
+        return res.data;
+    },
 
     // --- Inventory: Ingredients ---
     getIngredients: async () => {
