@@ -1,4 +1,4 @@
-import { X, Printer, RotateCcw, Clock, CreditCard, Banknote, Globe, Info, Package, User, Hash } from 'lucide-react';
+import { X, Printer, RotateCcw, Clock, CreditCard, Banknote, Globe, Info, Package, User, Hash, QrCode } from 'lucide-react';
 import { generatePDFReceipt } from '../utils/pdfReceipt';
 import { useSettings } from '../context/SettingsContext';
 import { api } from '../api';
@@ -41,7 +41,8 @@ export function OrderDetailsModal({ order, onClose, onRefunded }: OrderDetailsMo
     const getPaymentIcon = (method: string) => {
         switch (method) {
             case 'CASH': return <Banknote size={16} />;
-            case 'CARD': return <CreditCard size={16} />;
+            case 'CARD':
+            case 'QR': return <QrCode size={16} />;
             case 'ONLINE': return <Globe size={16} />;
             default: return null;
         }
@@ -99,7 +100,7 @@ export function OrderDetailsModal({ order, onClose, onRefunded }: OrderDetailsMo
                                     {order.paymentMethod && (
                                         <span className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
                                             {getPaymentIcon(order.paymentMethod)}
-                                            {order.paymentMethod}
+                                            {order.paymentMethod === 'CARD' ? 'QR' : order.paymentMethod}
                                         </span>
                                     )}
                                 </div>

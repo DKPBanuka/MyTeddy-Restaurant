@@ -1,13 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    X, 
-    CreditCard, 
-    Banknote,
-    CheckSquare,
-    Square,
-    Layers,
-    Plus
-} from 'lucide-react';
+import { X, QrCode, Banknote, CheckSquare, Square, Layers, Plus, Globe } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { formatCurrency } from '../utils/format';
 
@@ -17,7 +9,7 @@ interface CheckoutModalProps {
     totalAmount: number | string;
     items?: any[];
     existingPayments?: any[];
-    initialMethod?: 'CARD' | 'CASH' | 'ONLINE';
+    initialMethod?: 'QR' | 'CASH' | 'ONLINE';
     onConfirm: (paymentDetails: { 
         method: string; 
         amountReceived?: number; 
@@ -42,7 +34,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     totalAmount,
     items,
     existingPayments,
-    initialMethod = 'CARD',
+    initialMethod = 'QR',
     onConfirm,
     onSplitConfirm,
     customerId
@@ -51,7 +43,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     const [mode, setMode] = useState<'FULL' | 'SPLIT'>('FULL');
     const [splitSubMode, setSplitSubMode] = useState<'EQUAL' | 'ITEMS' | 'CUSTOM'>('ITEMS');
     const [splitPeopleCount, setSplitPeopleCount] = useState<number>(2);
-    const [method, setMethod] = useState<'CARD' | 'CASH' | 'ONLINE'>(initialMethod as any);
+    const [method, setMethod] = useState<'QR' | 'CASH' | 'ONLINE'>(initialMethod as any);
     const [cashReceived, setCashReceived] = useState<string>('');
     const [customSplitAmount, setCustomSplitAmount] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -174,7 +166,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             onClick={() => setMode('FULL')}
                             className={`flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${mode === 'FULL' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
-                            <CreditCard size={16} />
+                            <QrCode size={16} />
                             Full Payment
                         </button>
                         <button
@@ -227,7 +219,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                                     onClick={() => setSplitSubMode('CUSTOM')}
                                     className={`py-2 px-1 rounded-xl text-[10px] font-black uppercase transition-all flex flex-col items-center gap-1 ${splitSubMode === 'CUSTOM' ? 'bg-white text-blue-600 shadow-sm border border-blue-100' : 'text-slate-400 hover:text-slate-600'}`}
                                 >
-                                    <CreditCard size={14} />
+                                    <QrCode size={14} />
                                     Custom Amt
                                 </button>
                              </div>
@@ -400,17 +392,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                                 <span className="font-bold text-xs uppercase tracking-tight">Cash</span>
                             </button>
                             <button
-                                onClick={() => setMethod('CARD')}
-                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${method === 'CARD' ? 'border-blue-600 bg-blue-50/50 text-blue-700' : 'border-slate-100 bg-white hover:border-slate-200 text-slate-500'}`}
+                                onClick={() => setMethod('QR')}
+                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${method === 'QR' ? 'border-blue-600 bg-blue-50/50 text-blue-700' : 'border-slate-100 bg-white hover:border-slate-200 text-slate-500'}`}
                             >
-                                <CreditCard size={24} className={method === 'CARD' ? 'text-blue-600 mb-2' : 'text-slate-400 mb-2'} />
-                                <span className="font-bold text-xs uppercase tracking-tight">Card</span>
+                                <QrCode size={24} className={method === 'QR' ? 'text-blue-600 mb-2' : 'text-slate-400 mb-2'} />
+                                <span className="font-bold text-xs uppercase tracking-tight">QR</span>
                             </button>
                             <button
                                 onClick={() => setMethod('ONLINE')}
                                 className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${method === 'ONLINE' ? 'border-blue-600 bg-blue-50/50 text-blue-700' : 'border-slate-100 bg-white hover:border-slate-200 text-slate-500'}`}
                             >
-                                <CreditCard size={24} className={method === 'ONLINE' ? 'text-blue-600 mb-2' : 'text-slate-400 mb-2'} />
+                                <Globe size={24} className={method === 'ONLINE' ? 'text-blue-600 mb-2' : 'text-slate-400 mb-2'} />
                                 <span className="font-bold text-xs uppercase tracking-tight">Online</span>
                             </button>
                         </div>

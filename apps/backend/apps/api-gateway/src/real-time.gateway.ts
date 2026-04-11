@@ -6,6 +6,7 @@ import { Injectable, Logger } from '@nestjs/common';
   cors: {
     origin: '*',
   },
+  transports: ['polling', 'websocket'],
 })
 @Injectable()
 export class RealTimeGateway implements OnGatewayConnection, OnGatewayDisconnect {

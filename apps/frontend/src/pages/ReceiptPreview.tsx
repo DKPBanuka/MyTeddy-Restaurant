@@ -33,7 +33,7 @@ export default function ReceiptPreview() {
   
   const [discountPct, setDiscountPct] = useState(20);
   const [taxRate, setTaxRate] = useState(0); // Added Tax logic
-  const [paymentMethod, setPaymentMethod] = useState("CARD");
+  const [paymentMethod, setPaymentMethod] = useState("QR");
   
   const [paperSize, setPaperSize] = useState("80mm");
 
@@ -269,7 +269,7 @@ export default function ReceiptPreview() {
           <div>
             <label className="block text-sm text-gray-500 mb-1">Payment Method</label>
             <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-              <option value="CARD">CARD</option>
+              <option value="QR">QR</option>
               <option value="CASH">CASH</option>
               <option value="ONLINE">ONLINE</option>
             </select>

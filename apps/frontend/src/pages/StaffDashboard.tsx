@@ -11,7 +11,7 @@ import {
     Key, 
     Search,
     ShieldCheck,
-    Lock,
+    Lock as LockIcon,
     Eye,
     EyeOff,
     Check,
@@ -137,6 +137,9 @@ export const StaffDashboard: React.FC = () => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [showPin, setShowPin] = useState(false);
 
+    const [authCode, setAuthCode] = useState<{ code: string; expiresAt: string } | null>(null);
+    const [timeLeft, setTimeLeft] = useState<number>(0);
+
     // Form State
     const [formData, setFormData] = useState({
         name: '',
@@ -177,6 +180,33 @@ export const StaffDashboard: React.FC = () => {
             socket.off('STAFF_UPDATED', handleUpdate);
         };
     }, [socket, currentUser?.role]);
+
+    useEffect(() => {
+        if (!authCode) return;
+        const timer = setInterval(() => {
+            const diff = new Date(authCode.expiresAt).getTime() - Date.now();
+            if (diff <= 0) {
+                setAuthCode(null);
+                setTimeLeft(0);
+                clearInterval(timer);
+            } else {
+                setTimeLeft(Math.floor(diff / 1000));
+            }
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [authCode]);
+
+    const handleGeneratePin = async () => {
+        try {
+            const data = await api.generateAuthPin();
+            setAuthCode(data);
+            const diff = new Date(data.expiresAt).getTime() - Date.now();
+            setTimeLeft(Math.floor(diff / 1000));
+            toast.success('Manager Authorization PIN Generated');
+        } catch (error) {
+            toast.error('Failed to generate PIN');
+        }
+    };
 
     const fetchPermissions = async () => {
         try {
@@ -356,6 +386,15 @@ export const StaffDashboard: React.FC = () => {
                             සිං
                         </button>
                     </div>
+                    {currentUser?.role === 'ADMIN' && (
+                        <button
+                            onClick={handleGeneratePin}
+                            className={`flex items-center gap-2.5 px-6 py-3.5 bg-slate-900 text-white rounded-2xl hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 font-black text-sm group active:scale-95 ${authCode ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`}
+                        >
+                            <Key size={20} className={authCode ? "animate-pulse" : ""} />
+                            <span className="uppercase tracking-widest">{authCode ? `PIN: ${authCode.code}` : "VOID PIN"}</span>
+                        </button>
+                    )}
                     {activeTab === 'staff' && (
                         <button
                             onClick={() => handleOpenModal('create')}
@@ -367,6 +406,27 @@ export const StaffDashboard: React.FC = () => {
                     )}
                 </div>
             </header>
+
+            {/* Auth Code Insight */}
+            {authCode && (
+                <div className="max-w-7xl mx-auto mb-8 animate-in slide-in-from-top-4 duration-500">
+                    <div className="bg-indigo-600 rounded-3xl p-6 text-white flex items-center justify-between shadow-2xl shadow-indigo-200">
+                        <div className="flex items-center gap-6">
+                            <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-md">
+                                <Key size={32} />
+                            </div>
+                            <div>
+                                <p className="text-indigo-100 font-black text-[10px] uppercase tracking-[0.2em] mb-1">Active Manager Authorization PIN</p>
+                                <h3 className="text-4xl font-black tracking-tighter italic">{authCode.code}</h3>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-indigo-100 font-black text-[10px] uppercase tracking-[0.2em] mb-1">Expires In</p>
+                            <h4 className="text-2xl font-black">{Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}</h4>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <main className="max-w-7xl mx-auto">
                 {/* Custom Tabs */}
@@ -383,7 +443,7 @@ export const StaffDashboard: React.FC = () => {
                             onClick={() => setActiveTab('permissions')}
                             className={`flex items-center gap-3 px-8 py-3.5 rounded-full text-sm font-black transition-all ${activeTab === 'permissions' ? 'bg-white text-blue-600 shadow-xl shadow-blue-50' : 'text-slate-400 hover:text-slate-600'}`}
                         >
-                            <Lock size={20} />
+                            <LockIcon size={20} />
                             {t.rolePermissions}
                         </button>
                     )}
@@ -457,7 +517,7 @@ export const StaffDashboard: React.FC = () => {
                                                         </span>
                                                         {person.permissions && person.permissions.length > 0 && person.role !== 'ADMIN' && (
                                                             <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-orange-50 text-orange-600 border border-orange-100 text-[9px] font-black uppercase tracking-tighter">
-                                                                <Lock size={10} />
+                                                                <LockIcon size={10} />
                                                                 {t.customAccess}
                                                             </span>
                                                         )}

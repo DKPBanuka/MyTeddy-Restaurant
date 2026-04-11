@@ -11,6 +11,7 @@ import { AuditLogService } from '@app/prisma';
 export class OrdersGatewayController {
     constructor(
         @Inject('ORDER_SERVICE') private readonly orderClient: ClientProxy,
+        @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy,
         private readonly realTime: RealTimeGateway,
         private readonly auditLog: AuditLogService
     ) { }
@@ -112,9 +113,28 @@ export class OrdersGatewayController {
     async updateOrderStatus(
         @Param('id') id: string, 
         @Body('status') status: string,
-        @GetUser('id') userId: string
+        @Body('managerPin') managerPin: string,
+        @GetUser('id') userId: string,
+        @GetUser('role') role: string
     ) {
         try {
+            // SECURITY CHECK: Cancellations require Manager PIN if not Admin
+            if (status === 'CANCELLED' && role !== 'ADMIN') {
+                if (!managerPin) {
+                    throw new HttpException('Manager Authorization PIN is required for cancellations.', HttpStatus.FORBIDDEN);
+                }
+
+                const pinValidation = await firstValueFrom(
+                    this.authClient.send({ cmd: 'validate_temp_pin' }, { code: managerPin }).pipe(
+                        catchError(error => throwError(() => new RpcException(error)))
+                    )
+                );
+
+                if (!pinValidation.isValid) {
+                    throw new HttpException(pinValidation.message || 'Invalid Manager PIN', HttpStatus.FORBIDDEN);
+                }
+            }
+
             const result = await firstValueFrom(
                 this.orderClient.send({ cmd: 'update_order_status' }, { id, status }).pipe(
                     catchError(error => throwError(() => new RpcException(error)))
@@ -123,12 +143,20 @@ export class OrdersGatewayController {
             
             // Log sensitive status changes
             if (status === 'CANCELLED' || status === 'COMPLETED') {
-                await this.auditLog.log(`ORDER_STATUS_CHANGE_${status}`, userId, { orderId: id, result });
+                await this.auditLog.log(`ORDER_STATUS_CHANGE_${status}`, userId, { 
+                    orderId: id, 
+                    result,
+                    authorizedByManager: status === 'CANCELLED' && role !== 'ADMIN'
+                });
             }
 
-            this.realTime.emit('ORDER_UPDATED', result);
+            // Emit update to all clients
+            console.log(`[OrdersGateway] Status update successful for ${id}, emitting ORDER_UPDATED`);
+            this.realTime.emit('ORDER_UPDATED', { id, status, result });
+            
             return result;
         } catch (error: any) {
+            if (error instanceof HttpException) throw error;
             throw new HttpException({
                 status: HttpStatus.INTERNAL_SERVER_ERROR,
                 error: error.message || 'Microservice error updating order status',

@@ -111,7 +111,7 @@ export interface CreateOrderDto {
     subTotal?: number;
     discount?: number;
     grandTotal?: number;
-    paymentMethod?: 'CASH' | 'CARD' | 'ONLINE';
+    paymentMethod?: 'CASH' | 'QR' | 'ONLINE';
     amountReceived?: number;
     change?: number;
     paymentStatus?: 'UNPAID' | 'PAID' | 'PARTIAL' | 'REFUNDED';

@@ -7,6 +7,7 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { PermissionsGuard } from './auth/permissions.guard';
 import { Permissions } from './auth/permissions.decorator';
 import { UseGuards } from '@nestjs/common';
+import { GetUser } from './auth/get-user.decorator';
 
 @Controller('staff')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -84,6 +85,23 @@ export class StaffGatewayController {
             throw new HttpException({
                 status: HttpStatus.BAD_REQUEST,
                 error: error.message || 'Error deleting staff member',
+            }, HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @Post('generate-auth-pin')
+    async generateAuthPin(@GetUser('id') adminId: string) {
+        try {
+            const result = await firstValueFrom(
+                this.authClient.send({ cmd: 'create_temp_pin' }, { adminId }).pipe(
+                    catchError(error => throwError(() => new RpcException(error)))
+                )
+            );
+            return result;
+        } catch (error: any) {
+            throw new HttpException({
+                status: HttpStatus.BAD_REQUEST,
+                error: error.message || 'Error generating auth pin',
             }, HttpStatus.BAD_REQUEST);
         }
     }

@@ -35,4 +35,14 @@ export class AuthController {
     async deleteStaff(id: string) {
         return this.authService.deleteStaff(id);
     }
+
+    @MessagePattern({ cmd: 'create_temp_pin' })
+    async createTempPin(data: { adminId: string }) {
+        return this.authService.generateTemporaryPin(data.adminId);
+    }
+
+    @MessagePattern({ cmd: 'validate_temp_pin' })
+    async validateTempPin(data: { code: string }) {
+        return this.authService.validateTemporaryPin(data.code);
+    }
 }

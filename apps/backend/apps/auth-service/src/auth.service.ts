@@ -114,7 +114,7 @@ export class AuthService {
         }
     }
 
-    async createStaff(data: { name: string; role: any; pin: string; password?: string; email?: string }) {
+    async createStaff(data: { name: string; role: any; pin: string; password?: string; email?: string; permissions?: string[] }) {
         try {
             // Check for existing PIN
             const existing = await this.prisma.user.findUnique({ where: { pin: data.pin } });
@@ -167,14 +167,61 @@ export class AuthService {
 
     async deleteStaff(id: string) {
         try {
-            // Prisma will fail if orders are strictly tied without cascading, 
-            // but assuming POS users can be safely soft-deleted or hard-deleted if no orders are present.
-            await this.prisma.user.delete({
-                where: { id }
-            });
-            return { success: true, message: 'User deleted successfully' };
+            return await this.prisma.user.delete({ where: { id } });
         } catch (error: any) {
-            throw new RpcException({ message: error.message, status: 400 });
+            throw new RpcException({ message: error.message, status: 500 });
+        }
+    }
+
+    async generateTemporaryPin(adminId: string) {
+        try {
+            // Generate a 6-digit random code
+            const code = Math.floor(100000 + Math.random() * 900000).toString();
+            
+            // Set expiry to 10 minutes from now
+            const expiresAt = new Date();
+            expiresAt.setMinutes(expiresAt.getMinutes() + 10);
+
+            return await this.prisma.temporaryPin.create({
+                data: {
+                    code,
+                    expiresAt,
+                    createdBy: adminId,
+                    purpose: 'VOID_ORDER'
+                }
+            });
+        } catch (error: any) {
+            throw new RpcException({ message: `Failed to generate PIN: ${error.message}`, status: 500 });
+        }
+    }
+
+    async validateTemporaryPin(code: string) {
+        try {
+            const pin = await this.prisma.temporaryPin.findUnique({
+                where: { code }
+            });
+
+            if (!pin) {
+                return { isValid: false, message: 'Invalid PIN' };
+            }
+
+            if (pin.isUsed) {
+                return { isValid: false, message: 'PIN has already been used' };
+            }
+
+            if (new Date() > pin.expiresAt) {
+                return { isValid: false, message: 'PIN has expired' };
+            }
+
+            // Mark as used immediately for one-time use
+            await this.prisma.temporaryPin.update({
+                where: { id: pin.id },
+                data: { isUsed: true }
+            });
+
+            return { isValid: true, pin };
+        } catch (error: any) {
+            throw new RpcException({ message: `Validation failed: ${error.message}`, status: 500 });
         }
     }
 }

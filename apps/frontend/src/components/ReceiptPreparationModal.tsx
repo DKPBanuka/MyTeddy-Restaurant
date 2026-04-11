@@ -183,7 +183,7 @@ export function ReceiptPreparationModal({
                         <div className="space-y-3 pt-2">
                              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-1">Settlement Method</label>
                              <div className="grid grid-cols-2 gap-2">
-                                {['CASH', 'CARD', 'ONLINE', 'OTHER'].map((method) => (
+                                {['CASH', 'QR', 'ONLINE', 'OTHER'].map((method) => (
                                     <button
                                         key={method}
                                         onClick={() => setPaymentMethod(method)}

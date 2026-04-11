@@ -2,10 +2,10 @@ import { useState, useMemo, useEffect } from 'react';
 import {
     Search, FileText, Download,
     Printer, RotateCcw, ChevronRight, X, User,
-    CreditCard, Banknote, AlertCircle,
+    CreditCard, Banknote, AlertCircle, QrCode,
     Clock, CheckCircle2, LayoutGrid, Filter,
     ShoppingCart, History, TrendingUp,
-    Loader2
+    Loader2, BadgeCheck, Lock as LockIcon
 } from 'lucide-react';
 import { format, startOfDay, endOfDay, isToday } from 'date-fns';
 import { toast } from 'sonner';
@@ -27,6 +27,12 @@ export function OrdersDashboard() {
     const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    
+    // Void Modal State
+    const [isVoidModalOpen, setIsVoidModalOpen] = useState(false);
+    const [managerPin, setManagerPin] = useState('');
+    const [isVoiding, setIsVoiding] = useState(false);
+
     const { socket } = useSocket();
 
     const fetchOrders = async () => {
@@ -77,11 +83,11 @@ export function OrdersDashboard() {
     useEffect(() => {
         if (!socket) return;
 
-        const handleOrderUpdate = () => {
-            console.log('Real-time: Order updated, refetching...');
+        const handleOrderUpdate = (data: any) => {
+            console.log('Real-time: Order updated via Socket.io', data);
             fetchOrders();
             toast.info('Orders list updated', {
-                description: 'A new order was placed or updated elsewhere',
+                description: data?.status ? `Order status changed to ${data.status}` : 'A new order was placed or updated elsewhere',
                 duration: 3000
             });
         };
@@ -137,6 +143,35 @@ export function OrdersDashboard() {
     const handlePrint = () => {
         if (!selectedOrder) return;
         setTimeout(() => window.print(), 100);
+    };
+
+    const handleVoidClick = () => {
+        if (user?.role === 'ADMIN') {
+            // Admin can void directly or with confirmation
+            confirmVoid();
+        } else {
+            setManagerPin('');
+            setIsVoidModalOpen(true);
+        }
+    };
+
+    const confirmVoid = async (pin?: string) => {
+        try {
+            setIsVoiding(true);
+            await api.updateOrderStatus(selectedOrder.id, 'CANCELLED', pin);
+            toast.success('Transaction voided successfully');
+            setIsVoidModalOpen(false);
+            fetchOrders();
+            // Refresh details if open
+            const updated = await api.getOrders({ search: selectedOrder.orderNumber });
+            if (updated.orders && updated.orders[0]) {
+                setSelectedOrder(updated.orders[0]);
+            }
+        } catch (error: any) {
+            toast.error(error.response?.data?.error || 'Authorization failed');
+        } finally {
+            setIsVoiding(false);
+        }
     };
 
     return (
@@ -292,6 +327,7 @@ export function OrdersDashboard() {
                                         <th className="px-8 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 border-b border-gray-100">Type</th>
                                         <th className="px-8 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 border-b border-gray-100 text-right">Grand Total</th>
                                         <th className="px-8 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 border-b border-gray-100">Payment</th>
+                                        <th className="px-8 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 border-b border-gray-100">Staff</th>
                                         <th className="px-8 py-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 border-b border-gray-100 text-center">Order Status</th>
                                         <th className="px-8 py-6 border-b border-gray-100"></th>
                                     </tr>
@@ -356,6 +392,14 @@ export function OrdersDashboard() {
                                                 <div className={`inline-flex items-center px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${getPaymentBadge(order.paymentStatus)}`}>
                                                     {order.paymentStatus === 'PAID' ? <CheckCircle2 size={12} className="mr-1.5" /> : <AlertCircle size={12} className="mr-1.5" />}
                                                     {order.paymentStatus}
+                                                </div>
+                                            </td>
+                                            <td className="px-8 py-6">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-500 border border-indigo-100">
+                                                        <User size={14} />
+                                                    </div>
+                                                    <div className="text-[11px] font-black text-slate-700 uppercase tracking-tight">{order.user?.name || 'SYSTEM'}</div>
                                                 </div>
                                             </td>
                                             <td className="px-8 py-6 text-center">
@@ -431,11 +475,27 @@ export function OrdersDashboard() {
                                         <div className="flex items-center justify-end gap-3 text-slate-900 font-black">
                                             <span className="text-[11px] uppercase tracking-widest text-slate-400">Via</span>
                                             <span className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 italic">
-                                                {selectedOrder.paymentMethod || 'NONE'} 
-                                                {selectedOrder.paymentMethod === 'CASH' ? <Banknote size={18} className="text-emerald-500" /> : selectedOrder.paymentMethod === 'CARD' ? <CreditCard size={18} className="text-blue-500" /> : null}
+                                                {selectedOrder.paymentMethod === 'CARD' ? 'QR' : selectedOrder.paymentMethod || 'NONE'} 
+                                                {selectedOrder.paymentMethod === 'CASH' ? <Banknote size={18} className="text-emerald-500" /> : (selectedOrder.paymentMethod === 'CARD' || selectedOrder.paymentMethod === 'QR') ? <QrCode size={18} className="text-blue-500" /> : null}
                                             </span>
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+
+                            {/* Staff Info */}
+                            <div className="p-8 bg-indigo-50/30 rounded-[2rem] border border-indigo-100 flex items-center justify-between">
+                                <div className="flex items-center gap-5">
+                                    <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-50">
+                                        <BadgeCheck size={28} />
+                                    </div>
+                                    <div>
+                                        <p className="text-[11px] font-black text-indigo-600 uppercase tracking-widest mb-1 italic">Order Processed By</p>
+                                        <h4 className="text-xl font-black text-slate-900 tracking-tight">{selectedOrder.user?.name || 'System Auto'}</h4>
+                                    </div>
+                                </div>
+                                <div className="text-right px-6 py-2 bg-white rounded-xl border border-indigo-100 shadow-sm font-black text-[10px] text-indigo-600 uppercase tracking-[0.2em]">
+                                    {selectedOrder.user?.role || 'SERVER'}
                                 </div>
                             </div>
 
@@ -528,9 +588,11 @@ export function OrdersDashboard() {
 
                             {selectedOrder.status !== 'CANCELLED' && (
                                 <button
-                                    className="px-6 py-5 bg-white text-slate-400 rounded-[1.5rem] font-bold text-[11px] uppercase tracking-widest hover:bg-red-50 hover:text-red-600 hover:border-red-200 border-2 border-gray-100 transition-all shadow-sm active:scale-95"
+                                    onClick={handleVoidClick}
+                                    className="px-6 py-5 bg-white text-slate-400 rounded-[1.5rem] font-bold text-[11px] uppercase tracking-widest hover:bg-red-50 hover:text-red-600 hover:border-red-200 border-2 border-gray-100 transition-all shadow-sm active:scale-95 group"
+                                    title="Void Transaction"
                                 >
-                                    <RotateCcw size={20} />
+                                    <RotateCcw size={20} className="group-hover:-rotate-90 transition-transform" />
                                 </button>
                             )}
                         </div>
@@ -542,6 +604,48 @@ export function OrdersDashboard() {
                                 settings={settings} 
                                 logoUrl={settings?.logoUrl}
                             />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Manager PIN Modal */}
+            {isVoidModalOpen && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-6">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setIsVoidModalOpen(false)} />
+                    <div className="relative bg-white w-full max-w-sm rounded-[2.5rem] shadow-[0_32px_64px_rgba(0,0,0,0.2)] p-10 text-center animate-in zoom-in-95 duration-300">
+                        <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner ring-4 ring-amber-50/50">
+                            <LockIcon size={36} />
+                        </div>
+                        <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2 uppercase italic">Authorization Required</h2>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-8 leading-relaxed">Please enter a valid Manager PIN to void this transaction.</p>
+                        
+                        <div className="space-y-6">
+                            <input
+                                type="password"
+                                maxLength={6}
+                                placeholder="••••••"
+                                value={managerPin}
+                                onChange={(e) => setManagerPin(e.target.value)}
+                                className="w-full text-center px-6 py-5 bg-slate-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl outline-none font-black text-2xl tracking-[0.5em] transition-all"
+                                autoFocus
+                            />
+                            
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setIsVoidModalOpen(false)}
+                                    className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all active:scale-95"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => confirmVoid(managerPin)}
+                                    disabled={managerPin.length < 6 || isVoiding}
+                                    className="flex-[2] py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 active:scale-95 disabled:opacity-50"
+                                >
+                                    {isVoiding ? "Verifying..." : "Authorize Void"}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

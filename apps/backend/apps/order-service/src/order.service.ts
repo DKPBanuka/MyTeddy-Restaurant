@@ -52,8 +52,14 @@ export class OrderService {
             customerName,
             customerPhone,
             deliveryAddress,
-            customerId
+            customerId,
+            userId
         } = createOrderDto;
+
+        if (!userId) {
+            console.error('OrderService.createOrder: Missing userId in payload!');
+            throw new RpcException({ message: 'User identification is required to create an order', status: 400 });
+        }
 
         // Generate short, readable TokenID based on Order Type
         let tokenId: string | null = null;
@@ -83,21 +89,9 @@ export class OrderService {
         }
 
         // SAGA Step 2: Create Order Locally
-        console.log('OrderService: [STEP 2] Creating order locally...');
+        console.log(`OrderService: [STEP 2] Creating order locally for user ID: ${userId}...`);
         try {
             return await this.prisma.$transaction(async (tx) => {
-                console.log('OrderService: [STEP 2] Finding cashier...');
-                let cashier = await tx.user.findFirst({ where: { role: 'CASHIER' } });
-                if (!cashier) {
-                    console.warn('OrderService: [STEP 2 WARNING] No user with role CASHIER found. Falling back to the first available user.');
-                    cashier = await tx.user.findFirst();
-                }
-                
-                if (!cashier) {
-                    console.error('OrderService: [STEP 2 ERROR] No users found in database!');
-                    throw new Error('No user found to process order');
-                }
-                console.log(`OrderService: [STEP 2] Using user ID: ${cashier.id} (${cashier.role})`);
 
                 // Daily Sequential Numbering: INV-YYYYMMDD-XXXX
                 const now = new Date();
@@ -142,7 +136,7 @@ export class OrderService {
                         discount: createOrderDto.discount || 0,
                         grandTotal: createOrderDto.grandTotal || totalAmount,
                         tokenId,
-                        userId: cashier.id,
+                        userId: userId,
                         customerId: customerId || null,
                         orderItems: {
                             create: items.map((item: any) => {

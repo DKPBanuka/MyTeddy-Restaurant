@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type { CreateOrderDto, Product, Category } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://192.168.8.193:3000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
@@ -138,8 +138,8 @@ export const api = {
         const res = await apiClient.get(`/orders`, { params });
         return res.data;
     },
-    refundOrder: async (id: string, reason: string) => {
-        const res = await apiClient.patch(`/orders/${id}/refund`, { reason });
+    updateOrderStatus: async (id: string, status: string, managerPin?: string) => {
+        const res = await apiClient.patch(`/orders/${id}/status`, { status, managerPin });
         return res.data;
     },
     getPendingOrders: async (): Promise<any[]> => {
@@ -218,6 +218,10 @@ export const api = {
     },
     deleteStaff: async (id: string) => {
         const res = await apiClient.delete(`/staff/${id}`);
+        return res.data;
+    },
+    generateAuthPin: async () => {
+        const res = await apiClient.post(`/staff/generate-auth-pin`);
         return res.data;
     },
 

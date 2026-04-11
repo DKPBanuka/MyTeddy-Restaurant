@@ -304,6 +304,7 @@ enum PaymentStatus {
 enum PaymentMethod {
   CASH
   CARD
+  QR
   ONLINE
 }
 
@@ -340,5 +341,15 @@ model AuditLog {
   details   Json     @default("{}")
   userId    String
   user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model TemporaryPin {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  expiresAt DateTime
+  isUsed    Boolean  @default(false)
+  purpose   String   @default("VOID_ORDER")
+  createdBy String
   createdAt DateTime @default(now())
 }

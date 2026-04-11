@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Store, KeyRound, Eraser, Delete, Eye, EyeOff, User, Lock, Languages, ShieldCheck, ChevronRight } from 'lucide-react';
+import { Store, KeyRound, Eraser, Delete, Eye, EyeOff, User, Lock as LockIcon, Languages, ShieldCheck, ChevronRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 
@@ -213,7 +213,7 @@ export const LoginScreen = () => {
                                 />
                             </div>
                             <div className="relative group/field">
-                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within/field:text-indigo-400 transition-colors" size={20} />
+                                <LockIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within/field:text-indigo-400 transition-colors" size={20} />
                                 <input
                                     type={showPin ? "text" : "password"}
                                     placeholder={t.passPlaceholder}
