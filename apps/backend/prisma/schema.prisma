@@ -21,6 +21,7 @@ model User {
   orders        Order[]
   partyBookings PartyBooking[]
   expenses      Expense[]
+  auditLogs     AuditLog[]
 }
 
 model RolePermission {
@@ -330,4 +331,13 @@ enum PartyBookingStatus {
 enum BookingType {
   PARTIAL
   EXCLUSIVE
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String
+  details   Json     @default("{}")
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
 }

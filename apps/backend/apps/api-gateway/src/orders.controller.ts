@@ -1,21 +1,29 @@
-import { Controller, Post, Get, Patch, Body, Param, Inject, HttpException, HttpStatus, Query } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param, Inject, HttpException, HttpStatus, Query, UseGuards } from '@nestjs/common';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { firstValueFrom, catchError, throwError } from 'rxjs';
 
 import { RealTimeGateway } from './real-time.gateway';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { GetUser } from './auth/get-user.decorator';
+import { AuditLogService } from '@app/prisma';
 
 @Controller('orders')
 export class OrdersGatewayController {
     constructor(
         @Inject('ORDER_SERVICE') private readonly orderClient: ClientProxy,
-        private readonly realTime: RealTimeGateway
+        private readonly realTime: RealTimeGateway,
+        private readonly auditLog: AuditLogService
     ) { }
 
     @Post()
-    async createOrder(@Body() createOrderDto: any) {
+    @UseGuards(JwtAuthGuard)
+    async createOrder(@Body() createOrderDto: any, @GetUser('id') userId: string) {
         try {
+            // Force the userId from token to prevent spoofing
+            const payload = { ...createOrderDto, userId };
+            
             const result = await firstValueFrom(
-                this.orderClient.send({ cmd: 'create_order' }, createOrderDto).pipe(
+                this.orderClient.send({ cmd: 'create_order' }, payload).pipe(
                     catchError(error => throwError(() => new RpcException(error)))
                 )
             );
@@ -100,13 +108,24 @@ export class OrdersGatewayController {
     }
 
     @Patch(':id/status')
-    async updateOrderStatus(@Param('id') id: string, @Body('status') status: string) {
+    @UseGuards(JwtAuthGuard)
+    async updateOrderStatus(
+        @Param('id') id: string, 
+        @Body('status') status: string,
+        @GetUser('id') userId: string
+    ) {
         try {
             const result = await firstValueFrom(
                 this.orderClient.send({ cmd: 'update_order_status' }, { id, status }).pipe(
                     catchError(error => throwError(() => new RpcException(error)))
                 )
             );
+            
+            // Log sensitive status changes
+            if (status === 'CANCELLED' || status === 'COMPLETED') {
+                await this.auditLog.log(`ORDER_STATUS_CHANGE_${status}`, userId, { orderId: id, result });
+            }
+
             this.realTime.emit('ORDER_UPDATED', result);
             return result;
         } catch (error: any) {
@@ -136,13 +155,22 @@ export class OrdersGatewayController {
     }
 
     @Patch(':id/pay')
-    async payOrder(@Param('id') id: string, @Body() paymentDetails: any) {
+    @UseGuards(JwtAuthGuard)
+    async payOrder(
+        @Param('id') id: string, 
+        @Body() paymentDetails: any,
+        @GetUser('id') userId: string
+    ) {
         try {
             const result = await firstValueFrom(
                 this.orderClient.send({ cmd: 'pay_order' }, { id, paymentDetails }).pipe(
                     catchError(error => throwError(() => new RpcException(error)))
                 )
             );
+
+            // Log payment action
+            await this.auditLog.log('ORDER_PAYMENT', userId, { orderId: id, amount: paymentDetails.amount });
+
             this.realTime.emit('ORDER_UPDATED', result);
             return result;
         } catch (error: any) {
@@ -154,13 +182,22 @@ export class OrdersGatewayController {
     }
 
     @Patch(':id/split-pay')
-    async splitPayOrder(@Param('id') id: string, @Body() splitDetails: any) {
+    @UseGuards(JwtAuthGuard)
+    async splitPayOrder(
+        @Param('id') id: string, 
+        @Body() splitDetails: any,
+        @GetUser('id') userId: string
+    ) {
         try {
             const result = await firstValueFrom(
                 this.orderClient.send({ cmd: 'split_pay_order' }, { id, splitDetails }).pipe(
                     catchError(error => throwError(() => new RpcException(error)))
                 )
             );
+
+            // Log split payment action
+            await this.auditLog.log('ORDER_SPLIT_PAYMENT', userId, { orderId: id, details: splitDetails });
+
             this.realTime.emit('ORDER_UPDATED', result);
             return result;
         } catch (error: any) {

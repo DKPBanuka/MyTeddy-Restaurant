@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from '@app/prisma';
 import { AuthGatewayController } from './auth.controller';
 import { ProductsGatewayController } from './products.controller';
@@ -29,6 +31,10 @@ export const JWT_SECRET = 'your-super-secret-key-change-in-prod';
             secret: JWT_SECRET,
             signOptions: { expiresIn: '1d' },
         }),
+        ThrottlerModule.forRoot([{
+            ttl: 60000,
+            limit: 5,
+        }]),
         ClientsModule.register([
             { name: 'AUTH_SERVICE', transport: Transport.TCP, options: { host: process.env.AUTH_SERVICE_HOST || 'auth-service', port: 3001 } },
             { name: 'INVENTORY_SERVICE', transport: Transport.TCP, options: { host: process.env.INVENTORY_SERVICE_HOST || 'inventory-service', port: 3002 } },

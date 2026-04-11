@@ -12,17 +12,23 @@ export class RolePermissionsService implements OnModuleInit {
 
     async initializeDefaultPermissions() {
         const defaultPermissions: Record<Role, string[]> = {
-            [Role.ADMIN]: ['POS', 'INVENTORY', 'REPORTS', 'EVENTS', 'STAFF', 'KDS'],
-            [Role.MANAGER]: ['POS', 'INVENTORY', 'REPORTS', 'EVENTS', 'STAFF', 'KDS'],
-            [Role.CASHIER]: ['POS'],
-            [Role.WAITER]: ['POS'],
-            [Role.KITCHEN]: ['KDS'],
+            [Role.ADMIN]: [
+                'POS_ACCESS', 'INVENTORY_MANAGE', 'REPORTS_VIEW', 'EVENTS_MANAGE', 
+                'STAFF_MANAGE', 'KDS_ACCESS', 'ANALYSIS_VIEW', 'MENU_MANAGE', 'SETTINGS_MANAGE'
+            ],
+            [Role.MANAGER]: [
+                'POS_ACCESS', 'INVENTORY_MANAGE', 'REPORTS_VIEW', 'EVENTS_MANAGE', 
+                'KDS_ACCESS', 'ANALYSIS_VIEW'
+            ],
+            [Role.CASHIER]: ['POS_ACCESS'],
+            [Role.WAITER]: ['POS_ACCESS'],
+            [Role.KITCHEN]: ['KDS_ACCESS'],
         };
 
         for (const [role, permissions] of Object.entries(defaultPermissions)) {
             await this.prisma.rolePermission.upsert({
                 where: { role: role as Role },
-                update: {},
+                update: { permissions: permissions }, // Force update to new names
                 create: {
                     role: role as Role,
                     permissions: permissions,

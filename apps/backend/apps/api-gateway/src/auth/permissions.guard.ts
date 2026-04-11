@@ -18,9 +18,6 @@ export class PermissionsGuard implements CanActivate {
     
     const { user } = context.switchToHttp().getRequest();
     
-    // ADMIN role always has access
-    if (user?.role === 'ADMIN') return true;
-
     if (!user || !user.permissions) {
       return false;
     }
