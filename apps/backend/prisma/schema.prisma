@@ -16,6 +16,7 @@ model User {
   pin           String         @unique
   password      String?        // For administrator access
   role          Role           @default(CASHIER)
+  permissions   String[]       @default([])
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   orders        Order[]

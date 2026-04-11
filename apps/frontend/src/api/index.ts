@@ -51,6 +51,7 @@ export interface StaffDto {
     pin: string;
     role: string;
     email?: string;
+    permissions?: string[];
 }
 
 export interface PartyBookingDto {

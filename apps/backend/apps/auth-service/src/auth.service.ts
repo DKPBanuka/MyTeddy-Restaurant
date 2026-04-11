@@ -53,20 +53,30 @@ export class AuthService {
 
     private async generateToken(user: any) {
 
-        // Fetch permissions for the role
+        // Fetch permissions (User Custom Override -> Role Defaults)
         let permissions: string[] = [];
-        try {
-            console.log(`AuthService: Fetching permissions for role: ${user.role}`);
-            const rolePerm = await this.prisma.rolePermission.findUnique({
-                where: { role: user.role }
-            });
-            console.log(`AuthService: Found permissions: ${JSON.stringify(rolePerm?.permissions || [])}`);
-            if (rolePerm) {
-                permissions = rolePerm.permissions || [];
+
+        // ADMIN always has full access
+        if (user.role === 'ADMIN') {
+            try {
+                const adminPerm = await this.prisma.rolePermission.findUnique({ where: { role: 'ADMIN' } });
+                permissions = adminPerm?.permissions || [];
+            } catch (e) {
+                permissions = [];
             }
-        } catch (e: any) {
-            console.error(`AuthService: Error fetching role permissions: ${e.message}`);
-            permissions = [];
+        } else if (user.permissions && user.permissions.length > 0) {
+            // Use custom user permissions
+            permissions = user.permissions;
+        } else {
+            // Fallback to Role default permissions
+            try {
+                const rolePerm = await this.prisma.rolePermission.findUnique({
+                    where: { role: user.role }
+                });
+                permissions = rolePerm?.permissions || [];
+            } catch (e) {
+                permissions = [];
+            }
         }
 
         try {
@@ -93,6 +103,7 @@ export class AuthService {
                     id: true,
                     name: true,
                     role: true,
+                    permissions: true,
                     createdAt: true,
                 },
                 orderBy: { createdAt: 'asc' },
@@ -119,9 +130,10 @@ export class AuthService {
                     role: data.role,
                     pin: data.pin,
                     password: hashedPassword,
-                    email: data.email
+                    email: data.email,
+                    permissions: data.permissions || [],
                 },
-                select: { id: true, name: true, role: true }
+                select: { id: true, name: true, role: true, permissions: true }
             });
             return newUser;
         } catch (error: any) {
@@ -129,7 +141,7 @@ export class AuthService {
         }
     }
 
-    async updateStaff(id: string, data: { name?: string; role?: any; pin?: string }) {
+    async updateStaff(id: string, data: { name?: string; role?: any; pin?: string, permissions?: string[] }) {
         try {
             if (data.pin) {
                 const existing = await this.prisma.user.findUnique({ where: { pin: data.pin } });
@@ -140,8 +152,12 @@ export class AuthService {
 
             const updatedUser = await this.prisma.user.update({
                 where: { id },
-                data,
-                select: { id: true, name: true, role: true }
+                data: {
+                    ...data,
+                    // Ensure permissions are correctly updated if provided
+                    ...(data.permissions ? { permissions: data.permissions } : {})
+                },
+                select: { id: true, name: true, role: true, permissions: true }
             });
             return updatedUser;
         } catch (error: any) {

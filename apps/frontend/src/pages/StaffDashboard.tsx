@@ -28,6 +28,7 @@ interface StaffUser {
     name: string;
     role: Role;
     pin?: string;
+    permissions?: string[];
 }
 
 const TRANSLATIONS = {
@@ -61,7 +62,11 @@ const TRANSLATIONS = {
         saving: "Saving...",
         deleteConfirmTitle: "Remove Staff Member?",
         deleteConfirmDesc: "This action cannot be undone. Are you sure you want to delete this user?",
-        deleteBtn: "Yes, Remove Member"
+        deleteBtn: "Yes, Remove Member",
+        customAccess: "Custom Access",
+        managedByRole: "Default Role Permissions",
+        managedByStaff: "Individual User Permissions",
+        enableCustom: "Enable Custom Permission Override"
     },
     si: {
         title: "කාර්ය මණ්ඩල කළමනාකරණය",
@@ -93,7 +98,11 @@ const TRANSLATIONS = {
         saving: "සුරැකෙමින් පවතී...",
         deleteConfirmTitle: "සාමාජිකයා ඉවත් කරන්නද?",
         deleteConfirmDesc: "මෙය ස්ථිර ඉවත් කිරීමකි. ඔබට විශ්වාසද?",
-        deleteBtn: "ඔව්, ඉවත් කරන්න"
+        deleteBtn: "ඔව්, ඉවත් කරන්න",
+        customAccess: "විශේෂ ප්‍රවේශය",
+        managedByRole: "ප්‍රධාන අවසර",
+        managedByStaff: "පුද්ගල අවසර",
+        enableCustom: "පුද්ගල අවසර සබල කරන්න"
     }
 };
 
@@ -133,6 +142,8 @@ export const StaffDashboard: React.FC = () => {
         name: '',
         role: 'WAITER' as Role,
         pin: '',
+        permissions: [] as string[],
+        useCustomPermissions: false
     });
 
     // Delete Confirmation State
@@ -229,10 +240,12 @@ export const StaffDashboard: React.FC = () => {
                 name: user.name,
                 role: user.role,
                 pin: '',
+                permissions: user.permissions || [],
+                useCustomPermissions: (user.permissions && user.permissions.length > 0) || false
             });
         } else {
             setEditingId(null);
-            setFormData({ name: '', role: 'WAITER', pin: '' });
+            setFormData({ name: '', role: 'WAITER', pin: '', permissions: [], useCustomPermissions: false });
         }
         setIsModalOpen(true);
     };
@@ -240,7 +253,7 @@ export const StaffDashboard: React.FC = () => {
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setEditingId(null);
-        setFormData({ name: '', role: 'WAITER', pin: '' });
+        setFormData({ name: '', role: 'WAITER', pin: '', permissions: [], useCustomPermissions: false });
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -255,8 +268,14 @@ export const StaffDashboard: React.FC = () => {
                 await api.createStaff(formData);
                 toast.success('Staff member added');
             } else if (modalMode === 'edit' && editingId) {
-                const updateData = { ...formData };
+                const updateData = { 
+                    ...formData,
+                    // If custom permissions are disabled, send empty array to backend to trigger role fallback
+                    permissions: formData.useCustomPermissions ? formData.permissions : []
+                };
                 if (!updateData.pin) delete (updateData as any).pin;
+                delete (updateData as any).useCustomPermissions;
+                
                 await api.updateStaff(editingId, updateData);
                 toast.success('Staff profile updated');
             }
@@ -436,6 +455,12 @@ export const StaffDashboard: React.FC = () => {
                                                             <BadgeCheck size={14} />
                                                             {getTranslatedRole(person.role)}
                                                         </span>
+                                                        {person.permissions && person.permissions.length > 0 && person.role !== 'ADMIN' && (
+                                                            <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-orange-50 text-orange-600 border border-orange-100 text-[9px] font-black uppercase tracking-tighter">
+                                                                <Lock size={10} />
+                                                                {t.customAccess}
+                                                            </span>
+                                                        )}
                                                     </td>
                                                     <td className="px-8 py-6">
                                                         <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -610,9 +635,47 @@ export const StaffDashboard: React.FC = () => {
                                     </button>
                                 </div>
                                 <p className="text-[10px] font-bold text-slate-400 ml-1 italic">
-                                    {modalMode === 'edit' ? t.keepPin : t.pinHint}
                                 </p>
                             </div>
+
+                            {/* Custom Permissions Matrix in Modal */}
+                            {modalMode === 'edit' && formData.role !== 'ADMIN' && (
+                                <div className="space-y-4 pt-4 border-t border-slate-50">
+                                    <div className="flex items-center justify-between">
+                                        <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">
+                                            <ShieldCheck size={14} />
+                                            {t.managedByStaff}
+                                        </label>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setFormData(prev => ({ ...prev, useCustomPermissions: !prev.useCustomPermissions }))}
+                                            className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all ${formData.useCustomPermissions ? 'bg-orange-500 text-white shadow-lg shadow-orange-100' : 'bg-slate-100 text-slate-400'}`}
+                                        >
+                                            {formData.useCustomPermissions ? 'Override Active' : 'Use Default Role'}
+                                        </button>
+                                    </div>
+
+                                    {formData.useCustomPermissions && (
+                                        <div className="grid grid-cols-2 gap-2 bg-slate-50/50 p-4 rounded-3xl border border-slate-100 animate-in slide-in-from-top-2 duration-300">
+                                            {AVAILABLE_FEATURES.map(feature => (
+                                                <button
+                                                    key={feature}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const newPerms = formData.permissions.includes(feature)
+                                                            ? formData.permissions.filter(p => p !== feature)
+                                                            : [...formData.permissions, feature];
+                                                        setFormData(prev => ({ ...prev, permissions: newPerms }));
+                                                    }}
+                                                    className={`px-3 py-2.5 rounded-xl border text-[9px] font-black uppercase tracking-tight text-center transition-all ${formData.permissions.includes(feature) ? 'bg-white border-blue-200 text-blue-600 shadow-sm' : 'bg-transparent border-transparent text-slate-400 hover:text-slate-600'}`}
+                                                >
+                                                    {feature.replace('_', ' ')}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             <div className="pt-6 flex gap-4">
                                 <button
