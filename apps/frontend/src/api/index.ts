@@ -142,6 +142,10 @@ export const api = {
         const res = await apiClient.patch(`/orders/${id}/status`, { status, managerPin });
         return res.data;
     },
+    refundOrder: async (id: string, reason: string) => {
+        const res = await apiClient.patch(`/orders/${id}/status`, { status: 'CANCELLED', managerPin: reason });
+        return res.data;
+    },
     getPendingOrders: async (): Promise<any[]> => {
         const res = await apiClient.get(`/orders/pending`);
         return res.data;
@@ -252,6 +256,10 @@ export const api = {
     },
     updatePartyBookingItems: async (id: string, items: any[], menuTotal: number): Promise<PartyBookingDto> => {
         const res = await apiClient.patch(`/party-bookings/${id}/items`, { items, menuTotal });
+        return res.data;
+    },
+    voidPartyBooking: async (id: string, managerPin?: string): Promise<PartyBookingDto> => {
+        const res = await apiClient.patch(`/party-bookings/${id}/void`, { managerPin });
         return res.data;
     },
 

@@ -13,12 +13,12 @@ export class StaffController {
     }
 
     @MessagePattern({ cmd: 'create_staff' })
-    create(@Payload() data: { name: string; role: Role; pin: string; email?: string }) {
+    create(@Payload() data: { name: string; role: Role; pin: string; email?: string; password?: string; permissions?: string[] }) {
         return this.staffService.create(data);
     }
 
     @MessagePattern({ cmd: 'update_staff' })
-    update(@Payload() data: { id: string; updateData: { name?: string; role?: Role; pin?: string; email?: string } }) {
+    update(@Payload() data: { id: string; updateData: { name?: string; role?: Role; pin?: string; email?: string; password?: string; permissions?: string[] } }) {
         return this.staffService.update(data.id, data.updateData);
     }
 

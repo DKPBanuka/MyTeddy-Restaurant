@@ -32,7 +32,25 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern: ({ url }) => {
-              // Cache external images (Unsplash, etc) and local backend uploads
+              // Cache API GET requests for products, categories, etc.
+              return url.pathname.startsWith('/api/') || 
+                     url.port === '3000' || 
+                     url.port === '3001';
+            },
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24 // 24 Hours
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: ({ url }) => {
               return url.pathname.includes('/uploads/') || 
                      url.hostname.includes('unsplash.com') ||
                      url.hostname.includes('cloudinary.com');

@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { X, Calendar as CalendarIcon, Users, ShoppingBag, CheckCircle2, Loader2, Phone, User, Clock, ChevronRight, Package as PackageIcon, Utensils, Plus, Minus } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { X, Calendar as CalendarIcon, Users, ShoppingBag, CheckCircle2, Loader2, Phone, User, Clock, ChevronRight, Package as PackageIcon, Utensils, Plus, Minus, Star, X as XIcon } from 'lucide-react';
 import { VisualTimePickerPopup } from './VisualTimePickerPopup';
 import { MenuSelectionPopup } from './MenuSelectionPopup';
 import { useSettings } from '../context/SettingsContext';
@@ -46,19 +46,23 @@ export function NewPartyModal({
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [customerId, setCustomerId] = useState<string | null>(null);
-    const [customers, setCustomers] = useState<any[]>([]);
-    const [filteredCustomers, setFilteredCustomers] = useState<any[]>([]);
-    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [customerResults, setCustomerResults] = useState<any[]>([]);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [searching, setSearching] = useState(false);
+    const [linkedCustomer, setLinkedCustomer] = useState<any | null>(null);
     const [saveToCRM, setSaveToCRM] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const searchTimeout = useRef<any>(null);
 
+    // Close dropdown on outside click
     useEffect(() => {
-        const fetchCustomers = async () => {
-            try {
-                const data = await api.getCustomers();
-                setCustomers(data);
-            } catch (e) { console.error('Failed to fetch customers', e); }
+        const handler = (e: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setShowDropdown(false);
+            }
         };
-        fetchCustomers();
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
     }, []);
 
     useEffect(() => {
@@ -110,24 +114,48 @@ export function NewPartyModal({
         }
     }, [isOpen, initialData, initialDuration, initialDate, initialStartTime]);
 
-    useEffect(() => {
-        if (name.length > 1 && !customerId) {
-            const filtered = customers.filter(c => 
-                c.name.toLowerCase().includes(name.toLowerCase()) || 
-                c.phone?.includes(name)
-            );
-            setFilteredCustomers(filtered);
-            setShowSuggestions(filtered.length > 0);
-        } else {
-            setShowSuggestions(false);
-        }
-    }, [name, customers, customerId]);
+    // Search customers when name changes
+    const handleNameChange = useCallback((value: string) => {
+        setName(value);
+        setCustomerId(null);
+        setLinkedCustomer(null);
 
-    const handleSelectCustomer = (c: any) => {
-        setCustomerId(c.id);
-        setName(c.name);
-        setPhone(c.phone || '');
-        setShowSuggestions(false);
+        clearTimeout(searchTimeout.current);
+        if (value.trim().length < 1) {
+            setCustomerResults([]);
+            setShowDropdown(false);
+            return;
+        }
+        setSearching(true);
+        searchTimeout.current = setTimeout(async () => {
+            try {
+                const all = await api.getCustomers();
+                const filtered = all.filter((c: any) =>
+                    c.name.toLowerCase().includes(value.toLowerCase()) ||
+                    (c.phone && c.phone.includes(value))
+                );
+                setCustomerResults(filtered);
+                setShowDropdown(filtered.length > 0);
+            } catch {
+                setCustomerResults([]);
+            } finally {
+                setSearching(false);
+            }
+        }, 250);
+    }, []);
+
+    const handleSelectCustomer = (customer: any) => {
+        setCustomerId(customer.id);
+        setLinkedCustomer(customer);
+        setName(customer.name);
+        setPhone(customer.phone || '');
+        setCustomerResults([]);
+        setShowDropdown(false);
+    };
+
+    const handleUnlinkCustomer = () => {
+        setLinkedCustomer(null);
+        setCustomerId(null);
     };
 
 
@@ -263,40 +291,87 @@ export function NewPartyModal({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div className="space-y-2.5">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">Name <span className="text-red-500">*</span></label>
-                                <div className="relative group">
-                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" size={20} />
-                                    <input
-                                        type="text"
-                                        placeholder="Enter customer name"
-                                        value={name}
-                                        onChange={(e) => {
-                                            if (customerId) setCustomerId(null);
-                                            setName(e.target.value);
-                                        }}
-                                        required
-                                        disabled={!!initialData}
-                                        className={`w-full pl-12 pr-4 py-4.5 bg-white border-2 border-slate-100 focus:border-blue-500 rounded-2xl outline-none transition-all font-bold text-slate-700 shadow-sm focus:shadow-blue-500/10 ${initialData ? 'opacity-60 cursor-not-allowed bg-slate-50' : ''}`}
-                                    />
-                                    {showSuggestions && (
-                                        <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 z-[120] overflow-hidden animate-in fade-in slide-in-from-top-2">
-                                            {filteredCustomers.map((c, i) => (
-                                                <button
-                                                    key={i}
-                                                    type="button"
-                                                    onClick={() => handleSelectCustomer(c)}
-                                                    className="w-full text-left px-5 py-3 hover:bg-slate-50 transition-colors flex items-center justify-between border-b border-slate-50 last:border-0"
-                                                >
-                                                    <div>
-                                                        <p className="font-black text-slate-800 text-sm">{c.name}</p>
-                                                        <p className="text-[10px] font-bold text-slate-400">{c.phone}</p>
+                                <div className="relative" ref={dropdownRef}>
+                                    {linkedCustomer ? (
+                                        <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3.5 animate-in fade-in slide-in-from-top-2">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center text-sm font-black shadow-lg shadow-blue-600/20">
+                                                    {linkedCustomer.name.charAt(0)}
+                                                </div>
+                                                <div>
+                                                    <div className="text-sm font-black text-blue-950 leading-tight">{linkedCustomer.name}</div>
+                                                    <div className="flex items-center gap-1.5 text-[10px] text-amber-600 font-black uppercase tracking-wider mt-0.5">
+                                                        <Star size={10} className="fill-current" />
+                                                        {linkedCustomer.points} Loyalty Points
                                                     </div>
-                                                    <ChevronRight size={16} className="text-slate-300" />
-                                                </button>
-                                            ))}
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={handleUnlinkCustomer}
+                                                className="w-8 h-8 rounded-lg bg-white border border-blue-100 text-blue-400 hover:text-red-500 hover:border-red-100 transition-all flex items-center justify-center shadow-sm"
+                                            >
+                                                <XIcon size={16} />
+                                            </button>
                                         </div>
+                                    ) : (
+                                        <>
+                                            <div className="relative group">
+                                                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" size={20} />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Enter customer name"
+                                                    value={name}
+                                                    onChange={(e) => handleNameChange(e.target.value)}
+                                                    onFocus={() => {
+                                                        if (customerResults.length > 0) setShowDropdown(true);
+                                                    }}
+                                                    required
+                                                    autoComplete="off"
+                                                    disabled={!!initialData}
+                                                    className={`w-full pl-12 pr-4 py-4.5 bg-white border-2 border-slate-100 focus:border-blue-500 rounded-2xl outline-none transition-all font-bold text-slate-700 shadow-sm focus:shadow-blue-500/10 ${initialData ? 'opacity-60 cursor-not-allowed bg-slate-50' : ''}`}
+                                                />
+                                            </div>
+                                            {showDropdown && (
+                                                <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 z-[120] overflow-hidden animate-in fade-in slide-in-from-top-2 max-h-60 overflow-y-auto">
+                                                    {searching ? (
+                                                        <div className="px-5 py-4 text-xs font-bold text-slate-400 text-center flex flex-col items-center gap-2">
+                                                            <Loader2 size={16} className="animate-spin text-blue-500" />
+                                                            Searching Customers...
+                                                        </div>
+                                                    ) : (
+                                                        customerResults.map((c: any) => (
+                                                            <button
+                                                                key={c.id}
+                                                                type="button"
+                                                                onMouseDown={(e) => { e.preventDefault(); handleSelectCustomer(c); }}
+                                                                className="w-full text-left px-5 py-3 hover:bg-blue-50 transition-all flex items-center justify-between border-b border-slate-50 last:border-0 group"
+                                                            >
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-400 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center text-xs font-black transition-colors">
+                                                                        {c.name.charAt(0)}
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="font-black text-slate-800 text-sm group-hover:text-blue-600 transition-colors">{c.name}</p>
+                                                                        <div className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                                                                            <Phone size={9} />
+                                                                            {c.phone || 'No phone'}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-100 text-amber-700 px-2.5 py-1 rounded-lg text-[10px] font-black shadow-sm group-hover:bg-amber-100 transition-colors">
+                                                                    <Star size={10} className="fill-current" />
+                                                                    {c.points}
+                                                                </div>
+                                                            </button>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </div>
-                                {!customerId && !initialData && name.length > 1 && (
+                                {!customerId && !linkedCustomer && !initialData && name.length > 1 && (
                                     <div className="flex items-center gap-2 mt-2 px-1 animate-in fade-in slide-in-from-left-2">
                                         <input 
                                             type="checkbox" 
@@ -308,10 +383,10 @@ export function NewPartyModal({
                                         <label htmlFor="saveToCRM" className="text-[10px] font-black text-slate-500 uppercase tracking-widest cursor-pointer">Save as new customer</label>
                                     </div>
                                 )}
-                                {customerId && (
+                                {linkedCustomer && (
                                     <div className="flex items-center gap-2 mt-2 px-1 text-emerald-600 animate-in fade-in slide-in-from-left-2">
                                         <CheckCircle2 size={12} />
-                                        <span className="text-[10px] font-black uppercase tracking-widest">Linked to CRM Profile</span>
+                                        <span className="text-[10px] font-black uppercase tracking-widest">Linked to Active Loyalty Profile</span>
                                     </div>
                                 )}
                             </div>

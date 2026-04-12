@@ -40,4 +40,9 @@ export class PartyBookingController {
     async updateBooking(@Payload() data: { id: string, updateData: any }) {
         return this.partyBookingService.updateBooking(data.id, data.updateData);
     }
+
+    @MessagePattern({ cmd: 'void_party_booking' })
+    async voidBooking(@Payload() data: { id: string }) {
+        return this.partyBookingService.voidBooking(data.id);
+    }
 }

@@ -1,14 +1,19 @@
-import { Controller, Post, Get, Patch, Body, Query, Param, Inject } from '@nestjs/common';
-import { ClientProxy } from '@nestjs/microservices';
-import { firstValueFrom } from 'rxjs';
+import { Controller, Post, Get, Patch, Body, Query, Param, Inject, HttpException, HttpStatus, UseGuards } from '@nestjs/common';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
+import { firstValueFrom, catchError, throwError } from 'rxjs';
 
 import { RealTimeGateway } from './real-time.gateway';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { GetUser } from './auth/get-user.decorator';
+import { AuditLogService } from '@app/prisma';
 
 @Controller('party-bookings')
 export class PartyBookingsGatewayController {
     constructor(
         @Inject('ORDER_SERVICE') private client: ClientProxy,
-        private readonly realTime: RealTimeGateway
+        @Inject('AUTH_SERVICE') private authClient: ClientProxy,
+        private readonly realTime: RealTimeGateway,
+        private readonly auditLog: AuditLogService
     ) { }
 
     @Post()
@@ -104,6 +109,58 @@ export class PartyBookingsGatewayController {
         } catch (error) {
             console.error('Gateway Error updating booking:', error);
             throw error;
+        }
+    }
+
+    @Patch(':id/void')
+    @UseGuards(JwtAuthGuard)
+    async voidBooking(
+        @Param('id') id: string,
+        @Body('managerPin') managerPin: string,
+        @GetUser('id') userId: string,
+        @GetUser('role') role: string
+    ) {
+        try {
+            // SECURITY CHECK: Cancellations/Voids require Manager PIN if not Admin
+            if (role !== 'ADMIN') {
+                if (!managerPin) {
+                    throw new HttpException('Manager Authorization PIN is required for voiding bookings.', HttpStatus.FORBIDDEN);
+                }
+
+                const pinValidation = await firstValueFrom(
+                    this.authClient.send({ cmd: 'validate_temp_pin' }, { code: managerPin }).pipe(
+                        catchError(error => throwError(() => new RpcException(error)))
+                    )
+                );
+
+                if (!pinValidation.isValid) {
+                    throw new HttpException(pinValidation.message || 'Invalid Manager PIN', HttpStatus.FORBIDDEN);
+                }
+            }
+
+            const result = await firstValueFrom(
+                this.client.send({ cmd: 'void_party_booking' }, { id }).pipe(
+                    catchError(error => throwError(() => new RpcException(error)))
+                )
+            );
+
+            // Log sensitive status changes
+            await this.auditLog.log('PARTY_BOOKING_VOID', userId, { 
+                bookingId: id, 
+                result,
+                authorizedByManager: role !== 'ADMIN'
+            });
+
+            // Emit update to all clients
+            this.realTime.emit('PARTY_BOOKING_UPDATED', result);
+            
+            return result;
+        } catch (error: any) {
+            if (error instanceof HttpException) throw error;
+            throw new HttpException({
+                status: HttpStatus.INTERNAL_SERVER_ERROR,
+                error: error.message || 'Microservice error voiding party booking',
+            }, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 }

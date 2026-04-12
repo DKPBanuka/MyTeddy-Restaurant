@@ -1,10 +1,14 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '@app/prisma';
 import { RpcException } from '@nestjs/microservices';
+import { CustomersService } from './customers/customers.service';
 
 @Injectable()
 export class PartyBookingService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private customersService: CustomersService
+    ) { }
 
     async createBooking(data: any) {
         // 1. Time-slot clash validation
@@ -62,7 +66,7 @@ export class PartyBookingService {
         const advancePaid = Number(data.advancePaid) || 0;
 
         // 3. Create Record
-        return this.prisma.partyBooking.create({
+        const booking = await this.prisma.partyBooking.create({
             data: {
                 customerId: (data.customerId && data.customerId !== 'WALK_IN') ? data.customerId : null,
                 customerName: data.customerName,
@@ -84,6 +88,13 @@ export class PartyBookingService {
                 status: advancePaid > 0 ? 'CONFIRMED' : 'PENDING'
             }
         });
+
+        // Award points for advance paid
+        if (booking.customerId && advancePaid > 0) {
+            await this.customersService.awardPoints(booking.customerId, advancePaid);
+        }
+
+        return booking;
     }
 
     async getBookings(filters: any) {
@@ -179,13 +190,20 @@ export class PartyBookingService {
             newStatus = 'CONFIRMED';
         }
 
-        return this.prisma.partyBooking.update({
+        const updated = await this.prisma.partyBooking.update({
             where: { id },
             data: {
                 advancePaid: newAdvance,
                 status: newStatus
             }
         });
+
+        // Award points for the incremental advance payment
+        if (updated.customerId && advanceAmount > 0) {
+            await this.customersService.awardPoints(updated.customerId, Number(advanceAmount));
+        }
+
+        return updated;
     }
 
     async updateBookingTime(id: string, eventDate: string, startTime: string, endTime: string) {
@@ -348,4 +366,39 @@ export class PartyBookingService {
             data: updateData,
         });
     }
+
+    async voidBooking(id: string) {
+        const booking = await this.prisma.partyBooking.findUnique({
+            where: { id },
+            include: { customer: true }
+        });
+
+        if (!booking) {
+            throw new RpcException(new NotFoundException('Party booking not found'));
+        }
+
+        if (booking.status === 'VOIDED') {
+            throw new RpcException(new ConflictException('Booking is already voided'));
+        }
+
+        // 1. Reverse Loyalty Points
+        if (booking.customerId && Number(booking.advancePaid) > 0) {
+            const pointsToDeduct = Math.floor(Number(booking.advancePaid) / 100);
+            if (pointsToDeduct > 0) {
+                await this.prisma.customer.update({
+                    where: { id: booking.customerId },
+                    data: { points: { decrement: pointsToDeduct } }
+                });
+            }
+        }
+
+        // 2. Update Status to VOIDED
+        const updated = await this.prisma.partyBooking.update({
+            where: { id },
+            data: { status: 'VOIDED' as any }
+        });
+
+        return updated;
+    }
 }
+

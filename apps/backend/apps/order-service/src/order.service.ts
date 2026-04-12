@@ -4,6 +4,7 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PaymentStatus, OrderStatus } from '@prisma/client';
 import { firstValueFrom, lastValueFrom, catchError, throwError } from 'rxjs';
 import { SplitCalculationUtil } from './utils/split-calculation.util';
+import { CustomersService } from './customers/customers.service';
 const fs = require('fs');
 const LOG_FILE = './debug_manual.log';
 
@@ -11,32 +12,10 @@ const LOG_FILE = './debug_manual.log';
 export class OrderService {
     constructor(
         private readonly prisma: PrismaService,
+        private readonly customersService: CustomersService,
         @Inject('INVENTORY_SERVICE') private readonly inventoryClient: ClientProxy,
     ) { }
 
-    private async incrementPoints(customerId: string | null, amount: number, prismaInstance: any = this.prisma) {
-        console.log(`[LOYALTY] incrementPoints called for customer: ${customerId}, amount: ${amount}`);
-        if (!customerId || amount <= 0) {
-            console.log(`[LOYALTY] Skipping points award. Reason: ${!customerId ? 'No customerId' : 'Amount <= 0'}`);
-            return;
-        }
-        try {
-            const pointsToAdd = Math.floor(amount / 100);
-            if (pointsToAdd > 0) {
-                console.log(`[LOYALTY] Attempting to award ${pointsToAdd} points to customer: ${customerId}`);
-                const updated = await prismaInstance.customer.update({
-                    where: { id: customerId },
-                    data: { points: { increment: pointsToAdd } }
-                });
-                console.log(`[LOYALTY] SUCCESS: Awarded ${pointsToAdd} points to ${updated.name}. New Total: ${updated.points}`);
-            } else {
-                console.log(`[LOYALTY] Amount ${amount} is less than 100. No points awarded.`);
-            }
-        } catch (error) {
-            console.error(`[LOYALTY] ERROR: Failed to award points to customer ${customerId}:`, error);
-            // We catch but don't re-throw to prevent failing the entire order if loyalty award fails
-        }
-    }
 
     async createOrder(createOrderDto: any) {
         console.log('OrderService.createOrder payload received:', JSON.stringify(createOrderDto, null, 2));
@@ -119,6 +98,7 @@ export class OrderService {
 
                 const order = await tx.order.create({
                     data: {
+                        id: createOrderDto.id || undefined, // Use provided UUID if exists
                         orderNumber,
                         invoiceNumber,
                         totalAmount,
@@ -143,6 +123,7 @@ export class OrderService {
                                 const basePrice = Number(item.unitPrice || 0);
                                 const quantity = Number(item.quantity || 1);
                                 return {
+                                    id: item.id || undefined, // Use provided UUID if exists
                                     productId: item.productId || null,
                                     packageId: item.packageId || null,
                                     quantity: quantity,
@@ -168,7 +149,7 @@ export class OrderService {
 
                 // Award points if paid immediately
                 if (paymentStatus === 'PAID') {
-                    await this.incrementPoints(customerId, Number(totalAmount), tx);
+                    await this.customersService.awardPoints(customerId, Number(totalAmount), tx);
                 }
 
                 console.log(`OrderService: [STEP 2 SUCCESS] Order created with ID: ${order.id}`);
@@ -255,7 +236,7 @@ export class OrderService {
 
             // Award points for full payment
             if (order.customerId) {
-                await this.incrementPoints(order.customerId, Number(order.grandTotal));
+                await this.customersService.awardPoints(order.customerId, Number(order.grandTotal));
             }
 
             return order;
@@ -335,7 +316,7 @@ export class OrderService {
 
                 // Award points for partial paid amount
                 if (order.customerId) {
-                    await this.incrementPoints(order.customerId, Number(data.amount));
+                    await this.customersService.awardPoints(order.customerId, Number(data.amount), tx);
                 }
 
                 return updatedOrder;

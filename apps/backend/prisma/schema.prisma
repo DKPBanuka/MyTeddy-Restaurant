@@ -328,6 +328,7 @@ enum PartyBookingStatus {
   CONFIRMED
   COMPLETED
   CANCELLED
+  VOIDED
 }
 
 enum BookingType {

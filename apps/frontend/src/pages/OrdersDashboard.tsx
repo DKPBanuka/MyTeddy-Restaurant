@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import {
     Search, FileText, Download,
     Printer, RotateCcw, ChevronRight, X, User,
-    CreditCard, Banknote, AlertCircle, QrCode,
+    Banknote, AlertCircle, QrCode,
     Clock, CheckCircle2, LayoutGrid, Filter,
     ShoppingCart, History, TrendingUp,
     Loader2, BadgeCheck, Lock as LockIcon

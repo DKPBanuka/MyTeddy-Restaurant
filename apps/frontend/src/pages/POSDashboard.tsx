@@ -20,6 +20,9 @@ import { useSettings } from '../context/SettingsContext';
 import { generateInvoiceNumber } from '../utils/invoice';
 import { generatePDFReceipt } from '../utils/pdfReceipt';
 import { useSocket } from '../context/SocketContext';
+import { db } from '../db/db';
+import { useSyncManager } from '../hooks/useSyncManager';
+import { Wifi, WifiOff } from 'lucide-react';
 
 
 type OrderType = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
@@ -54,6 +57,7 @@ export function POSDashboard() {
     const [isPartiesModalOpen, setIsPartiesModalOpen] = useState(false);
     const queryClient = useQueryClient();
     const { socket } = useSocket();
+    const { isOnline } = useSyncManager();
 
     const { data: products = [], isLoading: productsLoading } = useQuery({
         queryKey: ['products'],
@@ -237,7 +241,7 @@ export function POSDashboard() {
                 }
                 const unitPrice = Number(item.price || 0);
                 return [...prev, {
-                    id: `local-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                    id: crypto.randomUUID(),
                     packageId: item.id,
                     quantity: 1,
                     type: 'PACKAGE',
@@ -282,7 +286,7 @@ export function POSDashboard() {
             }
             const unitPrice = Number(selectedSize?.price || product.price || 0);
             return [...prev, {
-                id: `local-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                id: crypto.randomUUID(),
                 productId: product.id,
                 quantity: 1,
                 type: product.type,
@@ -342,7 +346,7 @@ export function POSDashboard() {
             }
 
             return [...prev, {
-                id: `local-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                id: crypto.randomUUID(),
                 productId: product.id,
                 quantity: 1,
                 type: product.type,
@@ -458,6 +462,7 @@ export function POSDashboard() {
             });
 
             let createdOrder: any = null;
+            const orderId = activeOrderId || crypto.randomUUID();
 
             if (activeOrderId) {
                 await api.updateOrderItems(activeOrderId, {
@@ -469,7 +474,8 @@ export function POSDashboard() {
                 });
                 createdOrder = await api.payOrder(activeOrderId, paymentDetails);
             } else {
-                createdOrder = await api.createOrder({
+                const orderData = {
+                    id: orderId,
                     ...orderMetadata,
                     items: payloadItems,
                     totalAmount: paymentDetails.grandTotal || calculatedTotal,
@@ -479,10 +485,32 @@ export function POSDashboard() {
                     paymentMethod: paymentDetails.method as any,
                     amountReceived: paymentDetails.amountReceived,
                     change: paymentDetails.change,
-                    paymentStatus: 'PAID',
+                    paymentStatus: 'PAID' as 'PAID',
                     orderType,
                     customerId: paymentDetails.customerId || orderMetadata.customerId,
+                };
+
+                // 1. Save to local IndexedDB first
+                await db.orders.add({
+                    id: orderId,
+                    sync_status: 'pending',
+                    data: orderData,
+                    createdAt: Date.now()
                 });
+
+                if (navigator.onLine) {
+                    try {
+                        createdOrder = await api.createOrder(orderData as any);
+                        await db.orders.update(orderId, { sync_status: 'synced' });
+                    } catch (error) {
+                        console.error('Failed to sync immediately, will retry in background:', error);
+                        // Case: Online according to navigator but request failed
+                        createdOrder = { ...orderData, invoiceNumber: 'OFFLINE-' + orderId.substring(0, 8), status: 'PENDING' };
+                    }
+                } else {
+                    createdOrder = { ...orderData, invoiceNumber: 'OFFLINE-' + orderId.substring(0, 8), status: 'PENDING' };
+                    toast.info('Order saved offline. It will sync once connection is restored.');
+                }
             }
 
             console.log('Checkout SUCCESS. createdOrder from API:', createdOrder);
@@ -760,6 +788,22 @@ export function POSDashboard() {
                             placeholder="Search Menu..."
                             className="w-full pl-12 pr-4 py-3 md:py-3.5 bg-white border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 rounded-full outline-none font-semibold text-sm transition-all shadow-sm"
                         />
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl font-black text-[10px] tracking-widest uppercase shadow-sm border transition-all ${isOnline ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100 animate-pulse'}`}>
+                            {isOnline ? (
+                                <>
+                                    <Wifi size={14} />
+                                    <span>Online</span>
+                                </>
+                            ) : (
+                                <>
+                                    <WifiOff size={14} />
+                                    <span>Offline Mode</span>
+                                </>
+                            )}
+                        </div>
                     </div>
 
                     <div className="hidden md:flex items-center gap-6">

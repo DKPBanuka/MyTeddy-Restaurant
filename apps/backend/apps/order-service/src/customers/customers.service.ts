@@ -56,4 +56,29 @@ export class CustomersService {
       where: { id },
     });
   }
+
+  async awardPoints(customerId: string | null, amount: number, prismaInstance: any = this.prisma) {
+    console.log(`[LOYALTY] awardPoints called for customer: ${customerId}, amount: ${amount}`);
+    if (!customerId || amount <= 0) {
+      console.log(`[LOYALTY] Skipping points award. Reason: ${!customerId ? 'No customerId' : 'Amount <= 0'}`);
+      return;
+    }
+    try {
+      const pointsToAdd = Math.floor(amount / 100);
+      if (pointsToAdd > 0) {
+        console.log(`[LOYALTY] Attempting to award ${pointsToAdd} points to customer: ${customerId}`);
+        const updated = await prismaInstance.customer.update({
+          where: { id: customerId },
+          data: { points: { increment: pointsToAdd } }
+        });
+        console.log(`[LOYALTY] SUCCESS: Awarded ${pointsToAdd} points to ${updated.name}. New Total: ${updated.points}`);
+        return updated;
+      } else {
+        console.log(`[LOYALTY] Amount ${amount} is less than 100. No points awarded.`);
+      }
+    } catch (error) {
+      console.error(`[LOYALTY] ERROR: Failed to award points to customer ${customerId}:`, error);
+      // We catch but don't re-throw to prevent failing the entire transaction if loyalty award fails
+    }
+  }
 }

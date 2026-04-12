@@ -9,7 +9,7 @@ interface ReceiptPreparationModalProps {
     booking: PartyBookingDto;
     settings: any;
     receiptType: 'PARTY_ADVANCE' | 'PARTY_FINAL';
-    onConfirm: (data: { discount: number; serviceCharge: number; paymentMethod: string; addonsTotal: number }, action: 'PRINT' | 'DOWNLOAD') => Promise<void>;
+    onConfirm: (data: { discount: number; serviceCharge: number; paymentMethod: string; addonsTotal: number; paymentAmount?: number }, action: 'PRINT' | 'DOWNLOAD') => Promise<void>;
     isSubmitting: boolean;
 }
 
@@ -28,6 +28,7 @@ export function ReceiptPreparationModal({
     const [discountPercent, setDiscountPercent] = useState<number>(0);
     const [paymentMethod, setPaymentMethod] = useState<string>(booking.paymentMethod || 'CASH');
     const [extraAdjustments, setExtraAdjustments] = useState<number>(Number(booking.addonsTotal || 0));
+    const [paymentAmount, setPaymentAmount] = useState<number>(0);
 
     const baseTotal = Number(booking.hallCharge || 0) + Number(booking.menuTotal || 0);
     const grossTotalWithExtras = baseTotal + extraAdjustments;
@@ -38,6 +39,11 @@ export function ReceiptPreparationModal({
             setDiscountAmount(Math.round(calculated));
         }
     }, [discountPercent, discountType, grossTotalWithExtras, serviceCharge]);
+
+    const currentAdvancePaid = Number(booking.advancePaid || 0);
+    const netTotal = (grossTotalWithExtras + serviceCharge) - discountAmount;
+    const maxAllowedPayment = Math.max(0, netTotal - currentAdvancePaid);
+    const isPaymentInvalid = paymentAmount > maxAllowedPayment;
 
     if (!isOpen) return null;
 
@@ -179,6 +185,38 @@ export function ReceiptPreparationModal({
                             )}
                         </div>
 
+                        {/* Additional Advance Payment - Only for Advance Receipt */}
+                        {receiptType === 'PARTY_ADVANCE' && (
+                            <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                                <div className="flex justify-between items-center pl-1">
+                                    <label className={`text-[10px] font-black uppercase tracking-widest ${isPaymentInvalid ? 'text-red-500' : 'text-emerald-600'}`}>
+                                        New Advance Payment (Rs.)
+                                    </label>
+                                    {isPaymentInvalid && (
+                                        <span className="text-[9px] font-black text-red-500 uppercase flex items-center gap-1">
+                                            Exceeds Balance Due
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="relative">
+                                    <DollarSign className={`absolute left-4 top-1/2 -translate-y-1/2 ${isPaymentInvalid ? 'text-red-400' : 'text-emerald-500'}`} size={18} />
+                                    <input
+                                        type="number"
+                                        value={paymentAmount === 0 ? '' : paymentAmount}
+                                        onChange={(e) => setPaymentAmount(Number(e.target.value) || 0)}
+                                        className={`w-full pl-12 pr-4 py-4 rounded-2xl outline-none focus:ring-2 font-black transition-all ${isPaymentInvalid ? 'bg-red-50/50 border-red-200 text-red-900 focus:ring-red-500' : 'bg-emerald-50/50 border-emerald-100 text-emerald-900 focus:ring-emerald-500 placeholder:text-emerald-300'}`}
+                                        placeholder="Enter payment recorded now"
+                                    />
+                                </div>
+                                <p className="text-[9px] font-bold text-slate-400 pl-1 italic">
+                                    {isPaymentInvalid 
+                                        ? `Error: Maximum allowed is Rs. ${maxAllowedPayment.toLocaleString()}`
+                                        : `This will increment the total advance paid to Rs. ${(currentAdvancePaid + paymentAmount).toLocaleString()}`
+                                    }
+                                </p>
+                            </div>
+                        )}
+
                         {/* Payment Method Section */}
                         <div className="space-y-3 pt-2">
                              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-1">Settlement Method</label>
@@ -207,9 +245,15 @@ export function ReceiptPreparationModal({
 
                         <div className="flex gap-3">
                             <button
-                                onClick={() => onConfirm({ discount: discountAmount, serviceCharge, paymentMethod, addonsTotal: extraAdjustments }, 'PRINT')}
-                                disabled={isSubmitting}
-                                className="flex-1 bg-slate-900 hover:bg-black text-white py-5 rounded-2xl font-black transition-all shadow-xl shadow-slate-200 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3"
+                                onClick={() => onConfirm({ 
+                                    discount: discountAmount, 
+                                    serviceCharge, 
+                                    paymentMethod, 
+                                    addonsTotal: extraAdjustments,
+                                    paymentAmount: receiptType === 'PARTY_ADVANCE' ? paymentAmount : 0
+                                }, 'PRINT')}
+                                disabled={isSubmitting || isPaymentInvalid}
+                                className="flex-1 bg-slate-900 hover:bg-black text-white py-5 rounded-2xl font-black transition-all shadow-xl shadow-slate-200 active:scale-[0.98] disabled:opacity-50 disabled:grayscale disabled:scale-100 flex items-center justify-center gap-3"
                             >
                                 {isSubmitting ? (
                                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -221,9 +265,15 @@ export function ReceiptPreparationModal({
                                 )}
                             </button>
                             <button
-                                onClick={() => onConfirm({ discount: discountAmount, serviceCharge, paymentMethod, addonsTotal: extraAdjustments }, 'DOWNLOAD')}
-                                disabled={isSubmitting}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-8 rounded-2xl font-black transition-all shadow-xl shadow-blue-200 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3"
+                                onClick={() => onConfirm({ 
+                                    discount: discountAmount, 
+                                    serviceCharge, 
+                                    paymentMethod, 
+                                    addonsTotal: extraAdjustments,
+                                    paymentAmount: receiptType === 'PARTY_ADVANCE' ? paymentAmount : 0
+                                }, 'DOWNLOAD')}
+                                disabled={isSubmitting || isPaymentInvalid}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-8 rounded-2xl font-black transition-all shadow-xl shadow-blue-200 active:scale-[0.98] disabled:opacity-50 disabled:grayscale disabled:scale-100 flex items-center justify-center gap-3"
                                 title="Download PDF"
                             >
                                 {isSubmitting ? (

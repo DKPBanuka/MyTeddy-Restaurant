@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { X, Phone, User, Calendar as CalendarIcon, Clock, DollarSign, MessageCircle, Printer, ChevronRight, CheckCircle2, Edit, UtensilsCrossed } from 'lucide-react';
+import { X, Phone, User, Calendar as CalendarIcon, Clock, DollarSign, MessageCircle, Printer, ChevronRight, CheckCircle2, Edit, UtensilsCrossed, RotateCcw } from 'lucide-react';
 import { api, type PartyBookingDto } from '../api';
 import { toast } from 'sonner';
 import { MenuSelectionPopup } from './MenuSelectionPopup';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
 import { generatePDFReceipt, printReceiptBrowser } from '../utils/pdfReceipt';
 import { ReceiptPreparationModal } from './ReceiptPreparationModal';
+import { VoidPINModal } from './VoidPINModal';
 
 interface BookingDetailDrawerProps {
     isOpen: boolean;
@@ -17,6 +19,7 @@ interface BookingDetailDrawerProps {
 
 export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdit }: BookingDetailDrawerProps) {
     const { settings } = useSettings();
+    const { user } = useAuth();
     const [paymentAmount, setPaymentAmount] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     
@@ -27,6 +30,10 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
         isOpen: false,
         type: 'PARTY_ADVANCE'
     });
+
+    // Void State
+    const [isVoidModalOpen, setIsVoidModalOpen] = useState(false);
+    const [isVoiding, setIsVoiding] = useState(false);
 
     const pbId = (() => {
         if (!booking) return '';
@@ -96,20 +103,24 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
         }
     };
 
-    const handlePreparationConfirm = async (data: { discount: number; serviceCharge: number; paymentMethod: string; addonsTotal: number }, action: 'PRINT' | 'DOWNLOAD') => {
+    const handlePreparationConfirm = async (data: { discount: number; serviceCharge: number; paymentMethod: string; addonsTotal: number; paymentAmount?: number }, action: 'PRINT' | 'DOWNLOAD') => {
         setIsSubmitting(true);
         try {
             const isFinalSettlement = preparationModal.type === 'PARTY_FINAL';
             const finalTotal = (Number(booking.hallCharge || 0) + Number(booking.menuTotal || 0) + data.addonsTotal + data.serviceCharge) - data.discount;
 
-            // 1. Save to backend
+            if (data.paymentAmount && data.paymentAmount > 0) {
+                await api.updatePartyBookingAdvance(booking.id!, data.paymentAmount);
+            }
+
+            // 1. Save charges & status to backend
             await api.updatePartyBooking(booking.id!, {
                 discount: data.discount,
                 serviceCharge: data.serviceCharge,
                 paymentMethod: data.paymentMethod,
                 addonsTotal: data.addonsTotal,
                 // Automate settlement for Final Invoice
-                advancePaid: isFinalSettlement ? finalTotal : booking.advancePaid,
+                advancePaid: isFinalSettlement ? finalTotal : (Number(booking.advancePaid) + (data.paymentAmount || 0)),
                 status: isFinalSettlement ? 'COMPLETED' : booking.status
             });
             
@@ -121,7 +132,7 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
                 ...booking, 
                 ...data, 
                 totalAmount: finalTotal,
-                advancePaid: isFinalSettlement ? finalTotal : booking.advancePaid,
+                advancePaid: isFinalSettlement ? finalTotal : (Number(booking.advancePaid) + (data.paymentAmount || 0)),
                 status: isFinalSettlement ? 'COMPLETED' : booking.status
             };
             if (action === 'PRINT') {
@@ -137,6 +148,31 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
             toast.error(err?.response?.data?.message || 'Failed to prepare receipt.');
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleVoidClick = () => {
+        if (user?.role === 'ADMIN') {
+            if (confirm('Are you sure you want to void this party booking? This will also reverse all loyalty points.')) {
+                confirmVoid();
+            }
+        } else {
+            setIsVoidModalOpen(true);
+        }
+    };
+
+    const confirmVoid = async (pin?: string) => {
+        setIsVoiding(true);
+        try {
+            await api.voidPartyBooking(booking.id!, pin);
+            toast.success('Party booking voided successfully!');
+            setIsVoidModalOpen(false);
+            onSuccess();
+            onClose();
+        } catch (err: any) {
+            toast.error(err?.response?.data?.error || err?.response?.data?.message || 'Failed to void booking.');
+        } finally {
+            setIsVoiding(false);
         }
     };
 
@@ -305,9 +341,27 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
                                             <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Full Settlement</div>
                                         </div>
                                     </div>
-                                    <ChevronRight size={18} className="text-slate-300 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                                    <ChevronRight size={18} className="text-white group-hover:text-white group-hover:translate-x-1 transition-all" />
                                 </button>
                             </div>
+                            
+                            {booking.status !== 'VOIDED' && (
+                                <button 
+                                    onClick={handleVoidClick}
+                                    className="w-full flex items-center justify-between p-4 bg-white hover:bg-red-50 text-slate-700 rounded-3xl border border-white transition-all group shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-red-500/10 hover:border-red-100 sm:col-span-2"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-12 h-12 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center transition-colors group-hover:bg-red-500 group-hover:text-white">
+                                            <RotateCcw size={20} />
+                                        </div>
+                                        <div className="text-left">
+                                            <div className="font-black text-sm group-hover:text-red-700 transition-colors uppercase tracking-tight">Void Booking</div>
+                                            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 italic">Permanently Cancel & Reverse Points</div>
+                                        </div>
+                                    </div>
+                                    <ChevronRight size={18} className="text-slate-300 group-hover:text-red-600 group-hover:translate-x-1 transition-all" />
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -411,17 +465,25 @@ export function BookingDetailDrawer({ isOpen, onClose, booking, onSuccess, onEdi
                 </div>
             )}
             {/* Receipt Preparation Modal */}
-            {preparationModal.isOpen && (
-                <ReceiptPreparationModal 
-                    isOpen={preparationModal.isOpen}
-                    onClose={() => setPreparationModal(prev => ({ ...prev, isOpen: false }))}
-                    booking={booking}
-                    settings={settings}
-                    receiptType={preparationModal.type}
-                    onConfirm={handlePreparationConfirm}
-                    isSubmitting={isSubmitting}
+                    <ReceiptPreparationModal 
+                        isOpen={preparationModal.isOpen}
+                        onClose={() => setPreparationModal(prev => ({ ...prev, isOpen: false }))}
+                        booking={booking}
+                        settings={settings}
+                        receiptType={preparationModal.type}
+                        onConfirm={handlePreparationConfirm}
+                        isSubmitting={isSubmitting}
+                    />
+
+                {/* Void PIN Modal */}
+                <VoidPINModal
+                    isOpen={isVoidModalOpen}
+                    onClose={() => setIsVoidModalOpen(false)}
+                    onConfirm={confirmVoid}
+                    isProcessing={isVoiding}
+                    title="Void Party Booking"
+                    description="Enter your manager PIN to authorize voiding this booking and reversing loyalty points."
                 />
-            )}
-        </div>
-    );
-}
+            </div>
+        );
+    }

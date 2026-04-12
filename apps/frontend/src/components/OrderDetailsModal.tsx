@@ -1,4 +1,4 @@
-import { X, Printer, RotateCcw, Clock, CreditCard, Banknote, Globe, Info, Package, User, Hash, QrCode } from 'lucide-react';
+import { X, Printer, RotateCcw, Clock, Banknote, Globe, Info, Package, User, Hash, QrCode } from 'lucide-react';
 import { generatePDFReceipt } from '../utils/pdfReceipt';
 import { useSettings } from '../context/SettingsContext';
 import { api } from '../api';
